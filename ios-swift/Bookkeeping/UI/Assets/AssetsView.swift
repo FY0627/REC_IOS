@@ -95,9 +95,13 @@ struct AssetsView: View {
 
 // MARK: - 标题区
 
-/// 卡包上方的标题区：「资产」、净资产卡、「银行卡」一行（没有使用中的卡时是添加卡片的占位）。
+/// 卡包上方的标题区：净资产卡、「银行卡」一行（没有使用中的卡时是添加卡片的占位）。
 /// 由 `WalletController` 放在卡包的滚动区里，打开详情时向上淡出。
+/// 最上面给「资产」留出一行：标题单独放（`WalletController`），往下拉时留在原位，这里的内容被拉开。
 struct WalletHeader: View {
+    /// 「资产」上面的空隙
+    static let titleTop: CGFloat = 2
+
     let count: Int
     let store: LedgerStore
     let rates: ExchangeRateStore
@@ -105,13 +109,6 @@ struct WalletHeader: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("资产")
-                .font(.largeTitle.weight(.bold))
-                .frame(height: 44)
-                .padding(.horizontal, 4)
-                .padding(.top, 2)
-                .accessibilityAddTraits(.isHeader)
-
             OverviewCard()
 
             if count > 0 {
@@ -124,6 +121,7 @@ struct WalletHeader: View {
                     .padding(.bottom, 10)
             }
         }
+        .padding(.top, Self.titleTop + GlassControls.size)
         .frame(maxWidth: .infinity, alignment: .leading)
         .environment(store)
         .environment(rates)

@@ -88,6 +88,8 @@ final class WalletController: UIViewController, UIScrollViewDelegate, UIGestureR
     private let stackScroll = UIScrollView()
     private let cardsView = UIView()
     private let topBar = WalletTopBar()
+    /// 「资产」：在卡包的滚动区里，和「我的」「统计」的标题是同一个视图
+    private let titleBar = TitleBarView(title: "资产", menuCount: 0)
     private var headerHost: UIHostingController<WalletHeader>!
     private var archivedTitleHost: UIHostingController<ArchivedPileTitle>!
     private var stackTap: UITapGestureRecognizer!
@@ -155,6 +157,7 @@ final class WalletController: UIViewController, UIScrollViewDelegate, UIGestureR
         view.addSubview(stackScroll)
         headerHost = host(makeHeader(), in: stackScroll)
         archivedTitleHost = host(ArchivedPileTitle(count: 0), in: stackScroll)
+        stackScroll.addSubview(titleBar)
 
         cardsView.isUserInteractionEnabled = false
         // 读屏用卡包滚动区里的代替元素（见 updateCardElements），这里的卡片视图不出现
@@ -344,6 +347,7 @@ final class WalletController: UIViewController, UIScrollViewDelegate, UIGestureR
 
         headerHeight = headerHost.sizeThatFits(in: CGSize(width: contentWidth, height: .greatestFiniteMagnitude)).height.rounded(.up)
         place(headerHost.view, CGRect(x: inset, y: 0, width: contentWidth, height: headerHeight))
+        placeTitle()
         let layout = stackLayout
         archivedTitleHost.view.isHidden = layout.archived == 0
         place(archivedTitleHost.view, CGRect(x: inset, y: headerHeight + layout.archivedTitleY, width: contentWidth, height: StackLayout.sectionTitleHeight))
@@ -367,6 +371,17 @@ final class WalletController: UIViewController, UIScrollViewDelegate, UIGestureR
     private func place(_ view: UIView, _ rect: CGRect) {
         if view.bounds.size != rect.size { view.bounds = CGRect(origin: .zero, size: rect.size) }
         view.center = CGPoint(x: rect.midX, y: rect.midY)
+    }
+
+    /// 「资产」跟着卡包往上滚；在顶部往下拉时留在原位（和其他标签页的标题一样），滚动区拉开多少就往回移多少
+    private func placeTitle() {
+        let scrolled = stackScroll.contentOffset.y + stackScroll.contentInset.top
+        place(titleBar, CGRect(
+            x: AppLayout.cardInset,
+            y: WalletHeader.titleTop + min(0, scrolled),
+            width: AppLayout.cardWidth(view.bounds.width),
+            height: GlassControls.size
+        ))
     }
 
     // MARK: 卡片位置
@@ -441,6 +456,7 @@ final class WalletController: UIViewController, UIScrollViewDelegate, UIGestureR
     }
 
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        placeTitle()
         placeCards(only: [.resting, .below])
     }
 
@@ -638,7 +654,7 @@ final class WalletController: UIViewController, UIScrollViewDelegate, UIGestureR
         selectedIndex = nil
         behindFollowsScroll = false
         transitionCards = []
-        for view in cards.map({ $0 as UIView }) + [headerHost.view, archivedTitleHost.view].compactMap({ $0 }) {
+        for view in cards.map({ $0 as UIView }) + headerViews {
             view.layer.removeAllAnimations()
             view.layer.transform = CATransform3DIdentity
             view.layer.opacity = 1
@@ -653,10 +669,13 @@ final class WalletController: UIViewController, UIScrollViewDelegate, UIGestureR
         Task { @MainActor [weak self] in self?.actions.selectionChanged(nil) }
     }
 
-    /// 标题区和「已停用」标题随详情打开向上淡出，返回时在卡片回位后淡入
+    /// 「资产」、标题区和「已停用」标题
+    private var headerViews: [UIView] { [titleBar, headerHost.view, archivedTitleHost.view] }
+
+    /// 这几块随详情打开向上淡出，返回时在卡片回位后淡入
     private func setHeaderShown(_ shown: Bool, reduceMotion: Bool) {
         let transition = CardMotion.transition(reduceMotion: reduceMotion)
-        for view in [headerHost.view, archivedTitleHost.view].compactMap({ $0 }) {
+        for view in headerViews {
             CardMotion.setTransform(view.layer, shown ? CATransform3DIdentity : CATransform3DMakeTranslation(0, -32, 0), timing: transition)
             CardMotion.setOpacity(view.layer, shown ? 1 : 0, timing: shown ? .easeIn(0.2) : .easeOut(0.18), delay: shown ? 0.18 : 0)
         }
@@ -742,7 +761,7 @@ final class WalletController: UIViewController, UIScrollViewDelegate, UIGestureR
             element.activate = { [weak self] in self?.openCard(index) }
             return element
         }
-        var ordered: [Any] = []
+        var ordered: [Any] = [titleBar]
         if let header = headerHost.view { ordered.append(header) }
         ordered += elements.prefix(layout.active).map { $0 as Any }
         if layout.archived > 0, let title = archivedTitleHost.view { ordered.append(title) }
