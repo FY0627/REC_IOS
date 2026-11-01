@@ -28,7 +28,10 @@ public enum AmountParser {
 
         func groupsValid(_ groups: [Substring]) -> Bool {
             guard let head = groups.first, (1...3).contains(head.count) else { return false }
-            return groups.dropFirst().allSatisfy { $0.count == 3 }
+            let rest = groups.dropFirst()
+            if rest.allSatisfy({ $0.count == 3 }) { return true }
+            // 印度写法 13,30,614.75：最后一组三位，前面两位一组
+            return rest.last?.count == 3 && rest.dropLast().allSatisfy { $0.count == 2 }
         }
 
         if apostrophes > 0 {

@@ -448,6 +448,106 @@ final class ParserSampleTests: XCTestCase {
         XCTAssertTrue(parsed.events.allSatisfy { $0.issue == .ambiguousAmount })
     }
 
+    // MARK: 多行通知
+
+    func testAmountAtTheStartOfALineDoesNotCrash() throws {
+        let d = try XCTUnwrap(single(#"""
+        Debit Card Purchase
+        Account XXXX0001
+        100.00 USD
+        TEST SHOP
+        """#))
+        XCTAssertEqual(d.amount.digits, "100.00")
+        XCTAssertEqual(d.cardTail, "0001")
+    }
+
+    // MARK: 其他国家的写法（格式是常见写法，内容都是虚构的）
+
+    func testRupeeAmountsAndIndianGrouping() throws {
+        let d = try XCTUnwrap(single("Rs.1,20,500.75 debited from A/c XX0001 on 05-10-2026. Avl Bal Rs.2,000.00 -Test Bank"))
+        XCTAssertEqual(d.amount.digits, "1,20,500.75")
+        XCTAssertEqual(d.amount.preferredCurrency, CurrencyCode("INR"))
+        XCTAssertTrue(d.amount.currencyCandidates.contains(CurrencyCode("NPR")), "Rs 也可能是别的卢比，看账户持有哪个")
+        XCTAssertEqual(d.direction, .outflow)
+        XCTAssertEqual(d.cardTail, "0001")
+        XCTAssertEqual(d.balanceAfter?.digits, "2,000.00")
+        XCTAssertEqual(d.transactionTime?.month, 10)
+        XCTAssertEqual(d.transactionTime?.day, 5)
+        XCTAssertEqual(AmountParser.minorUnits("1,20,500.75", exponent: 2), .success(12_050_075))
+    }
+
+    func testCurrencySymbolsAndWordsFromOtherCountries() throws {
+        for (text, code) in [
+            ("Ksh1,120.00 paid to TEST SHOP on 13/10/26", "KES"), ("You paid ₱150.00 to TEST STORE", "PHP"), ("Spent RM 25.50 at TEST SHOP", "MYR"),
+            ("Paid R$ 80,00 at TEST SHOP", "BRL"), ("Withdrawal 2,000.00 บาท from A/C x0001", "THB"), ("Debited TL 200,00 from your account", "TRY"),
+        ] {
+            let parsed = parse(text)
+            XCTAssertEqual(parsed.events.first?.draft.amount.currencyCandidates, [CurrencyCode(code)], text)
+        }
+    }
+
+    func testDebitAndCreditMarksNextToTheAmount() throws {
+        let debit = try XCTUnwrap(single("Acct:***0001\nAmt:NGN4,200.00 DR\nDesc:TEST\nBal:NGN1,000.00"))
+        XCTAssertEqual(debit.direction, .outflow)
+        XCTAssertEqual(debit.balanceAfter?.digits, "1,000.00")
+        let credit = try XCTUnwrap(single("Acct:***0001\nCR Amt:40,000.00\nBal:40,277.08"))
+        XCTAssertEqual(credit.direction, .inflow)
+        XCTAssertEqual(parse("Dear Dr Smith, please call us about NGN 100.00").events.first?.issue, .uncertainKind, "「Dr」是称呼，不是借记")
+    }
+
+    func testWordNearestTheAmountDecidesDirection() throws {
+        let d = try XCTUnwrap(single("Rs.200.00 debited A/cXX0001 and credited to TEST PERSON via UPI on 23-08-26"))
+        XCTAssertEqual(d.direction, .outflow)
+    }
+
+    func testThirdPartyReceivingFromYourAccountIsOutflow() throws {
+        let d = try XCTUnwrap(single("Test Person has received Rs 600.00 from your A/c XX0001 via NEFT on 24-06-2026"))
+        XCTAssertEqual(d.direction, .outflow)
+    }
+
+    func testAmountsAfterTheTransactionAreNotTransactions() throws {
+        let d = try XCTUnwrap(single("ABC123 Confirmed. Ksh70.00 sent to TEST PERSON on 11/10/26 at 12:28 PM. New balance is Ksh100.00. Transaction cost, Ksh0.00. Amount you can transact within the day is 499,000.00."))
+        XCTAssertEqual(d.amount.digits, "70.00")
+        XCTAssertEqual(d.balanceAfter?.digits, "100.00")
+        let trailing = try XCTUnwrap(single("We processed a card purchase: $100.50 at TEST SHOP. Acct has a $500.00 bal"))
+        XCTAssertEqual(trailing.balanceAfter?.digits, "500.00")
+    }
+
+    func testNumbersInsideIdentifiersAreNotAmounts() throws {
+        let d = try XCTUnwrap(single("You have paid ETB 875.00 on 05/02/2026. Your transaction number is DB59HV01HN for plate 3AA33."))
+        XCTAssertEqual(d.amount.digits, "875.00")
+    }
+
+    func testMaskedAccountWordings() {
+        for (text, tail) in [
+            ("Ac XXXXXXXX00340001 Debited with Rs.100.00", "0001"), ("Rs. 50.00 deposited to a/c *0002 on 10/10/2026", "0002"),
+            ("INR 10.00 credited to A/C XXX#0003", "0003"), ("Spent Rs 20.00 on TEST CC 0004 on 20-10-2026", "0004"),
+            ("PKR 40.00 paid at TEST using Debit Card no. 53119xxxxxxxx0005.", "0005"), ("Acct XXX456 Dr. Rs. 75.50 on 07/07/26", "456"),
+        ] {
+            XCTAssertEqual(parse(text).events.first?.draft.cardTail, tail, text)
+        }
+    }
+
+    func testRemindersAndCodesInOtherWordings() {
+        XCTAssertTrue(parse("Your card payment of INR 1,000 is due by 25-08-2026").events.isEmpty)
+        XCTAssertTrue(parse("Payment request of INR 500.00 from merchant@upi. Ignore if already paid.").events.isEmpty)
+        XCTAssertEqual(parse("كلمة السر لمرة واحدة بمبلغ 10 دينار هي: 1234.").classification, .verificationCode)
+    }
+
+    func testResultWrittenAfterThePurchase() throws {
+        let reversed = try XCTUnwrap(single("Purchase of INR 500 at TEST STORE with card **0001 has been reversed and credited back."))
+        XCTAssertEqual(reversed.direction, .inflow)
+        XCTAssertEqual(reversed.kind, .reversal)
+        let refund = try XCTUnwrap(single("Purchase Refund\nAmount: 7.89 SAR\nAt: TEST STORE"))
+        XCTAssertEqual(refund.kind, .refund)
+        XCTAssertEqual(refund.direction, .inflow)
+    }
+
+    func testHeadingOnItsOwnLineDecidesDirection() throws {
+        let d = try XCTUnwrap(single("شراء عبر نقاط البيع\nبطاقة: ***0001\nمبلغ: SAR 56.00"))
+        XCTAssertEqual(d.direction, .outflow)
+    }
+
     // MARK: 英文写法
 
     func testEnglishWordingsFromOtherIssuers() throws {

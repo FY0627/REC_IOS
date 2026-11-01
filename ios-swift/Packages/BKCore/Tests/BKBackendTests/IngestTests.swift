@@ -1094,6 +1094,22 @@ final class IngestTests: XCTestCase {
         XCTAssertEqual(count, 1)
     }
 
+    func testTwoFeesInOneSentenceAreBothKept() async throws {
+        let backend = try makeBackend()
+        let result = try await backend.ingest(IngestRequest(text: "【招商银行】您尾号0001账户10月24日消费100.00元，手续费1.00元，服务费2.00元", source: .sms))
+        XCTAssertEqual(result.pendingCount, 3, result.summary)
+    }
+
+    func testEitherAccountOrCardNumberCanBeTheAddedOne() async throws {
+        let backend = try makeBackend()
+        let account = try await addAccount(backend, bank: "x", bankName: "Example Bank", last4: "0001", currency: .usd)
+        let text = "Example Bank\nDebit Card Purchase\nAccount XXXX0001\nCard XXXX0002\nUSD 20.00\nTEST SHOP"
+        let result = try await backend.ingest(IngestRequest(text: text, source: .sms))
+        XCTAssertEqual(result.recordedCount, 1, result.summary)
+        let rows = try await backend.records(accountID: account.id)
+        XCTAssertEqual(rows.count, 1)
+    }
+
     func testWalletAddedAsCardReceivesNoTailNotices() async throws {
         let backend = try makeBackend()
         let card = try await addAccount(backend, bank: "maya", bankName: "Maya", last4: "0007", currency: CurrencyCode("PHP"))

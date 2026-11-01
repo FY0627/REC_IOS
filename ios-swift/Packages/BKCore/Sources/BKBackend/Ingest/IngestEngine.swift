@@ -158,6 +158,11 @@ struct IngestEngine {
             for event in parsed.events {
                 var draft = event.draft
                 if draft.cardTail == nil { draft.cardTail = fallbackTail }
+                // 同时写了账号和卡号（「Account XX01 Card XX02」），用户加的可能是其中任何一个
+                if let tail = draft.cardTail, !ownCard.contains(where: { $0.matches(tail: tail) }),
+                   let other = parsed.cardTails.first(where: { tail in ownCard.contains { $0.matches(tail: tail) } }) {
+                    draft.cardTail = other
+                }
                 let outcome: CommitOutcome
                 if let issue = event.issue {
                     let candidates = candidateIDs(for: draft, request: request, accounts: accounts)

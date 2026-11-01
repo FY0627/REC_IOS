@@ -63,11 +63,12 @@ public enum MessageParser {
 
     private static let tailPatterns: [Rx] = [
         Rx(#"(?:结尾号码|尾号码|号码结尾|尾号|尾数|末四位|后四位|卡号后四位|账号尾号|卡尾号)\s*(?:为|是)?\s*[：:]?\s*[*xX•·]*\s*(\d{3,4})(?![\d年月日元.,])"#),
-        Rx(#"(?:账户|账号|卡号?|card|acct|account|a/c|konto|karte)\s*(?:ending(?:\s+in|\s+with)?|endend auf|no\.?)?\s*[*xX•·.]{1,}\s*(\d{4})(?![\d年月日元.,])"#),
-        Rx(#"(?:ending(?:\s+in|\s+with)?|ends in|endend auf)\s*[：:]?\s*[*xX•·]*\s*(\d{4})(?![\d.,])"#),
-        Rx(#"(?<![\w])[*xX•]{2,}\s?(\d{4})(?![\d.,])"#),
+        Rx(#"(?:账户|账号|卡号?|card|acct|account|a/c|\bac\b|\bcc\b|konto|karte)\s*(?:ending(?:\s+in|\s+with)?|endend auf|no\.?)?\s*[:：]?\s*\d*[*xX•·.#]{1,}\s*\d*?(\d{3,4})(?![\d年月日元xX*•#]|[.,]\d)"#),
+        Rx(#"(?:ending(?:\s+in|\s+with)?|ends in|endend auf)\s*[：:]?\s*[*xX•·]*\s*(\d{3,4})(?![\d.,])"#),
+        Rx(#"(?<![\w])[*xX•]{2,}\s?\d*(\d{4})(?![\d.,])"#),
         Rx(#"(?:借记卡|储蓄卡|信用卡|贷记卡|扣账卡|账户|账号)\s*(\d{4})(?![\d年月日元.,:：])"#),
         Rx(#"\bcard\s*\((\d{4})\)"#),
+        Rx(#"\b(?:cc|card)\s+(\d{4})(?![\d年月日元.,])"#),
     ]
     private static let referencePattern = Rx(#"(?:交易流水号|流水号|交易参考号|参考号|凭证号|交易编号|交易序号|reference(?:\s+no\.?|\s+number)?|\bref(?:\.|\s+no\.?)?|txn id|transaction id)\s*[：:#]?\s*([A-Za-z0-9][A-Za-z0-9\-]{5,31})"#)
     private static let longDigits = Rx(#"\d{9,}"#)
@@ -82,11 +83,10 @@ public enum MessageParser {
     private static let feeClause = Rx(#"(?:含\s*)?(?:手续费|服务费|费用)[^，,。；;)）]*"#)
     private static let cjk = Rx(#"[\x{4E00}-\x{9FFF}]"#)
     /// 数字后面紧跟着一个词（「54321 testcity」）：是名称里的数字
-    private static let wordAfterNumber = Rx(#"^\s?[A-Za-z\x{4E00}-\x{9FFF}]"#)
 
     private static let dateTimeFull = Rx(#"(20\d{2})\s*[-/.年]\s*(\d{1,2})\s*[-/.月]\s*(\d{1,2})\s*日?(?:\s*(?:T|\s)?\s*(\d{1,2})\s*[：:时点]\s*(\d{2})\s*(?:[：:分]\s*(\d{2}))?\s*(?:秒|分)?)?"#)
-    private static let dateNumericYear = Rx(#"(?<![\d.])(\d{1,2})([/.])(\d{1,2})[/.](20\d{2}|\d{2})(?:,?\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?(?![\d])"#)
-    private static let dateEnglishDMY = Rx(#"(?<![\d])(\d{1,2})(?:st|nd|rd|th)?\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?,?\s*(20\d{2})?(?:,?\s+(?:at\s+)?(\d{1,2}):(\d{2}))?"#)
+    private static let dateNumericYear = Rx(#"(?<![\d.\-/])(\d{1,2})([-/.])(\d{1,2})[-/.](20\d{2}|\d{2})(?:,?\s+(?:at\s+)?(\d{1,2}):(\d{2})(?::(\d{2}))?)?(?![\d])"#)
+    private static let dateEnglishDMY = Rx(#"(?<![\d])(\d{1,2})(?:st|nd|rd|th)?[\s-]+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?[,-]?\s*(20\d{2}|\d{2}(?![\d:]))?(?:,?\s+(?:at\s+)?(\d{1,2}):(\d{2}))?"#)
     private static let dateEnglishMDY = Rx(#"\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?\s*(20\d{2})?(?:,?\s+(?:at\s+)?(\d{1,2}):(\d{2}))?"#)
     /// 「于0618发生」「于20260928的汇款」
     private static let dateCompact = Rx(#"(?<=于)(20\d{2})?(0[1-9]|1[0-2])([0-3]\d)(?!\d)"#)
@@ -94,7 +94,7 @@ public enum MessageParser {
     private static let dateShort = Rx(#"(?<![\d.,/])(\d{1,2})([-/])(\d{1,2})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?(?![\d])"#)
     private static let timeOnly = Rx(#"(?<![\d:.])(\d{1,2})\s*[：:]\s*(\d{2})(?:\s*[：:]\s*(\d{2}))?(?![\d:])|(\d{1,2})时(\d{2})分"#)
 
-    private static let amountPattern = Rx(#"(?<![\d.,'#])([-+])?\s?(\d{1,3}(?:,\d{3})+(?:\.\d{1,3})?|\d{1,3}(?:\.\d{3})+(?:,\d{1,3})?|\d{1,3}(?:'\d{3})+(?:\.\d{1,3})?|\d+(?:[.,]\d{1,3})?)(?![\d'#]|[.,]\d)"#)
+    private static let amountPattern = Rx(#"(?<![\d,'#])(?<!\d\.)(?:([-+])[ \t]?)?(\d{1,2}(?:,\d{2})+,\d{3}(?:\.\d{1,3})?|\d{1,3}(?:,\d{3})+(?:\.\d{1,3})?|\d{1,3}(?:\.\d{3})+(?:,\d{1,3})?|\d{1,3}(?:'\d{3})+(?:\.\d{1,3})?|\d+(?:[.,]\d{1,3})?)(?![\d'#]|[.,]\d)"#)
 
     private static let counterpartyPatterns: [Rx] = [
         Rx(#"(?:商户名称|交易商户|商户|对方户名|对方账户名|对方名称|对方|收款方|收款人|付款方|付款人|交易对象|merchant|payee|händler)\s*[：:]\s*([^，,。；;\n()（）]{1,40})"#),
@@ -214,7 +214,7 @@ public enum MessageParser {
             guard let a = m.group(1, in: ns).flatMap(Int.init), let b = m.group(3, in: ns).flatMap(Int.init) else { continue }
             let separator = m.group(2, in: ns) ?? "/"
             var month: Int?, day: Int?
-            if separator == "." || a > 12 { day = a; month = b } else if b > 12 { month = a; day = b }
+            if separator != "/" || a > 12 { day = a; month = b } else if b > 12 { month = a; day = b }
             var yearText = m.group(4, in: ns)
             if let y = yearText, y.count == 2 { yearText = "20" + y }
             if month == nil {
@@ -225,7 +225,8 @@ public enum MessageParser {
             addTime(m.range, makeClock(year: yearText, month: month.map(String.init), day: day.map(String.init), hour: m.group(5, in: ns), minute: m.group(6, in: ns), second: m.group(7, in: ns), reference: reference, calendar: calendar))
         }
         for m in dateEnglishDMY.matches(ns) {
-            addTime(m.range, makeClock(year: m.group(3, in: ns), month: monthNumber(m.group(2, in: ns)).map(String.init), day: m.group(1, in: ns), hour: m.group(4, in: ns), minute: m.group(5, in: ns), second: nil, reference: reference, calendar: calendar))
+            let year = m.group(3, in: ns).map { $0.count == 2 ? "20" + $0 : $0 }
+            addTime(m.range, makeClock(year: year, month: monthNumber(m.group(2, in: ns)).map(String.init), day: m.group(1, in: ns), hour: m.group(4, in: ns), minute: m.group(5, in: ns), second: nil, reference: reference, calendar: calendar))
         }
         for m in dateEnglishMDY.matches(ns) {
             addTime(m.range, makeClock(year: m.group(3, in: ns), month: monthNumber(m.group(1, in: ns)).map(String.init), day: m.group(2, in: ns), hour: m.group(4, in: ns), minute: m.group(5, in: ns), second: nil, reference: reference, calendar: calendar))
@@ -283,6 +284,8 @@ public enum MessageParser {
             let suffixCurrency = CurrencyTokens.suffix(in: after)
             let hasCurrency = prefixCurrency != nil || suffixCurrency != nil
             if !hasCurrency, Lexicon.nonAmountSuffix.test(after) { continue }
+            // 粘在字母上的数字是编号（交易号 DB59HV、车牌 3AA33），写了币种的除外（USD10、CNY1）
+            if !hasCurrency, before.last?.isGluedToNumber == true || after.first?.isGluedToNumber == true { continue }
 
             let candidates = CurrencyTokens.combine(prefixCurrency, suffixCurrency, chineseText: chinese)
             var signNegative = m.group(1, in: maskedText) == "-"
@@ -292,7 +295,11 @@ public enum MessageParser {
             let clauseStart = clauseBoundaries.filter { $0 < numberRange.location }.max().map { $0 + 1 } ?? 0
             let windowStart = max(clauseStart, numberRange.location - 24)
             let window = ns.substring(with: NSRange(location: windowStart, length: max(0, numberRange.location - windowStart)))
-            let (role, included) = roleFor(window: window)
+            // 「Transaction cost, Ksh0.00」：标签和金额被逗号隔开，这一分句里什么都没有时往前看
+            let wider = window.trimmingCharacters(in: .whitespaces).count <= 4
+                ? ns.substring(with: NSRange(location: max(0, numberRange.location - 24), length: min(24, numberRange.location))) : window
+            var (role, included) = roleFor(window: wider)
+            if Lexicon.balanceAfterAmount.test(after) { (role, included) = (.balance, false) }
             let hasDecimals = digits.range(of: #"[.,]\d{2}$"#, options: .regularExpression) != nil
             if !hasCurrency, role == nil, !hasDecimals { continue }
             if role == .points { continue }
@@ -308,13 +315,10 @@ public enum MessageParser {
             ))
         }
 
-        // 同一句里已经有写明币种的金额时，没写币种、没有小数、后面紧跟着一个词的整数是名称里的数字
-        // （恒生「向54321 testcity CN支付了CNY58」里的商户「54321」），不算金额
-        let sentencesWithCurrency = Set(amounts.filter(\.hasCurrency).map(\.sentence))
-        amounts.removeAll { amount in
-            guard !amount.hasCurrency, sentencesWithCurrency.contains(amount.sentence),
-                  amount.digits.allSatisfy(\.isNumber) else { return false }
-            return wordAfterNumber.test(maskedText.substring(from: amount.range.location + amount.range.length))
+        // 已经有写明币种的交易金额时，没写币种的数字是名称、编号或说明（「Amount you can transact is 498,440.00」）
+        // （恒生「向54321 testcity CN支付了CNY58」的商户、「Person 4」「TRANSFER365」），不算金额
+        if amounts.contains(where: { $0.hasCurrency && $0.role == .transaction }) {
+            amounts.removeAll { !$0.hasCurrency && $0.role == .transaction }
         }
 
         // 同一条通知里其他金额写明的币种，可作为没写币种的金额的线索
@@ -403,8 +407,9 @@ public enum MessageParser {
             // 逾期/将要发生的扣款属于提醒，不入账
             if Lexicon.reminder.test(sentence), !Lexicon.completed.test(sentence) { continue }
 
-            let prefix = ns.substring(with: NSRange(location: sentenceRange.location, length: amount.range.location - sentenceRange.location))
-            let suffix = ns.substring(with: NSRange(location: amount.range.location + amount.range.length, length: sentenceRange.location + sentenceRange.length - amount.range.location - amount.range.length))
+            let amountEnd = amount.range.location + amount.range.length
+            let prefix = ns.substring(with: NSRange(location: sentenceRange.location, length: max(0, amount.range.location - sentenceRange.location)))
+            let suffix = ns.substring(with: NSRange(location: amountEnd, length: max(0, sentenceRange.location + sentenceRange.length - amountEnd)))
             var detection = detectKind(prefix: prefix, suffix: suffix, summary: summaryValue, message: singleTransaction ? cleaned + "\n" + subject : nil)
             if detection.status == .posted, Lexicon.failed.test(sentence) || (singleTransaction && Lexicon.failed.test(cleaned)) {
                 detection.status = .failed
@@ -441,7 +446,6 @@ public enum MessageParser {
             if issue == nil, case .failure(.ambiguous) = trialParse(amount.amount) { issue = .ambiguousAmount }
 
             let part = nextPart
-            nextPart += 2
             let draft = EventDraft(
                 amount: amount.amount, direction: detection.direction, kind: detection.kind, status: detection.status,
                 counterparty: counterparty, cardTail: tail, counterpartyTail: otherTail, transactionTime: time,
@@ -450,7 +454,9 @@ public enum MessageParser {
                 holdTime: detection.status == .posted ? holdTime(in: sentenceRange) : nil, evidenceSnippet: String(sentence.prefix(160))
             )
             events.append(ParsedEvent(draft: draft, issue: issue))
-            for fee in sentenceFees {
+            // 主交易用偶数编号，手续费用奇数（`IngestEngine.dedupeKey`）。一句里可以有几项费用，编号不能重复
+            nextPart += 2 * max(1, sentenceFees.count)
+            for (feeIndex, fee) in sentenceFees.enumerated() {
                 var feeDraft = draft
                 feeDraft.amount = fee.element.amount
                 feeDraft.kind = .fee
@@ -462,7 +468,7 @@ public enum MessageParser {
                 feeDraft.counterparty = nil
                 feeDraft.settlement = nil
                 feeDraft.holdTime = nil
-                feeDraft.partIndex = part + 1
+                feeDraft.partIndex = part + 1 + 2 * feeIndex
                 events.append(ParsedEvent(draft: feeDraft, issue: issue))
             }
         }
@@ -610,10 +616,15 @@ public enum MessageParser {
             }
             return best?.0
         }
-        func cueDirection(_ text: String) -> FlowDirection? {
+        // 离金额最近的词为准：金额前面看最后一个，金额后面看第一个（「debited A/c and credited to X」）
+        func cueDirection(_ text: String, nearestFirst: Bool = false) -> FlowDirection? {
             let ns = NSString(string: text)
-            let inflow = Lexicon.inflowCue.matches(ns).last.map { $0.range.location + $0.range.length }
-            let outflow = Lexicon.outflowCue.matches(ns).last.map { $0.range.location + $0.range.length }
+            func position(_ rx: Rx) -> Int? {
+                let matches = rx.matches(ns)
+                return (nearestFirst ? matches.first : matches.last).map { nearestFirst ? -$0.range.location : $0.range.location + $0.range.length }
+            }
+            let inflow = position(Lexicon.inflowCue)
+            let outflow = position(Lexicon.outflowCue)
             switch (inflow, outflow) {
             case let (i?, o?): return i >= o ? .inflow : .outflow
             case (.some, nil): return .inflow
@@ -628,10 +639,14 @@ public enum MessageParser {
         let around = (prefix + " " + suffix).replacingOccurrences(of: "预授权完成", with: "")
         // 金额后面的「手续费 2 元」描述的是另一笔，不用来判断这一笔的性质
         let suffixForKind = feeClause.replace(suffix, with: " ")
-        let rule = lastRule(in: prefix)?.0 ?? summary.flatMap(firstRule(in:)) ?? firstRule(in: suffixForKind) ?? message.flatMap(firstRule(in:))
+        // 标题和金额不在一句时看整条通知。「Purchase Refund」两个词都有，退款是结果
+        let refund = message.flatMap { text in Lexicon.kindRules.first { $0.kind == .refund && $0.rx.test(text) } }
+        let rule = lastRule(in: prefix)?.0 ?? summary.flatMap(firstRule(in:)) ?? firstRule(in: suffixForKind) ?? refund ?? message.flatMap(firstRule(in:))
         var status: SettlementStatus = .posted
         if let statusRule = Lexicon.kindRules.first(where: { $0.status != .posted && $0.rx.test(around) }) { status = statusRule.status }
-        let cue = cueDirection(prefix) ?? cueDirection(suffix) ?? summary.flatMap(cueDirection)
+        // 紧贴金额的借贷记号最可靠；标题和金额不在一句时（`شراء…` 换行后才是金额）再看整条通知
+        let cue = Lexicon.fromYourAccount.test(suffix) ? .outflow : markDirection(prefix: prefix, suffix: suffix)
+            ?? cueDirection(prefix) ?? cueDirection(suffix, nearestFirst: true) ?? summary.flatMap { cueDirection($0) } ?? message.flatMap { cueDirection($0) }
 
         guard let rule else {
             if let cue { return KindDetection(kind: .other, direction: cue, status: status, uncertain: false) }
@@ -650,12 +665,22 @@ public enum MessageParser {
             // 方向不明时交给入账服务按账户类型决定（信用卡收到还款 / 借记卡付出还款）
             return KindDetection(kind: .repayment, direction: cue, status: status, uncertain: false)
         default:
+            if rule.kind == .purchase, Lexicon.reversedAfter.test(suffix) {
+                return KindDetection(kind: .reversal, direction: .inflow, status: status, uncertain: false)
+            }
             // 「网上支付收入」「收入(跨行支付)」：「支付」只说明渠道，写明了收入就是钱进来了。不知道具体性质，和只写「收入」一样记为其他
             if rule.kind == .purchase, rule.direction == .outflow, cue == .inflow, Lexicon.explicitInflow.test(prefix) {
                 return KindDetection(kind: .other, direction: .inflow, status: status, uncertain: false)
             }
             return KindDetection(kind: rule.kind, direction: rule.direction ?? cue, status: status, uncertain: rule.direction == nil && cue == nil)
         }
+    }
+
+    private static func markDirection(prefix: String, suffix: String) -> FlowDirection? {
+        let before = String(prefix.suffix(16)), after = String(suffix.prefix(6))
+        if Lexicon.debitMark.test(before) || Lexicon.debitMark.test(after) { return .outflow }
+        if Lexicon.creditMark.test(before) || Lexicon.creditMark.test(after) { return .inflow }
+        return nil
     }
 
     static func extractCounterparty(sentence: String, summary: String?) -> String? {
@@ -743,6 +768,11 @@ public enum MessageParser {
     }
 }
 
+private extension Character {
+    /// 紧贴在数字旁边时，说明这个数字是编号的一部分
+    var isGluedToNumber: Bool { isASCII && isLetter }
+}
+
 /// 金额旁的币种写法。
 enum CurrencyTokens {
     struct Found {
@@ -751,6 +781,8 @@ enum CurrencyTokens {
         var symbolOnly: Bool
     }
 
+    /// 「Rs」：印度、巴基斯坦、尼泊尔、斯里兰卡都这么写，账户持有哪个就是哪个
+    private static let rupees: [CurrencyCode] = ["INR", "PKR", "NPR", "LKR"].map { CurrencyCode($0) }
     private static let dollarFamily: [CurrencyCode] = ["USD", "HKD", "SGD", "AUD", "CAD", "TWD", "NZD", "MOP"].map { CurrencyCode($0) }
 
     // 按长度从长到短匹配
@@ -767,6 +799,15 @@ enum CurrencyTokens {
         ("HUF", [CurrencyCode("HUF")], nil, false), ("美元", [.usd], nil, false), ("欧元", [.eur], nil, false), ("港币", [.hkd], nil, false),
         ("港元", [.hkd], nil, false), ("英镑", [.gbp], nil, false), ("日元", [.jpy], nil, false), ("韩元", [CurrencyCode("KRW")], nil, false),
         ("澳元", [CurrencyCode("AUD")], nil, false), ("加元", [CurrencyCode("CAD")], nil, false),
+        ("دينار", [CurrencyCode("JOD"), CurrencyCode("KWD"), CurrencyCode("BHD")], nil, false), ("MT", [CurrencyCode("MZN")], nil, false), ("TL", [CurrencyCode("TRY")], nil, false),
+        ("BIRR", [CurrencyCode("ETB")], nil, false), ("KSHS", [CurrencyCode("KES")], nil, false), ("KSH", [CurrencyCode("KES")], nil, false), ("TSHS", [CurrencyCode("TZS")], nil, false), ("TSH", [CurrencyCode("TZS")], nil, false),
+        ("PHP", [CurrencyCode("PHP")], nil, false), ("INR", [CurrencyCode("INR")], nil, false), ("BAHT", [CurrencyCode("THB")], nil, false), ("NAIRA", [CurrencyCode("NGN")], nil, false),
+        ("RS.", rupees, CurrencyCode("INR"), true), ("RS", rupees, CurrencyCode("INR"), true), ("R$", [CurrencyCode("BRL")], nil, false), ("RM", [CurrencyCode("MYR")], nil, false),
+        ("RP", [CurrencyCode("IDR")], nil, false), ("TK", [CurrencyCode("BDT")], nil, false), ("DHS", [CurrencyCode("AED")], nil, false), ("SR", [CurrencyCode("SAR")], nil, false),
+        ("₹", [CurrencyCode("INR")], nil, false), ("₱", [CurrencyCode("PHP")], nil, false), ("₦", [CurrencyCode("NGN")], nil, false), ("₫", [CurrencyCode("VND")], nil, false),
+        ("฿", [CurrencyCode("THB")], nil, false), ("₺", [CurrencyCode("TRY")], nil, false), ("₪", [CurrencyCode("ILS")], nil, false), ("₴", [CurrencyCode("UAH")], nil, false),
+        ("₽", [CurrencyCode("RUB")], nil, false), ("৳", [CurrencyCode("BDT")], nil, false), ("บาท", [CurrencyCode("THB")], nil, false), ("ريال", [CurrencyCode("SAR")], nil, false),
+        ("ر.س", [CurrencyCode("SAR")], nil, false), ("درهم", [CurrencyCode("AED")], nil, false), ("د.إ", [CurrencyCode("AED")], nil, false), ("تومان", [CurrencyCode("IRR")], nil, false),
         ("菲律宾比索", [CurrencyCode("PHP")], nil, false), ("新加坡元", [CurrencyCode("SGD")], nil, false), ("新西兰元", [CurrencyCode("NZD")], nil, false),
         ("泰铢", [CurrencyCode("THB")], nil, false), ("林吉特", [CurrencyCode("MYR")], nil, false),
         ("€", [.eur], nil, false), ("£", [.gbp], nil, false), ("円", [.jpy], nil, false), ("₩", [CurrencyCode("KRW")], nil, false),
