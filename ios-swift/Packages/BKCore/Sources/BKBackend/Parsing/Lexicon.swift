@@ -6,7 +6,7 @@ enum Lexicon {
 
     static let verificationCode = Rx(#"验证码|校验码|动态码|动态密码|短信密码|一次性密码|\bOTP\b|one[- ]time (?:password|code)|verification code|verify code|security code|passcode|bestätigungscode|\bm?TAN\b"#)
     /// 正文里真的给出了一个验证码（只提到「验证码」字样的安全提示不算）
-    static let verificationCodeValue = Rx(#"(?:验证码|校验码|动态码|动态密码|短信密码|一次性密码)\s*(?:是|为)?\s*[：:]?\s*[A-Za-z0-9]{4,8}(?![\d])|(?<![\d.])\d{4,8}\s*(?:是|为)?\s*(?:您的?)?(?:本次)?(?:验证码|校验码|动态码|动态密码)|(?:\bOTP\b|one[- ]time (?:password|code)|verification code|verify code|security code|passcode|bestätigungscode)\s*(?:is|:|ist)?\s*[：:]?\s*\d{4,8}|\d{4,8}\s+is your (?:otp|verification code|code)|(?:الرقم السري|كلمة السر|رمز التحقق|رمز التفعيل|c[oó]digo de (?:verificaci[oó]n|seguridad)|код подтверждения|doğrulama kodu).{0,80}?(?<![\d.])\d{4,8}(?!\d)"#)
+    static let verificationCodeValue = Rx(#"(?:验证码|校验码|动态码|动态密码|短信密码|一次性密码)\s*(?:是|为)?\s*[：:]?\s*[A-Za-z0-9]{4,8}(?![\d])|(?<![\d.])\d{4,8}\s*(?:是|为)?\s*(?:您的?)?(?:本次)?(?:验证码|校验码|动态码|动态密码)|(?:\bOTP\b|one[- ]time (?:password|code)|verification code|verify code|security code|passcode|bestätigungscode)\s*(?:is|:|ist)?\s*[：:]?\s*\d{4,8}|\d{4,8}\s+is your (?:otp|verification code|code)|\bOTP for\b|\d{4,8}\s*هو\s*رمز|(?:الرقم السري|كلمة السر|رمز التحقق|رمز التفعيل|c[oó]digo de (?:verificaci[oó]n|seguridad)|код подтверждения|doğrulama kodu).{0,80}?(?<![\d.])\d{4,8}(?!\d)"#)
     static let statement = Rx(#"电子账单|对账单|月结单|账单明细|本期账单明细|e-?statement|monthly statement|statement of account|kontoauszug"#)
     static let reminder = Rx(#"还款提醒|账单提醒|扣款提醒|温馨提示.{0,20}还款|到期还款日|最后还款日|账单日|最低还款|应还款?额|本期应还|账单已出|已出账|payment due|due date|minimum payment|statement (?:is )?ready|将于|将在|即将|预计.{0,6}(?:扣款|扣收|还款|入账)|请于|请在.{0,12}前|请确保|请保证|请存入|请及时还款|请按时还款|will be (?:debited|charged|deducted)|\bis due\b|\bdue (?:on|by)\b|ignore if (?:already )?paid|payment request|\bmandate\b"#)
     static let completed = Rx(#"已还款|还款成功|成功还款|已入账|已到账|已收到|已扣款|已于|扣款成功|has been (?:credited|debited|received)|was (?:charged|debited|credited)|received your payment"#)
@@ -35,8 +35,8 @@ enum Lexicon {
     }
 
     static let roleLabels: [(Role, Rx)] = [
-        (.balance, Rx(#"可用余额|账户余额|活期余额|余额|结余|\bbalance\b|\ba?va?i?l\.? ?bal|avail(?:able)? bal|\bbaln?\b|\bavbl\b|\bavlb?\b|\bremaining\b|kontostand|saldo|bakiye|остаток|رصيد|الرصيد|مانده|المتبقي|คงเหลือ"#)),
-        (.creditLimit, Rx(#"可用额度|信用额度|剩余额度|临时额度|额度|限额|上限|available credit|credit limit|available limit|\ba?va?i?l\.? ?(?:lmt|limit)\b|\blmt\b|verfügbarer rahmen"#)),
+        (.balance, Rx(#"可用余额|账户余额|活期余额|余额|结余|\bbalance\b|\ba?va?i?l\.? ?bal|avail(?:able)? bal|\bbaln?\b|\bavbl\b|\bavlb?\b|\bavailable\b|доступно|\bremaining\b|kontostand|saldo|bakiye|остаток|رصيد|الرصيد|مانده|المتبقي|คงเหลือ"#)),
+        (.creditLimit, Rx(#"可用额度|信用额度|剩余额度|临时额度|额度|限额|上限|available credit|credit limit|available limit|\blimit\b|\blmt\b|verfügbarer rahmen"#)),
         (.fee, Rx(#"手续费|服务费|工本费|年费|管理费|短信费|\bfees?\b|\bcost\b|\bcharges\b|service charge|\bvat\b|\bgst\b|commission|gebühr|comisi[oó]n|komisyon|رسوم"#)),
         (.cumulative, Rx(#"累计|合计|总计|共计|本月消费|当月消费|\btotal\b"#)),
         (.due, Rx(#"最低还款|应还款?额?|本期账单金额|账单金额|minimum payment|amount due|statement balance"#)),
@@ -87,13 +87,13 @@ enum Lexicon {
         KindRule(#"取款|取现|提现|\bATM\b|\bcash[- ]?out\b|(?<!手机银行|网上银行|网银|网上支付|快捷支付)支取|cash withdrawal|withdrawal|withdrawn|abhebung|bargeld"#, .withdrawal, .outflow),
         KindRule(#"存款|现金存入|存入现金|cash deposit|deposited (?:via|at|by|through) (?:atm|cash)|\bcash[- ]?in\b|einzahlung"#, .deposit, .inflow),
         KindRule(#"向您(?:尾号\s*[*xX•]*\d{3,4})?的?(?:账户|账号|卡)?(?:完成)?(?:转账|转存|汇款)|转入|汇入|收款|来账|转账收入|转账存入|received from|transfer from|incoming transfer|überweisung von"#, .transferIn, .inflow),
-        KindRule(#"credited to (?:the )?beneficiary|(?<!you )(?<!account )(?<!card )has received|转出|汇出|转账支出|[你您]已成功转账|成功转账至|已转账至|转账至|向[^，,。；;\n]{1,20}(?:转账|汇款)|付款给|transfer(?:red)? to|your transfer is successful|\bsent\b|outgoing transfer|überweisung an"#, .transferOut, .outflow),
+        KindRule(#"credited to (?:the )?beneficiary|(?<!you )(?<!account )(?<!card )has received|转出|汇出|转账支出|[你您]已成功转账|成功转账至|已转账至|转账至|向[^，,。；;\n]{1,20}(?:转账|汇款)|付款给|transfer(?:red)? to|your transfer is successful|\bsent\b(?! by)|outgoing transfer|überweisung an"#, .transferOut, .outflow),
         KindRule(#"转账|汇款|\btransfer\b|überweisung"#, .transferOut, nil, transferGeneric: true),
         KindRule(#"消费|刷卡|网上支付|快捷支付|网银支付|支付|购物|扣款|划扣|purchase|spent|charged|was used|card transaction|transaction at\b|card payment|payment (?:at|to)|paid (?:to|at)\b|\bPOS\b|kartenzahlung|einkauf"#, .purchase, .outflow),
     ]
 
     static let inflowCue = Rx(#"收入|入账|到账|存入|收到|退回|返还|credited|\bcredit\b(?! card)|\breceived?\b|deposited|eingang|gutgeschrieben|gutschrift|abono|dep[oó]sito|recibido|recebido|recebeu|re[cç]u\b|зачисл|пополнен|поступ|yatırıl|masuk|diterima|إيداع|ايداع|واریز|รับเงิน|เงินเข้า|โอนเงินเข้า|umepokea"#)
-    static let outflowCue = Rx(#"支出|支取|扣除|扣减|扣款|扣收|\bpaid\b|\bspent\b|withdrawn|deducted|\bsent\b|debited|\bspending\b|\bcargo\b|\bretiro\b|\bpago\b|\bcompra\b|\bconsumo\b|\bsaque\b|pagamento|\bachat\b|paiement|retrait|покупка|списан|оплата|снятие|harcama|ödeme|çekim|pembayaran|penarikan|شراء|خصم|سحب|برداشت|خرید|ถอน|ชำระ|จ่าย|โอนเงินออก|malipo|umetuma|kwenda|\bdebit\b(?! card)|abgebucht|belastet|belastung"#)
+    static let outflowCue = Rx(#"支出|支取|扣除|扣减|扣款|扣收|\bpaid\b|\bspent\b|withdrawn|deducted|\bsent\b(?! by)|debited|\bspending\b|\bcargo\b|\bretiro\b|\bpago\b|\bcompra\b|\bconsumo\b|\bsaque\b|pagamento|\bachat\b|paiement|retrait|покупка|списан|оплата|снятие|harcama|ödeme|çekim|pembayaran|penarikan|شراء|خصم|سحب|برداشت|خرید|ถอน|ชำระ|จ่าย|โอนเงินออก|malipo|umetuma|kwenda|\bdebit\b(?! card)|abgebucht|belastet|belastung"#)
     /// 借贷记号：`NGN4,200.00 DR`、`Dr. Rs. 75.50`。必须是这个大小写，「Dr Smith」「CR7」这类不算
     static let debitMark = Rx(#"(?<![A-Za-z])(?:DR\b|Dr\b\.?(?!\s+(?!Rs\b)[A-Z][a-z]))"#, caseInsensitive: false)
     static let creditMark = Rx(#"(?<![A-Za-z])(?:CR\b|Cr\b\.?(?!\s+(?!Rs\b)[A-Z][a-z]))"#, caseInsensitive: false)

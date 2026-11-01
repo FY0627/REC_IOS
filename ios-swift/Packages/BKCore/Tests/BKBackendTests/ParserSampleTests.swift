@@ -543,6 +543,26 @@ final class ParserSampleTests: XCTestCase {
         XCTAssertEqual(refund.direction, .inflow)
     }
 
+    func testWordAfterTheAmountCannotReverseADirectionWrittenBeforeIt() throws {
+        let d = try XCTUnwrap(single("Test, you've received INR 100.00 in your Account XXXX0001. It was sent by SOMEONE on March 19, 2026."))
+        XCTAssertEqual(d.direction, .inflow)
+    }
+
+    func testCounterpartyAccountIsNotOurs() throws {
+        let d = try XCTUnwrap(single("A/c 100-200***-003 is credited with INR 50.00 as NEFT from TEST A/c ***6000 of Test Person."))
+        XCTAssertEqual(d.cardTail, "003")
+    }
+
+    func testLinksAndLimitsAreNotAmounts() throws {
+        let link = try XCTUnwrap(single("Your Account 1****0001 has been debited with ETB 25.00. Balance is ETB 100.00 https://example.com/?id=FT25256RP1FK27"))
+        XCTAssertEqual(link.amount.digits, "25.00")
+        let limit = try XCTUnwrap(single("Purchase of AED 150.00 with Credit Card ending 0001 at TEST SHOP. Avl Cr. Limit is AED 45,000.00"))
+        XCTAssertEqual(limit.amount.digits, "150.00")
+        let vat = parse("Your Account 1****0001 has been debited with ETB 100.00. VAT(15%) of ETB1.50")
+        XCTAssertEqual(vat.events.first?.draft.amount.digits, "100.00")
+        XCTAssertNil(vat.events.first?.issue)
+    }
+
     func testHeadingOnItsOwnLineDecidesDirection() throws {
         let d = try XCTUnwrap(single("شراء عبر نقاط البيع\nبطاقة: ***0001\nمبلغ: SAR 56.00"))
         XCTAssertEqual(d.direction, .outflow)

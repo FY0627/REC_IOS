@@ -63,7 +63,7 @@ public enum MessageParser {
 
     private static let tailPatterns: [Rx] = [
         Rx(#"(?:结尾号码|尾号码|号码结尾|尾号|尾数|末四位|后四位|卡号后四位|账号尾号|卡尾号)\s*(?:为|是)?\s*[：:]?\s*[*xX•·]*\s*(\d{3,4})(?![\d年月日元.,])"#),
-        Rx(#"(?:账户|账号|卡号?|card|acct|account|a/c|\bac\b|\bcc\b|konto|karte)\s*(?:ending(?:\s+in|\s+with)?|endend auf|no\.?)?\s*[:：]?\s*\d*[*xX•·.#]{1,}\s*\d*?(\d{3,4})(?![\d年月日元xX*•#]|[.,]\d)"#),
+        Rx(#"(?:账户|账号|卡号?|card|acct|account|a/c|\bac\b|\bcc\b|konto|karte)\s*(?:ending(?:\s+in|\s+with)?|endend auf|no\.?)?\s*[:：]?\s*[\d-]*[*xX•·.#]{1,}[\s-]*\d*?(\d{3,4})(?![\d年月日元xX*•#]|[.,]\d)"#),
         Rx(#"(?:ending(?:\s+in|\s+with)?|ends in|endend auf)\s*[：:]?\s*[*xX•·]*\s*(\d{3,4})(?![\d.,])"#),
         Rx(#"(?<![\w])[*xX•]{2,}\s?\d*(\d{4})(?![\d.,])"#),
         Rx(#"(?:借记卡|储蓄卡|信用卡|贷记卡|扣账卡|账户|账号)\s*(\d{4})(?![\d年月日元.,:：])"#),
@@ -75,11 +75,13 @@ public enum MessageParser {
     /// 电话号码（「+86-138******00」「+852 3665 3665」）和打码的号码（「138******00」「100*0001」）：里面的数字不是金额
     private static let phoneNumber = Rx(#"(?<![\w+])\+\d{1,4}[\s-]+[\d*xX•][\d*xX•\s-]{4,}[\d*xX•]"#)
     private static let maskedNumber = Rx(#"\d*[*•]{2,}\d+|\d+[*•]{2,}\d*|\d+[*•]\d+|\d+[xX]{2,}\d+"#)
+    /// 通知里的链接：里面的数字和字母不是金额和币种
+    private static let url = Rx(#"\b(?:https?://|www\.)\S+"#)
     /// 手机号形状的打码号码（共 11 位，1 开头）：后四位不是卡号尾号。打码的卡号（`6222****1234`）长度不同，不受影响
     static let maskedPhone = Rx(#"(?<![\d*xX•])1[3-9](?:\d\s?[*xX•]{4}|\d{2}\s?[*xX•]{3}|[*xX•]{5})\s?\d{4}(?![\d*xX•])"#)
     /// 引号里的文字：转账对象的账号、邮箱
     static let quoted = Rx(#"["“][^"”\n]{1,60}["”]"#)
-    private static let counterpartyTailMarker = Rx(#"(?:向|至|到|给|对方|收款|付款|\bto|\bfrom)\s*$"#)
+    private static let counterpartyTailMarker = Rx(#"(?:向|至|到|给|对方|收款|付款|\bto|\bfrom)\s*$|\b(?:to|from)\s+[A-Za-z]{2,10}\s+$"#)
     private static let feeClause = Rx(#"(?:含\s*)?(?:手续费|服务费|费用)[^，,。；;)）]*"#)
     private static let cjk = Rx(#"[\x{4E00}-\x{9FFF}]"#)
     /// 数字后面紧跟着一个词（「54321 testcity」）：是名称里的数字
@@ -260,6 +262,7 @@ public enum MessageParser {
         for m in longDigits.matches(ns) where isFree(m.range) { mask(m.range) }
         for m in phoneNumber.matches(ns) { mask(m.range) }
         for m in maskedNumber.matches(ns) { mask(m.range) }
+        for m in url.matches(ns) { mask(m.range) }
 
         // 4. 句子与分句
         let sentences = splitRanges(ns, by: sentenceBreak)
@@ -299,6 +302,11 @@ public enum MessageParser {
             let wider = window.trimmingCharacters(in: .whitespaces).count <= 4
                 ? ns.substring(with: NSRange(location: max(0, numberRange.location - 24), length: min(24, numberRange.location))) : window
             var (role, included) = roleFor(window: wider)
+            // 「VAT(15%) of ETB1.50」：标签在括号前面，本分句认不出时往前看，只认费用、余额这类不是交易的标签
+            if role == nil {
+                let farther = roleFor(window: ns.substring(with: NSRange(location: max(0, numberRange.location - 24), length: min(24, numberRange.location))))
+                if farther.0 != .transaction { (role, included) = farther }
+            }
             if Lexicon.balanceAfterAmount.test(after) { (role, included) = (.balance, false) }
             let hasDecimals = digits.range(of: #"[.,]\d{2}$"#, options: .regularExpression) != nil
             if !hasCurrency, role == nil, !hasDecimals { continue }
@@ -361,7 +369,7 @@ public enum MessageParser {
 
         // 「向尾号6621账户转账」里的尾号是对方账户，不是本条通知所属的账户
         func isCounterpartyTail(_ mention: Mention<String>) -> Bool {
-            let start = max(0, mention.range.location - 4)
+            let start = max(0, mention.range.location - 16)
             let before = ns.substring(with: NSRange(location: start, length: mention.range.location - start))
             return counterpartyTailMarker.test(before)
         }
@@ -640,7 +648,7 @@ public enum MessageParser {
         // 金额后面的「手续费 2 元」描述的是另一笔，不用来判断这一笔的性质
         let suffixForKind = feeClause.replace(suffix, with: " ")
         // 标题和金额不在一句时看整条通知。「Purchase Refund」两个词都有，退款是结果
-        let refund = message.flatMap { text in Lexicon.kindRules.first { $0.kind == .refund && $0.rx.test(text) } }
+        let refund = message.flatMap { text in Lexicon.kindRules.first { ($0.kind == .refund || $0.kind == .reversal) && $0.rx.test(text) } }
         let rule = lastRule(in: prefix)?.0 ?? summary.flatMap(firstRule(in:)) ?? firstRule(in: suffixForKind) ?? refund ?? message.flatMap(firstRule(in:))
         var status: SettlementStatus = .posted
         if let statusRule = Lexicon.kindRules.first(where: { $0.status != .posted && $0.rx.test(around) }) { status = statusRule.status }
@@ -648,6 +656,10 @@ public enum MessageParser {
         let cue = Lexicon.fromYourAccount.test(suffix) ? .outflow : markDirection(prefix: prefix, suffix: suffix)
             ?? cueDirection(prefix) ?? cueDirection(suffix, nearestFirst: true) ?? summary.flatMap { cueDirection($0) } ?? message.flatMap { cueDirection($0) }
 
+        // 金额前面已经写明了方向，后面或别处的词不能把它反过来（「you've received … It was sent by X」）
+        if lastRule(in: prefix) == nil, let written = cueDirection(prefix), let opposite = rule?.direction, opposite != written, rule?.kind != .refund, rule?.kind != .reversal {
+            return KindDetection(kind: .other, direction: written, status: status, uncertain: false)
+        }
         guard let rule else {
             if let cue { return KindDetection(kind: .other, direction: cue, status: status, uncertain: false) }
             return KindDetection(kind: .other, direction: nil, status: status, uncertain: true)
@@ -843,7 +855,7 @@ enum CurrencyTokens {
         for (token, candidates, preferred, symbolOnly) in tokens where upper.hasPrefix(token.uppercased()) {
             if token.first!.isLetter, token.first!.isASCII {
                 let rest = upper.dropFirst(token.count)
-                if let next = rest.first, next.isASCII, next.isLetter { continue }
+                if let next = rest.first, next.isASCII, next.isLetter || next.isNumber { continue }
             }
             return Found(candidates: candidates, preferred: preferred, symbolOnly: symbolOnly)
         }
