@@ -38,11 +38,15 @@ REC 是一款 iPhone 记账 App。你付完款，银行短信一到，它就在�
 
 还在测试，没有上架 App Store。需要 iOS 27 或更高版本，目前要用 [iLoader](https://github.com/nab138/iloader) 自己签名安装，步骤见[安装指南](docs/guides/ios-swift-windows-iloader.md)。
 
-有些银行的短信还认不准，可以在 App 里自己做识别模板。演示里的「日常记账」是 REC 改名前的名字。
+有些银行的短信还认不准，可以在 App 里自己做识别模板。
 
 ## 开发
 
 代码在 [`ios-swift/`](ios-swift/README.md)，文档从 [docs/INDEX.md](docs/INDEX.md) 开始看。
+
+## 友情赞助
+
+- **Frank（Nongfsq）**：市场营销顾问、AI Agent 顾问。[GitHub](https://github.com/Nongfsq) · [B 站](https://space.bilibili.com/19658621)
 
 ## 许可证
 
