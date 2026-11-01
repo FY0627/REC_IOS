@@ -135,7 +135,7 @@ final class WalletController: UIViewController, UIScrollViewDelegate, UIGestureR
         view.backgroundColor = .systemGroupedBackground
 
         detailList = WalletDetailList(store: store, model: detailModel, parent: self)
-        let list = detailList.collectionView
+        let list = detailList.tableView
         list.isHidden = true
         list.accessibilityElementsHidden = true
         view.addSubview(list)
@@ -300,9 +300,12 @@ final class WalletController: UIViewController, UIScrollViewDelegate, UIGestureR
         super.viewDidLayoutSubviews()
         if let window = view.window { safeTop = window.safeAreaInsets.top }
         let bounds = view.bounds
-        // 只改尺寸和中心：详情列表返回时带着下移的变换，这时不能设 frame；滚动区的 bounds 原点是滚动位置，不能动
-        for subview in [detailList.collectionView, stackScroll, cardsView] as [UIView] {
-            if subview.bounds.size != bounds.size { subview.bounds.size = bounds.size }
+        // 只改尺寸和中心：详情列表返回时带着下移的变换，这时不能设 frame；滚动区的 bounds 原点是滚动位置，不能动。
+        // 详情列表和卡片一样宽（系统的滑动按钮贴着格子右边）
+        let listSize = CGSize(width: AppLayout.cardWidth(bounds.width), height: bounds.height)
+        let sizes: [(UIView, CGSize)] = [(detailList.tableView, listSize), (stackScroll, bounds.size), (cardsView, bounds.size)]
+        for (subview, size) in sizes {
+            if subview.bounds.size != size { subview.bounds.size = size }
             subview.center = CGPoint(x: bounds.midX, y: bounds.midY)
         }
         if bounds.width != laidOutWidth {

@@ -75,6 +75,7 @@ private struct ProfileList: View {
                                 Image(systemName: "paintpalette")
                             }
                         }
+                        .background(UndimmedList())
                     }
                 }
 
@@ -229,6 +230,27 @@ private struct ProfileList: View {
     private var primaryCurrencyList: Binding<[CurrencyCode]> {
         Binding { [CurrencyCode(primaryCurrency)] } set: { codes in
             if let code = codes.first { primaryCurrency = code.rawValue }
+        }
+    }
+}
+
+/// 打开弹窗时系统把下面的页面调暗（`tintAdjustmentMode`），菜单按钮的主题色会变成灰色。
+/// 放在列表的一行里：往上找到列表，让它不跟着调暗
+private struct UndimmedList: UIViewRepresentable {
+    func makeUIView(context: Context) -> Probe {
+        let view = Probe()
+        view.isUserInteractionEnabled = false
+        return view
+    }
+
+    func updateUIView(_ uiView: Probe, context: Context) {}
+
+    final class Probe: UIView {
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            var view = superview
+            while let current = view, !(current is UIScrollView) { view = current.superview }
+            view?.tintAdjustmentMode = .normal
         }
     }
 }

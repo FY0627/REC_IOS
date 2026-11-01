@@ -29,12 +29,14 @@ final class WalletDetailModel {
 /// 打开时第一页流水、笔数和待处理数量都读到后，内容整块从屏幕底下升上来；返回时整块退到屏幕底下。
 /// 两个动画都只动列表的显示位置（Core Animation），升起途中也能滚动、点按。
 ///
-/// 流水行左滑露出「编辑」「删除」（右滑是返回卡包，在 `WalletController`）。系统的滑动按钮只有自适应高度的列表布局才有，
-/// 这里不用（见上），所以手势写在这里：只移动格子里 SwiftUI 那一层的显示位置，不重新布局。
+/// 流水行左滑露出「编辑」「删除」，用系统的滑动按钮，和首页一模一样（右滑是返回卡包，在 `WalletController`）。
+/// 所以列表是 `UITableView`：collection view 只有自适应高度的列表布局才有系统的滑动按钮，table view 的行高可以事先量好。
+/// 滑动按钮贴着格子右边，所以列表和卡片一样宽；每笔流水单独一组，行之间的空隙是组尾，按钮才和这一行一样高。
 @MainActor
-final class WalletDetailList: NSObject, UICollectionViewDelegateFlowLayout, UIGestureRecognizerDelegate {
-    enum Section: Int {
-        case card, summary, records
+final class WalletDetailList: NSObject, UITableViewDelegate {
+    enum Section: Hashable {
+        case card, summary, empty
+        case record(String)
     }
 
     enum Item: Hashable {
@@ -45,7 +47,7 @@ final class WalletDetailList: NSObject, UICollectionViewDelegateFlowLayout, UIGe
         case empty
     }
 
-    let collectionView: UICollectionView
+    let tableView: UITableView
     /// 列表滚动了：卡片跟着移动
     var onScroll: () -> Void = {}
     var onSelectRecord: (RecordRow) -> Void = { _ in }
@@ -59,7 +61,7 @@ final class WalletDetailList: NSObject, UICollectionViewDelegateFlowLayout, UIGe
     private let model: WalletDetailModel
     /// 格子里的 SwiftUI 宿主挂在它下面，跟随它的外观和字号
     private unowned let parent: UIViewController
-    private var dataSource: UICollectionViewDiffableDataSource<Section, Item>!
+    private var dataSource: UITableViewDiffableDataSource<Section, Item>!
     /// 量格子高度用，不显示
     private let sizer: UIHostingController<AnyView>
     private var summaryHeight: CGFloat = 0
@@ -77,26 +79,19 @@ final class WalletDetailList: NSObject, UICollectionViewDelegateFlowLayout, UIGe
     private var session = 0
     /// 余额和流水是否已经显示（升起之后，到关闭后清空之前）
     private var contentShown = false
-    private let rowSwipe = UIPanGestureRecognizer()
-    /// 手指按下的那一行
-    private weak var touchedRow: RecordCell?
-    /// 露着按钮的那一行，同时只有一行
-    private weak var openRow: RecordCell?
-    /// 这次滑动开始时那一行的位置
-    private var swipeStart: CGFloat = 0
+    /// 有一行正在滑动或露着按钮
+    private(set) var hasOpenRow = false
 
     /// 每页流水条数
     private static let pageSize = 40
+    /// 流水行之间的空隙
+    private static let rowSpacing: CGFloat = 8
 
     init(store: LedgerStore, model: WalletDetailModel, parent: UIViewController) {
         self.store = store
         self.model = model
         self.parent = parent
-        let layout = UICollectionViewFlowLayout()
-        layout.scrollDirection = .vertical
-        layout.minimumInteritemSpacing = 0
-        layout.minimumLineSpacing = 0
-        collectionView = UICollectionView(frame: .zero, collectionViewLayout: layout)
+        tableView = DetailTableView(frame: .zero, style: .plain)
         sizer = UIHostingController(rootView: AnyView(EmptyView()))
         super.init()
 
@@ -106,62 +101,72 @@ final class WalletDetailList: NSObject, UICollectionViewDelegateFlowLayout, UIGe
         parent.view.addSubview(sizer.view)
         sizer.didMove(toParent: parent)
 
-        collectionView.backgroundColor = .clear
-        collectionView.contentInsetAdjustmentBehavior = .never
-        collectionView.selfSizingInvalidation = .disabled
-        collectionView.alwaysBounceVertical = true
-        collectionView.showsVerticalScrollIndicator = false
-        collectionView.showsHorizontalScrollIndicator = false
-        collectionView.scrollsToTop = false
-        // 最后一行下面留白（详情里标签栏是隐藏的）
-        collectionView.contentInset.bottom = 48
-        collectionView.delegate = self
+        tableView.backgroundColor = .clear
+        // 行往左滑时能走到屏幕边上，不在列表左边被切掉
+        tableView.clipsToBounds = false
+        tableView.separatorStyle = .none
+        tableView.contentInsetAdjustmentBehavior = .never
+        tableView.insetsContentViewsToSafeArea = false
+        tableView.cellLayoutMarginsFollowReadableWidth = false
+        tableView.selfSizingInvalidation = .disabled
+        // 高度都事先量好，估算设成 0：列表不估算、不量格子，滚动时内容不跳
+        tableView.estimatedRowHeight = 0
+        tableView.estimatedSectionHeaderHeight = 0
+        tableView.estimatedSectionFooterHeight = 0
+        tableView.sectionHeaderHeight = 0
+        tableView.sectionHeaderTopPadding = 0
+        tableView.alwaysBounceVertical = true
+        tableView.showsVerticalScrollIndicator = false
+        tableView.showsHorizontalScrollIndicator = false
+        tableView.scrollsToTop = false
+        // 最后一行下面留白（详情里标签栏是隐藏的），加上这一行的组尾一共 48pt
+        tableView.contentInset.bottom = 48 - Self.rowSpacing
+        tableView.delegate = self
 
-        rowSwipe.addTarget(self, action: #selector(rowSwiped(_:)))
-        rowSwipe.maximumNumberOfTouches = 1
-        rowSwipe.delegate = self
-        collectionView.addGestureRecognizer(rowSwipe)
-        // 先看是不是左滑这一行；不是的话（`gestureRecognizerShouldBegin` 说不）马上轮到滚动，不多等
-        collectionView.panGestureRecognizer.require(toFail: rowSwipe)
+        tableView.register(CardSlotCell.self, forCellReuseIdentifier: "card")
+        tableView.register(HostingCell.self, forCellReuseIdentifier: "summary")
+        tableView.register(HostingCell.self, forCellReuseIdentifier: "record")
+        tableView.register(HostingCell.self, forCellReuseIdentifier: "empty")
+        dataSource = RecordDataSource(tableView: tableView) { [weak self] _, indexPath, item in
+            self?.cell(for: item, at: indexPath)
+        }
+        dataSource.defaultRowAnimation = .none
+        applySnapshot(reconfigure: false)
+    }
 
-        let cardSlot = UICollectionView.CellRegistration<CardSlotCell, Item> { [weak self] cell, _, _ in
-            cell.accessibilityLabel = self?.cardLabel
-            cell.activate = { [weak self] in self?.onActivateCard() }
-        }
-        let summary = UICollectionView.CellRegistration<HostingCell, Item> { [weak self] cell, _, _ in
-            guard let self, self.account != nil else { return }
-            cell.show(self.summaryView(), parent: self.parent)
-        }
-        let record = UICollectionView.CellRegistration<RecordCell, Item> { [weak self] cell, _, item in
-            guard let self, case .record(let id) = item, let row = self.rowsByID[id] else { return }
-            cell.onEdit = { [weak self] in self?.editRecord(id) }
-            cell.onDelete = { [weak self, weak cell] in
-                if let cell { self?.confirmDelete(id, from: cell.deleteSource) }
-            }
+    private func cell(for item: Item, at indexPath: IndexPath) -> UITableViewCell {
+        switch item {
+        case .card:
+            let cell = tableView.dequeueReusableCell(withIdentifier: "card", for: indexPath)
+            cell.accessibilityLabel = cardLabel
+            (cell as? CardSlotCell)?.activate = { [weak self] in self?.onActivateCard() }
+            return cell
+        case .summary:
+            let cell = hostingCell("summary", at: indexPath)
+            if account != nil { cell.show(summaryView(), parent: parent) }
+            return cell
+        case .record(let id):
+            let cell = hostingCell("record", at: indexPath)
+            guard let row = rowsByID[id] else { return cell }
             cell.show(
                 RecordRowView(row: row, showAccount: false, boxed: true)
                     .accessibilityAction(named: "编辑") { [weak self] in self?.editRecord(id) }
-                    .accessibilityAction(named: "删除") { [weak cell] in cell?.onDelete() },
-                parent: self.parent
+                    .accessibilityAction(named: "删除") { [weak self, weak cell] in
+                        // 读屏不用滑开这一行，这时没有「删除」按钮，菜单从这一行弹出
+                        if let cell { self?.confirmDelete(id, from: cell) { _ in } }
+                    },
+                parent: parent
             )
+            return cell
+        case .empty:
+            let cell = hostingCell("empty", at: indexPath)
+            cell.show(EmptyRecordsView(), parent: parent)
+            return cell
         }
-        let empty = UICollectionView.CellRegistration<HostingCell, Item> { [weak self] cell, _, _ in
-            guard let self else { return }
-            cell.show(EmptyRecordsView(), parent: self.parent)
-        }
-        dataSource = UICollectionViewDiffableDataSource<Section, Item>(collectionView: collectionView) { collectionView, indexPath, item in
-            switch item {
-            case .card:
-                return collectionView.dequeueConfiguredReusableCell(using: cardSlot, for: indexPath, item: item)
-            case .summary:
-                return collectionView.dequeueConfiguredReusableCell(using: summary, for: indexPath, item: item)
-            case .record:
-                return collectionView.dequeueConfiguredReusableCell(using: record, for: indexPath, item: item)
-            case .empty:
-                return collectionView.dequeueConfiguredReusableCell(using: empty, for: indexPath, item: item)
-            }
-        }
-        applySnapshot(reconfigure: false)
+    }
+
+    private func hostingCell(_ identifier: String, at indexPath: IndexPath) -> HostingCell {
+        tableView.dequeueReusableCell(withIdentifier: identifier, for: indexPath) as! HostingCell
     }
 
     private func summaryView() -> some View {
@@ -174,39 +179,39 @@ final class WalletDetailList: NSObject, UICollectionViewDelegateFlowLayout, UIGe
 
     // MARK: 格子尺寸
 
-    func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout, sizeForItemAt indexPath: IndexPath) -> CGSize {
-        let width = collectionView.bounds.width
-        let contentWidth = AppLayout.cardWidth(width)
+    func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
+        let width = tableView.bounds.width
         switch dataSource.itemIdentifier(for: indexPath) {
         case .card:
-            // 卡片画在列表上层，这里只留出位置：顶部按钮一行 + 卡片
-            return CGSize(width: width, height: AppLayout.detailTop + AppLayout.cardHeight(width))
+            // 卡片画在列表上层，这里只留出位置：顶部按钮一行 + 卡片，下面空 8pt 才是余额区
+            return AppLayout.detailTop + AppLayout.cardHeight(parent.view.bounds.width) + 8
         case .summary:
-            return CGSize(width: contentWidth, height: summaryHeight)
+            return summaryHeight
         case .record(let id):
-            return CGSize(width: contentWidth, height: rowHeight(rowsByID[id], width: contentWidth))
+            return rowHeight(rowsByID[id], width: width)
         case .empty:
-            if emptyHeight == nil { emptyHeight = measure(EmptyRecordsView(), width: contentWidth) }
-            return CGSize(width: contentWidth, height: emptyHeight ?? 1)
+            if emptyHeight == nil { emptyHeight = measure(EmptyRecordsView(), width: width) }
+            return emptyHeight ?? 1
         case nil:
-            return CGSize(width: contentWidth, height: 1)
+            return 1
         }
     }
 
-    func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout, insetForSectionAt section: Int) -> UIEdgeInsets {
-        let inset = AppLayout.cardInset
-        switch Section(rawValue: section) {
-        case .summary:
-            return UIEdgeInsets(top: 8, left: inset, bottom: 0, right: inset)
-        case .records:
-            return UIEdgeInsets(top: 0, left: inset, bottom: 0, right: inset)
-        default:
-            return .zero
-        }
+    func tableView(_ tableView: UITableView, heightForFooterInSection section: Int) -> CGFloat {
+        isRecordSection(section) ? Self.rowSpacing : 0
     }
 
-    func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout, minimumLineSpacingForSectionAt section: Int) -> CGFloat {
-        Section(rawValue: section) == .records ? 8 : 0
+    func tableView(_ tableView: UITableView, viewForFooterInSection section: Int) -> UIView? {
+        guard isRecordSection(section) else { return nil }
+        // 普通样式的组尾停在屏幕底部，不能挡住下面的行
+        let gap = UIView()
+        gap.isUserInteractionEnabled = false
+        return gap
+    }
+
+    private func isRecordSection(_ section: Int) -> Bool {
+        if case .record = dataSource.sectionIdentifier(for: section) { return true }
+        return false
     }
 
     /// 宽度或系统字号变了：重新量高度
@@ -214,7 +219,12 @@ final class WalletDetailList: NSObject, UICollectionViewDelegateFlowLayout, UIGe
         recordRowHeight = nil
         emptyHeight = nil
         updateSummaryHeight()
-        collectionView.collectionViewLayout.invalidateLayout()
+        refreshHeights()
+    }
+
+    /// 列表不自己量高度，要它重新取一次
+    private func refreshHeights() {
+        UIView.performWithoutAnimation { tableView.performBatchUpdates(nil, completion: nil) }
     }
 
     private func measure(_ content: some View, width: CGFloat) -> CGFloat {
@@ -236,33 +246,29 @@ final class WalletDetailList: NSObject, UICollectionViewDelegateFlowLayout, UIGe
             summaryHeight = 0
             return
         }
-        summaryHeight = measure(summaryView(), width: AppLayout.cardWidth(collectionView.bounds.width))
+        summaryHeight = measure(summaryView(), width: tableView.bounds.width)
     }
 
     // MARK: 滚动
 
     /// 往上滚动的距离；在顶部往下拉时为负
-    var scrolledDistance: CGFloat { collectionView.contentOffset.y + collectionView.contentInset.top }
+    var scrolledDistance: CGFloat { tableView.contentOffset.y + tableView.contentInset.top }
 
     /// 顶部留出状态栏，滚动距离不变
     func setTopInset(_ top: CGFloat) {
-        guard collectionView.contentInset.top != top else { return }
+        guard tableView.contentInset.top != top else { return }
         let scrolled = scrolledDistance
-        collectionView.contentInset.top = top
-        collectionView.contentOffset.y = scrolled - top
+        tableView.contentInset.top = top
+        tableView.contentOffset.y = scrolled - top
     }
 
     /// 停止惯性滚动：返回时卡片从它现在的位置回卡包
     func stopScrolling() {
-        collectionView.setContentOffset(collectionView.contentOffset, animated: false)
+        tableView.setContentOffset(tableView.contentOffset, animated: false)
     }
 
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
         onScroll()
-    }
-
-    func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
-        closeOpenRow()
     }
 
     // MARK: 打开 / 关闭
@@ -270,11 +276,11 @@ final class WalletDetailList: NSObject, UICollectionViewDelegateFlowLayout, UIGe
     /// 打开一张卡的详情。返回途中再点同一张卡、内容还没清空时，内容从当前位置升回来；
     /// 否则回到顶部，读到第一页流水后内容从屏幕底下升上来
     func open(_ account: Account) {
-        collectionView.isHidden = false
-        collectionView.isUserInteractionEnabled = true
-        collectionView.scrollsToTop = true
-        collectionView.accessibilityElementsHidden = false
-        let layer = collectionView.layer
+        tableView.isHidden = false
+        tableView.isUserInteractionEnabled = true
+        tableView.scrollsToTop = true
+        tableView.accessibilityElementsHidden = false
+        let layer = tableView.layer
         if contentShown, self.account?.id == account.id {
             let timing = CardMotion.entrance(reduceMotion: UIAccessibility.isReduceMotionEnabled)
             CardMotion.setTransform(layer, CATransform3DIdentity, timing: timing)
@@ -294,7 +300,7 @@ final class WalletDetailList: NSObject, UICollectionViewDelegateFlowLayout, UIGe
         layer.transform = CATransform3DIdentity
         layer.opacity = 1
         applySnapshot(reconfigure: false)
-        collectionView.contentOffset = CGPoint(x: 0, y: -collectionView.contentInset.top)
+        tableView.contentOffset = CGPoint(x: 0, y: -tableView.contentInset.top)
         load()
     }
 
@@ -304,14 +310,14 @@ final class WalletDetailList: NSObject, UICollectionViewDelegateFlowLayout, UIGe
         loadTask = nil
         closeOpenRow()
         stopScrolling()
-        collectionView.isUserInteractionEnabled = false
-        collectionView.scrollsToTop = false
-        collectionView.accessibilityElementsHidden = true
-        let layer = collectionView.layer
+        tableView.isUserInteractionEnabled = false
+        tableView.scrollsToTop = false
+        tableView.accessibilityElementsHidden = true
+        let layer = tableView.layer
         if UIAccessibility.isReduceMotionEnabled {
             CardMotion.setOpacity(layer, 0, timing: .easeIn(0.15))
         } else {
-            let away = CATransform3DMakeTranslation(0, collectionView.bounds.height, 0)
+            let away = CATransform3DMakeTranslation(0, tableView.bounds.height, 0)
             CardMotion.setTransform(layer, away, timing: CardMotion.transition(reduceMotion: false))
         }
     }
@@ -327,8 +333,8 @@ final class WalletDetailList: NSObject, UICollectionViewDelegateFlowLayout, UIGe
         rowsByID = [:]
         hasMore = false
         loadingMore = false
-        collectionView.isHidden = true
-        let layer = collectionView.layer
+        tableView.isHidden = true
+        let layer = tableView.layer
         layer.removeAllAnimations()
         layer.transform = CATransform3DIdentity
         layer.opacity = 1
@@ -408,8 +414,8 @@ final class WalletDetailList: NSObject, UICollectionViewDelegateFlowLayout, UIGe
             self.applySnapshot(reconfigure: true)
             if reveal {
                 CardMotion.rise(
-                    self.collectionView.layer,
-                    from: self.collectionView.bounds.height,
+                    self.tableView.layer,
+                    from: self.tableView.bounds.height,
                     timing: CardMotion.entrance(reduceMotion: UIAccessibility.isReduceMotionEnabled)
                 )
             }
@@ -440,14 +446,22 @@ final class WalletDetailList: NSObject, UICollectionViewDelegateFlowLayout, UIGe
     }
 
     private func applySnapshot(reconfigure: Bool) {
+        let oldSummaryHeight = summaryHeight
         updateSummaryHeight()
         var snapshot = NSDiffableDataSourceSnapshot<Section, Item>()
         snapshot.appendSections([.card])
         snapshot.appendItems([.card], toSection: .card)
         if contentShown {
-            snapshot.appendSections([.summary, .records])
+            snapshot.appendSections([.summary])
             snapshot.appendItems([.summary], toSection: .summary)
-            snapshot.appendItems(rows.isEmpty ? [.empty] : rows.map { Item.record($0.id) }, toSection: .records)
+            if rows.isEmpty {
+                snapshot.appendSections([.empty])
+                snapshot.appendItems([.empty], toSection: .empty)
+            }
+            for row in rows {
+                snapshot.appendSections([.record(row.id)])
+                snapshot.appendItems([.record(row.id)], toSection: .record(row.id))
+            }
         }
         if reconfigure {
             // 已经显示的格子内容可能变了（备注、状态、余额），重新配置；新出现的格子本来就会配置
@@ -455,10 +469,8 @@ final class WalletDetailList: NSObject, UICollectionViewDelegateFlowLayout, UIGe
             snapshot.reconfigureItems(snapshot.itemIdentifiers.filter { shown.contains($0) })
         }
         dataSource.apply(snapshot, animatingDifferences: false)
-        if reconfigure {
-            // 余额区、有没有备注变了时高度也会变；列表不自己量高度，要重新取一次
-            collectionView.collectionViewLayout.invalidateLayout()
-        }
+        // 流水行的高度不变，只有余额区会变
+        if summaryHeight != oldSummaryHeight { refreshHeights() }
     }
 
     private var cardLabel: String? {
@@ -469,23 +481,21 @@ final class WalletDetailList: NSObject, UICollectionViewDelegateFlowLayout, UIGe
 
     // MARK: 点按
 
-    func collectionView(_ collectionView: UICollectionView, shouldHighlightItemAt indexPath: IndexPath) -> Bool {
-        // 有一行露着按钮时，点一下只是把它合上
-        if closeOpenRow() { return false }
-        return isRecord(indexPath)
-    }
-
-    func collectionView(_ collectionView: UICollectionView, shouldSelectItemAt indexPath: IndexPath) -> Bool {
+    func tableView(_ tableView: UITableView, shouldHighlightRowAt indexPath: IndexPath) -> Bool {
         isRecord(indexPath)
     }
 
-    func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
-        collectionView.deselectItem(at: indexPath, animated: false)
+    func tableView(_ tableView: UITableView, willSelectRowAt indexPath: IndexPath) -> IndexPath? {
+        isRecord(indexPath) ? indexPath : nil
+    }
+
+    func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        tableView.deselectRow(at: indexPath, animated: false)
         guard case .record(let id) = dataSource.itemIdentifier(for: indexPath), let row = rowsByID[id] else { return }
         onSelectRecord(row)
     }
 
-    func collectionView(_ collectionView: UICollectionView, willDisplay cell: UICollectionViewCell, forItemAt indexPath: IndexPath) {
+    func tableView(_ tableView: UITableView, willDisplay cell: UITableViewCell, forRowAt indexPath: IndexPath) {
         guard case .record(let id) = dataSource.itemIdentifier(for: indexPath), id == rows.last?.id else { return }
         loadMore()
     }
@@ -497,14 +507,35 @@ final class WalletDetailList: NSObject, UICollectionViewDelegateFlowLayout, UIGe
 
     // MARK: 左滑
 
-    var hasOpenRow: Bool { openRow != nil }
+    func tableView(_ tableView: UITableView, trailingSwipeActionsConfigurationForRowAt indexPath: IndexPath) -> UISwipeActionsConfiguration? {
+        guard case .record(let id) = dataSource.itemIdentifier(for: indexPath) else { return nil }
+        // 和首页一样：不用 destructive（系统会马上把这一行划走，而这时还没有确认）；点了才算，滑到底不直接触发
+        let delete = UIContextualAction(style: .normal, title: "删除") { [weak self] _, source, finished in
+            self?.confirmDelete(id, from: source, finished: finished)
+        }
+        delete.image = UIImage(systemName: "trash")
+        delete.backgroundColor = .systemRed
+        let edit = UIContextualAction(style: .normal, title: "编辑") { [weak self] _, _, finished in
+            finished(true)
+            self?.editRecord(id)
+        }
+        edit.image = UIImage(systemName: "pencil")
+        edit.backgroundColor = tableView.tintColor
+        let configuration = UISwipeActionsConfiguration(actions: [delete, edit])
+        configuration.performsFirstActionWithFullSwipe = false
+        return configuration
+    }
 
-    @discardableResult
-    private func closeOpenRow() -> Bool {
-        guard let openRow else { return false }
-        openRow.settle(open: false)
-        self.openRow = nil
-        return true
+    func tableView(_ tableView: UITableView, willBeginEditingRowAt indexPath: IndexPath) {
+        hasOpenRow = true
+    }
+
+    func tableView(_ tableView: UITableView, didEndEditingRowAt indexPath: IndexPath?) {
+        hasOpenRow = false
+    }
+
+    private func closeOpenRow() {
+        if hasOpenRow { tableView.setEditing(false, animated: true) }
     }
 
     private func editRecord(_ id: String) {
@@ -512,67 +543,49 @@ final class WalletDetailList: NSObject, UICollectionViewDelegateFlowLayout, UIGe
         if let row = rowsByID[id] { onEditRecord(row) }
     }
 
-    /// 确认框从「删除」按钮展开（系统的弹出动画），所以这一行等确认框收起才合上
-    private func confirmDelete(_ id: String, from source: UIView) {
-        guard let row = rowsByID[id] else { return }
-        let alert = UIAlertController(title: "删除这笔流水？", message: row.deleteWarning, preferredStyle: .actionSheet)
-        alert.addAction(UIAlertAction(title: "删除", style: .destructive) { [weak self] _ in
-            self?.closeOpenRow()
-            self?.onDeleteRecord(row)
-        })
-        alert.addAction(UIAlertAction(title: "取消", style: .cancel) { [weak self] _ in
-            self?.closeOpenRow()
-        })
-        alert.popoverPresentationController?.sourceItem = source
-        parent.present(alert, animated: true)
+    /// 确认菜单从「删除」按钮弹出，这一行等菜单收起才合上
+    private func confirmDelete(_ id: String, from source: UIView, finished: @escaping (Bool) -> Void) {
+        guard let row = rowsByID[id], let container = parent.view else { return finished(false) }
+        RecordDeleteMenuButton.show(
+            row,
+            at: source.convert(source.bounds, to: container),
+            in: container,
+            onDelete: { [weak self] in self?.onDeleteRecord(row) },
+            onEnd: { finished(false) }
+        )
     }
+}
 
-    /// 手指按下时就定下是哪一行：滑动识别出来时手指已经走了一段，可能离开了这一行
-    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
-        guard !collectionView.isDecelerating,
-              let indexPath = collectionView.indexPathForItem(at: touch.location(in: collectionView)),
-              let cell = collectionView.cellForItem(at: indexPath) as? RecordCell else { return false }
-        touchedRow = cell
-        return true
+/// 系统的滑动按钮要数据源允许编辑这一行；这个数据源默认不允许
+private final class RecordDataSource: UITableViewDiffableDataSource<WalletDetailList.Section, WalletDetailList.Item> {
+    override func tableView(_ tableView: UITableView, canEditRowAt indexPath: IndexPath) -> Bool {
+        if case .record = itemIdentifier(for: indexPath) { return true }
+        return false
     }
+}
 
-    func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
-        let velocity = rowSwipe.velocity(in: collectionView)
-        guard abs(velocity.x) > abs(velocity.y), let touchedRow else { return false }
-        // 往右是返回卡包，只有这一行开着时才是把它合上
-        return velocity.x < 0 || touchedRow === openRow
-    }
-
-    @objc private func rowSwiped(_ recognizer: UIPanGestureRecognizer) {
-        guard let cell = touchedRow else { return }
-        switch recognizer.state {
-        case .began:
-            if openRow !== cell { closeOpenRow() }
-            swipeStart = cell.offset
-            fallthrough
-        case .changed:
-            let x = swipeStart + recognizer.translation(in: collectionView).x
-            // 超过按钮的宽度后手指走得多、行走得少
-            cell.setOffset(x < -RecordCell.revealWidth ? (x - RecordCell.revealWidth * 2) / 3 : min(0, x))
-        case .ended:
-            // 松手时的速度也算上：轻轻一甩也能打开、合上
-            let open = cell.offset + recognizer.velocity(in: collectionView).x * 0.2 < -RecordCell.revealWidth / 2
-            cell.settle(open: open)
-            openRow = open ? cell : nil
-        case .cancelled, .failed:
-            cell.settle(open: false)
-            openRow = nil
-        default:
-            break
-        }
+/// 列表和卡片一样宽，两边的空白也算在列表里：手指放在那里一样能滚动、右滑返回
+private final class DetailTableView: UITableView {
+    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+        bounds.insetBy(dx: -AppLayout.cardInset, dy: 0).contains(point)
     }
 }
 
 /// 一格由 SwiftUI 画的内容。用 `UIHostingController` 是为了关掉安全区：
 /// 格子滚到状态栏下面时，SwiftUI 不会因为安全区变化把内容往下推、重新布局。
 /// 内容贴着格子顶端：格子高度还没跟上内容时，内容只往下伸，不会居中往上跑到卡片后面
-private class HostingCell: UICollectionViewCell {
-    fileprivate var host: UIHostingController<AnyView>?
+private final class HostingCell: UITableViewCell {
+    private var host: UIHostingController<AnyView>?
+
+    override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
+        super.init(style: style, reuseIdentifier: reuseIdentifier)
+        backgroundColor = .clear
+        selectionStyle = .none
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
 
     func show(_ content: some View, parent: UIViewController) {
         let view = AnyView(content.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top))
@@ -592,89 +605,14 @@ private class HostingCell: UICollectionViewCell {
     }
 }
 
-/// 一行流水：SwiftUI 那一层往左移，露出压在它下面的「编辑」「删除」。平时按钮隐藏，不参与合成。
-private final class RecordCell: HostingCell {
-    private static let buttonWidth: CGFloat = 76
-    private static let spacing: CGFloat = 8
-    /// 打开时行往左移的距离
-    static let revealWidth = (buttonWidth + spacing) * 2
-
-    var onEdit: () -> Void = {}
-    var onDelete: () -> Void = {}
-    private(set) var offset: CGFloat = 0
-    private let buttons = UIView()
-    private lazy var editButton = Self.button("编辑", symbol: "pencil", color: nil) { [weak self] in self?.onEdit() }
-    private lazy var deleteButton = Self.button("删除", symbol: "trash", color: .systemRed) { [weak self] in self?.onDelete() }
-    /// 删除确认框从哪里弹出：读屏不用滑开这一行，这时按钮是隐藏的
-    var deleteSource: UIView { offset == 0 ? self : deleteButton }
-
-    override init(frame: CGRect) {
-        super.init(frame: frame)
-        buttons.frame = contentView.bounds
-        buttons.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        buttons.isHidden = true
-        buttons.addSubview(editButton)
-        buttons.addSubview(deleteButton)
-        contentView.addSubview(buttons)
-    }
-
-    required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
-    }
-
-    /// `color` 为 nil 时跟主题色
-    private static func button(_ title: String, symbol: String, color: UIColor?, action: @escaping () -> Void) -> UIButton {
-        var configuration = UIButton.Configuration.filled()
-        configuration.title = title
-        configuration.image = UIImage(systemName: symbol)
-        configuration.imagePlacement = .top
-        configuration.imagePadding = 2
-        configuration.buttonSize = .small
-        configuration.cornerStyle = .fixed
-        configuration.background.cornerRadius = 18
-        configuration.baseBackgroundColor = color
-        configuration.baseForegroundColor = .white
-        return UIButton(configuration: configuration, primaryAction: UIAction { _ in action() })
-    }
-
-    override func layoutSubviews() {
-        super.layoutSubviews()
-        let bounds = buttons.bounds
-        deleteButton.frame = CGRect(x: bounds.maxX - Self.buttonWidth, y: 0, width: Self.buttonWidth, height: bounds.height)
-        editButton.frame = deleteButton.frame.offsetBy(dx: -(Self.buttonWidth + Self.spacing), dy: 0)
-    }
-
-    override func prepareForReuse() {
-        super.prepareForReuse()
-        host?.view.layer.removeAllAnimations()
-        setOffset(0)
-    }
-
-    /// 手指拖着走
-    func setOffset(_ x: CGFloat) {
-        offset = x
-        buttons.isHidden = x == 0
-        host?.view.transform = CGAffineTransform(translationX: x, y: 0)
-    }
-
-    /// 松手：弹到打开或合上的位置
-    func settle(open: Bool) {
-        let target = open ? -Self.revealWidth : 0
-        offset = target
-        UIView.animate(springDuration: 0.35, bounce: 0, options: [.allowUserInteraction, .beginFromCurrentState]) {
-            self.host?.view.transform = CGAffineTransform(translationX: target, y: 0)
-        } completion: { _ in
-            self.buttons.isHidden = self.offset == 0
-        }
-    }
-}
-
 /// 详情顶部给选中卡片留的位置。卡片画在列表上层；读屏时这里代表卡片，激活即返回卡包
-private final class CardSlotCell: UICollectionViewCell {
+private final class CardSlotCell: UITableViewCell {
     var activate: () -> Void = {}
 
-    override init(frame: CGRect) {
-        super.init(frame: frame)
+    override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
+        super.init(style: style, reuseIdentifier: reuseIdentifier)
+        backgroundColor = .clear
+        selectionStyle = .none
         isAccessibilityElement = true
         accessibilityTraits = .button
         accessibilityHint = "返回卡包"

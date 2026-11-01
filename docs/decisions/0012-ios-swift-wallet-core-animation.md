@@ -51,6 +51,15 @@
 - 2026-11-01 补充：iOS 26 的确认框从它所在的视图弹出。原来挂在资产页上，详情的删除确认离那一行很远、也没有弹出动画，
   改成 `UIAlertController` 的 action sheet，`sourceItem` 设成「删除」按钮：从按钮展开，这一行等确认框收起才合上。
   首页、统计同理，确认框挂在行上（`RecordSwipe.swift`）。
+- 2026-11-01 再补充：手写的滑动和首页差得远：按钮一直压在行下面，滑开时直接露出来，滑回去时也露着。要和首页一样只能用系统的滑动按钮，
+  所以推翻上面「留在 flow layout 上」：详情列表从 `UICollectionView` 换成 `UITableView`。table view 的滑动按钮不依赖自适应高度：
+  行高由 delegate 给（事先量好），`estimatedRowHeight` 设成 0，和「详情列表不用自适应高度」不冲突。`UICollectionLayoutListConfiguration` 仍然不用：它先按估算高度排，滚动时才量格子。
+  系统的按钮贴着格子右边，所以列表和卡片一样宽（两边的空白由 `point(inside:)` 算进列表，手指放在那里一样能滚动、右滑）；
+  每笔流水单独一组，行之间的 8pt 是组尾：放在行里的话，按钮会比这一行高、也不居中。`UITableViewDiffableDataSource` 默认不允许编辑，要重写 `canEditRowAt`，否则滑不开。
+- 2026-11-01 再补充：删除确认不用 action sheet / `confirmationDialog`，改成系统的下拉菜单（和流水详情最下面的「删除」一样），出现、收起都是菜单自己的动画。
+  滑动按钮不能挂菜单，系统也没有「在某个位置打开菜单」的方法。公开的办法只有 `UIControl.performPrimaryAction()`（iOS 17.4 起，文档写明会打开菜单）：
+  在弹出位置放一个看不见的按钮（`RecordDeleteMenuButton`，`showsMenuAsPrimaryAction`），让它执行主操作，收起后拿掉。卡片详情放在「删除」按钮的位置；
+  首页、统计是 SwiftUI 的滑动按钮，拿不到视图，放在这一行右端。Chromium 的 iOS 版也是这个做法（按钮隐藏、不接收触摸）。这两条还没有真机结果（清单 B12a、B12b）。
 - 2026-10-31 补充：返回时快收完下面的卡一顿一顿（点最后一张卡时没有）。动画本身都在 Core Animation 上，有两处时间对得上：
   下面的卡走一整屏多，带回弹的弹簧（阻尼 0.86）在 0.55 秒左右冲过头 4pt 再退回来；0.5 秒时 `finishClose` 在主线程拆掉列表的格子。
   改成下面的卡用不回弹的弹簧、停稳后（0.9 秒）再清空。原因是按时间推算的，真机用性能开关对照（清单 D5）。

@@ -60,8 +60,8 @@ docker run --rm -v "<仓库>/ios-swift/Packages/BKCore:/pkg" -w /pkg bk-swift sw
 
 - `UI/Assets/WalletController.swift`：卡包、卡片位置和转场、手势。每张卡一个视图，在两个滚动区上层按滚动距离摆放；
   打开 / 关闭时改模型位置并加叠加动画，动画途中滚动、再点都从当前位置平滑转向。状态栏高度从窗口读取。
-- `UI/Assets/WalletDetailList.swift`：详情列表（`UICollectionView` + 固定高度的流式布局）。余额区 `AccountDetailSummary`
-  和每行流水仍由 SwiftUI 画，放在关掉安全区的 `UIHostingController` 里；格子高度事先量好，不做自适应高度。
+- `UI/Assets/WalletDetailList.swift`：详情列表（`UITableView`，用系统的滑动按钮）。余额区 `AccountDetailSummary`
+  和每行流水仍由 SwiftUI 画，放在关掉安全区的 `UIHostingController` 里；行高事先量好，不做自适应高度。
 - `UI/Assets/CardMotion.swift`：弹簧和曲线参数（与 SwiftUI 的 `spring(response:dampingFraction:)` 换算一致），
   收到后面的卡的缩放比例 `behindScale`。卡片不做 3D 倾斜（会让卡片之间的上下层错乱）。
 - `UI/Assets/WalletTopBar.swift`：顶部按钮，UIKit 液态玻璃（同一个玻璃容器里的三块玻璃，共用部分在 `UI/Common/GlassControls.swift`）。
@@ -156,7 +156,7 @@ docker run --rm -v "<仓库>/ios-swift/Packages/BKCore:/pkg" -w /pkg bk-swift sw
   转帐两边照样配对。通知的指纹保留，同一条通知再来不会重新记上；同银行同尾号的卡可以重新添加，之后的通知记到新卡上。
 - **排序**：「管理银行卡」里按住一行上下拖动，用系统列表的 `.onMove`（不用进编辑模式）：按住的行浮在上层，其他行自动让开、补位。
   顺序存在 `accounts.sort_order`，资产页的卡包跟着变，新卡排在最后。拖动的回调里要同步改好界面上的顺序（`LedgerStore.reorderAccounts`），否则松手时行会先弹回去再跳过来。
-- **滑动操作流水**：首页、搜索结果、统计的明细、卡片详情都是左滑露出「编辑」「删除」两个按钮，删除要先确认（`UI/Common/RecordSwipe.swift`）。
+- **滑动操作流水**：首页、搜索结果、统计的明细、卡片详情都是左滑露出「编辑」「删除」两个系统的滑动按钮，删除要在系统的下拉菜单里再确认一次（`UI/Common/RecordSwipe.swift`）。
   卡片详情里右滑仍是返回卡包。转帐在首页合成一行，但删除只删这一笔，所以确认时写明另一边还留着。
 - 再点一次标签栏的「资产」，卡包滚回顶部：卡包是 UIKit 的滚动区，系统不会替它滚，由 `RootView` 记下再点一次，交给 `WalletController`。
 
