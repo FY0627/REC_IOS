@@ -13,7 +13,7 @@ struct WalletActions {
     var openFace: () -> Void = {}
     var openPending: () -> Void = {}
     var openRecord: (RecordRow) -> Void = { _ in }
-    /// 流水左滑露出的两个按钮
+    /// 流水左滑露出的两个按钮；删除在列表里确认过才到这里
     var editRecord: (RecordRow) -> Void = { _ in }
     var deleteRecord: (RecordRow) -> Void = { _ in }
     /// 流水的时间段选了「自定义…」

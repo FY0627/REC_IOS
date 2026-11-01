@@ -69,7 +69,7 @@ struct AssetsView: View {
             openPending: { sheet = .pending },
             openRecord: { sheet = .record($0) },
             editRecord: { swipe.editing = $0 },
-            deleteRecord: { swipe.deleting = $0 },
+            deleteRecord: { swipe.confirmedDelete = $0 },
             chooseCustomPeriod: { sheet = .customPeriod }
         )
     }

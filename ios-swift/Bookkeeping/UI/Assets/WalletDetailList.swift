@@ -135,11 +135,13 @@ final class WalletDetailList: NSObject, UICollectionViewDelegateFlowLayout, UIGe
         let record = UICollectionView.CellRegistration<RecordCell, Item> { [weak self] cell, _, item in
             guard let self, case .record(let id) = item, let row = self.rowsByID[id] else { return }
             cell.onEdit = { [weak self] in self?.editRecord(id) }
-            cell.onDelete = { [weak self] in self?.deleteRecord(id) }
+            cell.onDelete = { [weak self, weak cell] in
+                if let cell { self?.confirmDelete(id, from: cell.deleteSource) }
+            }
             cell.show(
                 RecordRowView(row: row, showAccount: false, boxed: true)
                     .accessibilityAction(named: "编辑") { [weak self] in self?.editRecord(id) }
-                    .accessibilityAction(named: "删除") { [weak self] in self?.deleteRecord(id) },
+                    .accessibilityAction(named: "删除") { [weak cell] in cell?.onDelete() },
                 parent: self.parent
             )
         }
@@ -510,9 +512,19 @@ final class WalletDetailList: NSObject, UICollectionViewDelegateFlowLayout, UIGe
         if let row = rowsByID[id] { onEditRecord(row) }
     }
 
-    private func deleteRecord(_ id: String) {
-        closeOpenRow()
-        if let row = rowsByID[id] { onDeleteRecord(row) }
+    /// 确认框从「删除」按钮展开（系统的弹出动画），所以这一行等确认框收起才合上
+    private func confirmDelete(_ id: String, from source: UIView) {
+        guard let row = rowsByID[id] else { return }
+        let alert = UIAlertController(title: "删除这笔流水？", message: row.deleteWarning, preferredStyle: .actionSheet)
+        alert.addAction(UIAlertAction(title: "删除", style: .destructive) { [weak self] _ in
+            self?.closeOpenRow()
+            self?.onDeleteRecord(row)
+        })
+        alert.addAction(UIAlertAction(title: "取消", style: .cancel) { [weak self] _ in
+            self?.closeOpenRow()
+        })
+        alert.popoverPresentationController?.sourceItem = source
+        parent.present(alert, animated: true)
     }
 
     /// 手指按下时就定下是哪一行：滑动识别出来时手指已经走了一段，可能离开了这一行
@@ -593,6 +605,8 @@ private final class RecordCell: HostingCell {
     private let buttons = UIView()
     private lazy var editButton = Self.button("编辑", symbol: "pencil", color: nil) { [weak self] in self?.onEdit() }
     private lazy var deleteButton = Self.button("删除", symbol: "trash", color: .systemRed) { [weak self] in self?.onDelete() }
+    /// 删除确认框从哪里弹出：读屏不用滑开这一行，这时按钮是隐藏的
+    var deleteSource: UIView { offset == 0 ? self : deleteButton }
 
     override init(frame: CGRect) {
         super.init(frame: frame)
