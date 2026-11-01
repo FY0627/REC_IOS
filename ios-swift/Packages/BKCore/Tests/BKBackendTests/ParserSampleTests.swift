@@ -563,6 +563,69 @@ final class ParserSampleTests: XCTestCase {
         XCTAssertNil(vat.events.first?.issue)
     }
 
+    func testSingaporeBankWordings() throws {
+        let card = try XCTUnwrap(single("A transaction of SGD 12.30 was made with your TEST Card ending 0001 on 04/10/26 at TEST CABS."))
+        XCTAssertEqual(card.direction, .outflow)
+        XCTAssertEqual(card.cardTail, "0001")
+        let transfer = try XCTUnwrap(single("You made a PayNow transfer of SGD 200.00 to TEST PERSON (Mobile ending 0005) on your a/c ending 0003 at 5:33PM SGT, 18 Sep 26."))
+        XCTAssertEqual(transfer.kind, .transferOut)
+        XCTAssertEqual(transfer.cardTail, "0003", "括号里的手机尾号不是账户")
+        let bill = try XCTUnwrap(single("You made/scheduled a bill payment(s) of SGD 80.00 to TEST PAYEE on your a/c ending 0003 at 4:58PM SGT, 25 Oct 26."))
+        XCTAssertEqual(bill.direction, .outflow)
+        let labelled = try XCTUnwrap(single("Date & Time: 09 OCT 11:58 (SGT)\nAmount: SGD12.40\nFrom: TEST card ending 0004\nTo: TEST SHOP"))
+        XCTAssertEqual(labelled.direction, .outflow)
+    }
+
+    func testCancelledPurchaseIsNotASpend() throws {
+        let d = try XCTUnwrap(single("We've cancelled your purchase of SGD 12.40 at TEST RIDES on 10 Oct 2026."))
+        XCTAssertEqual(d.kind, .reversal)
+        XCTAssertEqual(d.direction, .inflow)
+    }
+
+    func testCardRepaymentWithoutTheWordRepayment() throws {
+        let d = try XCTUnwrap(single("Thank you for payment of INR 3,000.00 towards your TEST Credit Card XX0001 on 02 May 2026."))
+        XCTAssertEqual(d.kind, .repayment)
+    }
+
+    func testOutstandingAndCashbackAreNotTransactions() throws {
+        let d = try XCTUnwrap(single("Rs.2000 spent on Credit Card XX0001. Avbl credit limit Rs.50000. Outstanding Rs.10000"))
+        XCTAssertEqual(d.amount.digits, "2000")
+        XCTAssertEqual(parse("Get Rs.500 cashback on your first payment! T&C apply. Download now").classification, .marketing)
+    }
+
+    func testYearIsNotACardTail() throws {
+        let d = try XCTUnwrap(single("您尾号0001的储蓄卡2026-10-18 17:09在某某超市消费人民币35.50元"))
+        XCTAssertEqual(d.cardTail, "0001")
+    }
+
+    func testChineseMerchantBeforeTheOutflowWord() throws {
+        let direct = try XCTUnwrap(single("【建设银行】您账户0001于10月6日12:00向美团外卖-某某面馆支出25元,可用余额900元。"))
+        XCTAssertEqual(direct.counterparty, "美团外卖-某某面馆")
+        let channel = try XCTUnwrap(single("【建设银行】您账户0001于10月6日10:00向京东支付-京东商城-某某店支出88元,可用余额800元。"))
+        XCTAssertEqual(channel.counterparty, "京东支付-京东商城-某某店")
+        let person = try XCTUnwrap(single("【建设银行】您账户0001于9月26日10:00向李四跨行转出支出700元,可用余额900元。"))
+        XCTAssertEqual(person.counterparty, "李四")
+    }
+
+    func testChineseRefundFromMerchantKeepsTheMerchant() throws {
+        let d = try XCTUnwrap(single("【建设银行】支付宝-某某杂货铺于10月24日17:00向您账户0001消费退货存入35.13元,可用余额935元。"))
+        XCTAssertEqual(d.kind, .refund)
+        XCTAssertEqual(d.counterparty, "支付宝-某某杂货铺")
+    }
+
+    func testPingAnStyleSingleCharacterVerbs() throws {
+        let deposit = try XCTUnwrap(single("10月30日11时03分,账户*[0001]存RMB485,000.00元成功，现余额561,752.68元【平安银行】"))
+        XCTAssertEqual(deposit.direction, .inflow)
+        XCTAssertEqual(deposit.cardTail, "0001")
+        let withdrawal = try XCTUnwrap(single("11月03日09时51分,账户*[0001]取RMB3,700.00元成功，现余额6,749.68元【平安银行】"))
+        XCTAssertEqual(withdrawal.direction, .outflow)
+    }
+
+    func testDiscountIsNotASecondPayment() throws {
+        let d = try XCTUnwrap(single("您尾号0001的储蓄卡10月18日17:09在某某超市支付人民币35.50元，已优惠5元"))
+        XCTAssertEqual(d.amount.digits, "35.50")
+    }
+
     func testHeadingOnItsOwnLineDecidesDirection() throws {
         let d = try XCTUnwrap(single("شراء عبر نقاط البيع\nبطاقة: ***0001\nمبلغ: SAR 56.00"))
         XCTAssertEqual(d.direction, .outflow)
