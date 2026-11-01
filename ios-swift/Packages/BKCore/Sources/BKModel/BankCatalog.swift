@@ -270,6 +270,7 @@ public enum BankCatalog {
         bank("revolut", "Revolut", "Revolut", "英国", "R", "midnight", []),
         bank("starling", "Starling Bank", "Starling Bank", "英国", "S", "violet", ["Starling"]),
         bank("wise", "Wise", "Wise", "英国", "W", "lime", ["TransferWise"]),
+        bank("maya", "Maya", "Maya", "菲律宾", "M", "lagoon", ["PayMaya"]),
         bank("deutschebank", "德意志银行", "Deutsche Bank", "德国", "德", "ocean", ["德意志銀行", "德银"]),
         bank("commerzbank", "德国商业银行", "Commerzbank", "德国", "商", "autumn-gold", ["德國商業銀行"]),
         bank("sparkasse", "德国储蓄银行", "Sparkasse", "德国", "S", "crimson", ["德國儲蓄銀行"]),

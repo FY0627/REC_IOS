@@ -62,7 +62,7 @@ public enum MessageParser {
     // MARK: 识别用正则
 
     private static let tailPatterns: [Rx] = [
-        Rx(#"(?:结尾号码|尾号码|号码结尾|尾号|尾数|末四位|后四位|卡号后四位|账号尾号|卡尾号)\s*(?:为|是)?\s*[：:]?\s*[*xX•·]*\s*(\d{4})(?![\d年月日元.,])"#),
+        Rx(#"(?:结尾号码|尾号码|号码结尾|尾号|尾数|末四位|后四位|卡号后四位|账号尾号|卡尾号)\s*(?:为|是)?\s*[：:]?\s*[*xX•·]*\s*(\d{3,4})(?![\d年月日元.,])"#),
         Rx(#"(?:账户|账号|卡号?|card|acct|account|a/c|konto|karte)\s*(?:ending(?:\s+in|\s+with)?|endend auf|no\.?)?\s*[*xX•·.]{1,}\s*(\d{4})(?![\d年月日元.,])"#),
         Rx(#"(?:ending(?:\s+in|\s+with)?|ends in|endend auf)\s*[：:]?\s*[*xX•·]*\s*(\d{4})(?![\d.,])"#),
         Rx(#"(?<![\w])[*xX•]{2,}\s?(\d{4})(?![\d.,])"#),
@@ -100,14 +100,14 @@ public enum MessageParser {
         Rx(#"(?:商户名称|交易商户|商户|对方户名|对方账户名|对方名称|对方|收款方|收款人|付款方|付款人|交易对象|merchant|payee|händler)\s*[：:]\s*([^，,。；;\n()（）]{1,40})"#),
         // 商户描述可以很长（名称 + 地址 + 城市 + 邮编），地址里可能有不带空格的逗号。「绑定在Apple Pay上的账户…」的「在」后面不是商户，不跨过账户、卡号
         Rx(#"在\s*(?!\d)((?:(?!账户|账号|卡号|尾号)(?:[^，,。；;\n]|,(?=\S))){2,80}?)\s*(?:完成(?:一笔)?(?:扣款|消费|支付|交易|付款)|预授权|冻结|消费|支付|刷卡|网上支付|快捷支付|扣款|购物)"#),
-        Rx(#"([^\s，,。；;\n:：]{2,30}?)\s*向您(?:尾号\s*[*xX•]*\d{4})?的?(?:账户|账号|[^，,。；;\n]{0,8}?卡)?(?:转账|汇款|存入)"#),
+        Rx(#"([^\s，,。；;\n:：]{2,30}?)\s*向您(?:尾号\s*[*xX•]*\d{3,4})?的?(?:账户|账号|[^，,。；;\n]{0,8}?卡)?(?:完成)?(?:转账|转存|汇款|存入)"#),
         // 卡组织的商户描述（名称 + 城市 + 国家）可以到 40 多个字符，例如「WEIXIN*Demo QR shop fo Testcity CN」
         Rx(#"向\s*([^您，,。；;\n][^，,。；;\n]{1,44}?)\s*(?:转账|转出|付款|汇款|支付)"#),
         Rx(#"(?:转出|转账|汇款|付款)(?:至|到|给)\s*([^，,。；;\n]{2,30}?)\s*(?=[，,。；;\n]|$)"#),
         Rx(#"(?:来自|付款方)\s*([^，,。；;\n]{2,30}?)(?:的|转账|汇款|[，,。；;\n]|$)"#),
         Rx(#"\bto\s+["“]([^"”\n]{2,40})["”]"#),
         Rx(#"\bat\s+([A-Z0-9][A-Za-z0-9 &'.\-*/]{1,40}?)(?=\s+on\b|\s+\d|[.,;]|\s*$)"#, caseInsensitive: false),
-        Rx(#"\b(?:to|from)\s+([A-Z][A-Za-z0-9 &'.\-]{1,40}?)(?=\s+on\b|\s+\d|[.,;]|\s*$)"#, caseInsensitive: false),
+        Rx(#"\b(?:to|from)\s+([A-Z][A-Za-z0-9 &'.\-]{1,40}?)(?=\s+(?:on|using|with|via)\b|\s+\d|[.,;]|\s*$)"#, caseInsensitive: false),
         Rx(#"\bbei\s+([A-Z0-9][A-Za-z0-9 &'.\-]{1,40}?)(?=\s+am\b|[.,;]|\s*$)"#, caseInsensitive: false),
     ]
     private static let genericSummary: Set<String> = [
@@ -410,6 +410,11 @@ public enum MessageParser {
                 detection.status = .failed
             }
             if detection.direction == nil, detection.kind == .other, amount.negative { detection.direction = .outflow }
+            // 交易失败时钱没有动，说不清性质也不用问用户
+            if detection.status == .failed, detection.direction == nil {
+                detection.direction = .outflow
+                detection.uncertain = false
+            }
 
             let (tail, otherTail) = nearestTail(before: amount.range.location, sentence: amount.sentence)
             let time = nearestTime(before: amount.range.location, sentence: amount.sentence)
@@ -658,6 +663,7 @@ public enum MessageParser {
         for pattern in counterpartyPatterns {
             for match in pattern.matches(ns) {
                 guard var value = match.group(1, in: ns) else { continue }
+                value = value.replacingOccurrences(of: #"^[^】]*】"#, with: "", options: .regularExpression)
                 value = value.replacingOccurrences(of: #"于\s*\d.*$"#, with: "", options: .regularExpression)
                 value = value.replacingOccurrences(of: #"^(?:您的?|贵方)"#, with: "", options: .regularExpression)
                 value = value.replacingOccurrences(of: #"\s*(?:于|在)\s*$"#, with: "", options: .regularExpression)

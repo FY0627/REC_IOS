@@ -102,6 +102,7 @@ public enum WalletDirectory {
                       signatures: ["支付宝", "支付寶", "Alipay"], accountNames: ["支付宝", "支付寶", "alipay", "余额宝"]),
         WalletProfile(id: "wechatpay", name: "微信支付", smsNumbers: [], senderNames: ["微信支付", "wechat pay"],
                       signatures: ["微信支付", "WeChat Pay"], accountNames: ["微信", "wechat", "零钱"]),
+        WalletProfile(id: "maya", name: "Maya", smsNumbers: [], senderNames: ["maya"], signatures: ["Maya"], accountNames: ["maya"]),
     ]
 
     public static func profile(id: String?) -> WalletProfile? {

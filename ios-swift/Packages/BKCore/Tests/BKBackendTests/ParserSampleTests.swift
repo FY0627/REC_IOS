@@ -448,6 +448,28 @@ final class ParserSampleTests: XCTestCase {
         XCTAssertTrue(parsed.events.allSatisfy { $0.issue == .ambiguousAmount })
     }
 
+    // MARK: 英文写法
+
+    func testEnglishWordingsFromOtherIssuers() throws {
+        let paid = try XCTUnwrap(single("You paid PHP 150.00 to TEST STORE using your Maya card ending in 0007 on Nov 01, 2026."))
+        XCTAssertEqual(paid.direction, .outflow)
+        XCTAssertEqual(paid.counterparty, "TEST STORE", "「using your…」不是商户名称")
+        let used = try XCTUnwrap(single("HSBC: Your card ending 0018 was used for HKD 100.00 at TEST SHOP on 01 Nov 2026."))
+        XCTAssertEqual(used.kind, .purchase)
+        let declined = try XCTUnwrap(single("Your Maya card ending in 0007 was declined for PHP 99.00 at TEST STORE."))
+        XCTAssertEqual(declined.status, .failed)
+        let cashIn = try XCTUnwrap(single("Cash in of PHP 1,000.00 to your Maya Wallet is successful."))
+        XCTAssertEqual(cashIn.direction, .inflow)
+        let sent = try XCTUnwrap(single("Sent PHP 200.00 to 0917***0000 via Maya."))
+        XCTAssertEqual(sent.kind, .transferOut)
+    }
+
+    func testDepositFromAnotherPersonWithTransferWord() throws {
+        let d = try XCTUnwrap(single("【中国农业银行】张三于11月01日10:20向您尾号0014账户完成转存交易人民币1,000.00，余额2,000.00。"))
+        XCTAssertEqual(d.kind, .transferIn)
+        XCTAssertEqual(d.counterparty, "张三")
+    }
+
     // MARK: 汇款方向、紧凑日期、币种代码
 
     func testRemittanceResultDecidesDirection() throws {

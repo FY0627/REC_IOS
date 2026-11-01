@@ -815,8 +815,8 @@ public final class LedgerBackend: Sendable {
             let allowed: Bool
             if !item.candidateAccountIDs.isEmpty {
                 allowed = item.candidateAccountIDs.contains(accountID)
-            } else if let tail = draft.cardTail, accounts.contains(where: { !$0.archived && $0.last4 == tail }) {
-                allowed = account.last4 == tail
+            } else if let tail = draft.cardTail, accounts.contains(where: { !$0.archived && $0.matches(tail: tail) }) {
+                allowed = account.matches(tail: tail)
             } else {
                 // 通知里没有尾号，或尾号对不上任何卡：由用户选择记入哪张卡
                 allowed = !account.archived

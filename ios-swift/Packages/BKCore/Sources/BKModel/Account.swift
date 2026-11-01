@@ -175,6 +175,11 @@ public struct Account: Identifiable, Hashable, Sendable, Codable {
 
     /// 银行卡（有尾号，参与自动记账匹配）
     public var isCard: Bool { cardType.isCard }
+
+    /// 通知里写的尾号是不是这张卡。邮储等只写后三位（「尾号017」）
+    public func matches(tail: String) -> Bool {
+        last4 == tail || (tail.count == 3 && last4.hasSuffix(tail))
+    }
     public var deleted: Bool { deletedAt != nil }
 
     /// 银行卡「招商银行 ·0427」，现金和电子钱包写名称；删除的账户后面写「（已删除）」

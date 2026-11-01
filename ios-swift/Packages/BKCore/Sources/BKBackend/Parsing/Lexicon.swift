@@ -82,12 +82,12 @@ enum Lexicon {
         KindRule(#"手续费|年费|管理费|服务费|短信费|扣费|\bfees?\b|gebühr"#, .fee, .outflow),
         KindRule(#"工资|薪资|薪金|代发|奖金|salary|payroll|gehalt|lohn"#, .salary, .inflow),
         // 「手机银行支取」「网上支付支取」是转走或付款，不是取现金
-        KindRule(#"取款|取现|\bATM\b|(?<!手机银行|网上银行|网银|网上支付|快捷支付)支取|cash withdrawal|withdrawal|withdrawn|abhebung|bargeld"#, .withdrawal, .outflow),
-        KindRule(#"存款|现金存入|存入现金|cash deposit|einzahlung"#, .deposit, .inflow),
-        KindRule(#"向您(?:尾号\s*[*xX•]*\d{4})?的?(?:账户|账号|卡)?(?:转账|汇款)|转入|汇入|收款|来账|转账收入|转账存入|received from|transfer from|incoming transfer|überweisung von"#, .transferIn, .inflow),
-        KindRule(#"转出|汇出|转账支出|[你您]已成功转账|成功转账至|已转账至|转账至|向[^，,。；;\n]{1,20}(?:转账|汇款)|付款给|transfer(?:red)? to|your transfer is successful|sent to|outgoing transfer|überweisung an"#, .transferOut, .outflow),
+        KindRule(#"取款|取现|提现|\bATM\b|\bcash[- ]?out\b|(?<!手机银行|网上银行|网银|网上支付|快捷支付)支取|cash withdrawal|withdrawal|withdrawn|abhebung|bargeld"#, .withdrawal, .outflow),
+        KindRule(#"存款|现金存入|存入现金|cash deposit|\bcash[- ]?in\b|einzahlung"#, .deposit, .inflow),
+        KindRule(#"向您(?:尾号\s*[*xX•]*\d{3,4})?的?(?:账户|账号|卡)?(?:完成)?(?:转账|转存|汇款)|转入|汇入|收款|来账|转账收入|转账存入|received from|transfer from|incoming transfer|überweisung von"#, .transferIn, .inflow),
+        KindRule(#"转出|汇出|转账支出|[你您]已成功转账|成功转账至|已转账至|转账至|向[^，,。；;\n]{1,20}(?:转账|汇款)|付款给|transfer(?:red)? to|your transfer is successful|\bsent\b|outgoing transfer|überweisung an"#, .transferOut, .outflow),
         KindRule(#"转账|汇款|\btransfer\b|überweisung"#, .transferOut, nil, transferGeneric: true),
-        KindRule(#"消费|刷卡|网上支付|快捷支付|网银支付|支付|购物|扣款|划扣|purchase|spent|charged|card payment|payment (?:at|to)|\bPOS\b|kartenzahlung|einkauf"#, .purchase, .outflow),
+        KindRule(#"消费|刷卡|网上支付|快捷支付|网银支付|支付|购物|扣款|划扣|purchase|spent|charged|was used|card payment|payment (?:at|to)|\bPOS\b|kartenzahlung|einkauf"#, .purchase, .outflow),
     ]
 
     static let inflowCue = Rx(#"收入|入账|到账|存入|收到|退回|返还|credited|received|deposited|eingang|gutgeschrieben|gutschrift"#)

@@ -1094,6 +1094,41 @@ final class IngestTests: XCTestCase {
         XCTAssertEqual(count, 1)
     }
 
+    func testWalletAddedAsCardReceivesNoTailNotices() async throws {
+        let backend = try makeBackend()
+        let card = try await addAccount(backend, bank: "maya", bankName: "Maya", last4: "0007", currency: CurrencyCode("PHP"))
+        let result = try await backend.ingest(IngestRequest(text: "Sent PHP 200.00 to 0917***0000. Ref no. 123456789012", source: .sms, sender: "Maya"))
+        XCTAssertEqual(result.recordedCount, 1, result.summary)
+        let rows = try await backend.records(accountID: card.id)
+        XCTAssertEqual(rows.first?.record.kind, .transferOut)
+    }
+
+    func testAccountNamedInTheTextIsKeptAsACandidate() async throws {
+        let backend = try makeBackend()
+        let card = try await addAccount(backend, bank: "maya", bankName: "Maya", last4: "0007", currency: CurrencyCode("PHP"))
+        let result = try await backend.ingest(IngestRequest(text: "Sent PHP 200.00 to 0917***0000 via Maya. Ref no. 123456789012", source: .sms))
+        XCTAssertEqual(result.pendingCount, 1, "没有发件人和署名，只是提到名称：不直接入账，也不丢掉")
+        let items = try await backend.openPendingItems()
+        XCTAssertEqual(items.first?.candidateAccountIDs, [card.id])
+    }
+
+    func testFormalAmountFromUnknownSenderIsKept() async throws {
+        let backend = try makeBackend()
+        let kept = try await backend.ingest(IngestRequest(text: "Cash in of PHP 1,000.00 to your wallet is successful.", source: .sms))
+        XCTAssertEqual(kept.pendingCount, 1, kept.summary)
+        let chat = try await backend.ingest(IngestRequest(text: "晚上吃饭AA，你转我100元就行", source: .sms))
+        XCTAssertEqual(chat.outcome, .filtered)
+    }
+
+    func testThreeDigitTailMatchesTheEndOfTheCard() async throws {
+        let backend = try makeBackend()
+        let card = try await addAccount(backend, bank: "psbc", bankName: "中国邮政储蓄银行", last4: "0017")
+        let result = try await backend.ingest(IngestRequest(text: "【邮储银行】26年11月01日10:20您尾号017账户提现，金额100.00元，余额500.00元。", source: .sms))
+        XCTAssertEqual(result.recordedCount, 1, result.summary)
+        let rows = try await backend.records(accountID: card.id)
+        XCTAssertEqual(rows.first?.record.kind, .withdrawal)
+    }
+
     func testPendingWithoutTailCanBeAssignedToAnyCard() async throws {
         let backend = try makeBackend()
         let account = try await addAccount(backend, last4: "0427")

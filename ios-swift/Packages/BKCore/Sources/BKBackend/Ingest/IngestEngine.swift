@@ -16,7 +16,9 @@ enum AccountMatcher {
         // 现金、电子钱包没有卡号，不参与尾号匹配
         let active = accounts.filter { !$0.archived && $0.isCard }
         let bound = boundAccountID.flatMap { id in active.first { $0.id == id } }
-        let bankName = BankCatalog.entry(id: bankHint)?.name
+        // 钱包发的、但用户把它加成了卡（Maya 有卡号）：和银行一样按发通知的机构找
+        let issuer = bankHint ?? walletHint
+        let bankName = BankCatalog.entry(id: issuer)?.name
         func bankCompatible(_ account: Account) -> Bool {
             guard let bankHint, let bankID = account.bankID else { return true }
             return bankID == bankHint || account.bankName == bankName
@@ -34,12 +36,12 @@ enum AccountMatcher {
                 }
             }
             // 认出了银行：众安的转账通知不写卡号，这家银行只添加了一张卡时就是这张，有几张时让用户选
-            let sameBank = active.filter { bankHint != nil && ($0.bankID == bankHint || $0.bankName == bankName) }
+            let sameBank = active.filter { issuer != nil && ($0.bankID == issuer || $0.bankName == bankName) }
             if sameBank.count == 1 { return .matched(sameBank[0]) }
             if let bound, bankCompatible(bound) { return .boundOnly(bound) }
             return sameBank.isEmpty ? .none : .ambiguous(sameBank)
         }
-        let sameTail = active.filter { $0.last4 == tail }
+        let sameTail = active.filter { $0.matches(tail: tail) }
         if let bound, sameTail.contains(bound) { return .matched(bound) }
         let candidates = sameTail.filter(bankCompatible)
         switch candidates.count {
@@ -118,17 +120,19 @@ struct IngestEngine {
         // 对不上时，有非银行的【署名】直接丢；没有署名的，能完整认出交易才留下（被截断的通知可能丢了银行名称，
         // 「你已成功转账 … HKD275.40」这样的仍进待处理，朋友发来的「转我100元」不进）；
         // 银行或钱包发的有金额的留下（可能有卡没添加），没有金额的只留在接收日志里（`logOnly`）。
-        // 钱包的其他通知很多，没有金额的照样不保存
+        // 钱包的其他通知很多，没有金额的照样不保存。
+        // 正文提到了已添加账户的银行或钱包（`namedAccounts`），或者金额写得像银行通知（`formalAmount`），也留下：宁可让用户看一眼，不悄悄丢掉
         let ownCard = accounts.filter { !$0.archived && $0.isCard }
         let ownAccount = templateHit || request.boundAccountID != nil || fallbackTail != nil
-            || parsed.cardTails.contains { tail in ownCard.contains { $0.last4 == tail } }
+            || parsed.cardTails.contains { tail in ownCard.contains { $0.matches(tail: tail) } }
             || accounts.contains { !$0.archived && parsed.walletHint != nil && WalletDirectory.provider(of: $0) == parsed.walletHint }
+        let named = parsed.hasAmount ? Self.namedAccounts(in: parsed.cleanedText, accounts: accounts) : []
         var classification = parsed.classification
         if !ownAccount, parsed.nonBankSignature {
             classification = .noFinancialContent
         } else if !ownAccount, [MessageClassification.transaction, .unrecognized, .marketing].contains(classification),
                   parsed.bankHint == nil, !parsed.bankSignature, parsed.walletHint == nil || parsed.events.isEmpty,
-                  !Lexicon.bankish.test(parsed.cleanedText), !parsed.events.contains(where: { $0.issue == nil }) {
+                  named.isEmpty, !Lexicon.bankish.test(parsed.cleanedText), !parsed.events.contains(where: { $0.issue == nil || Self.formalAmount($0.draft.amount) }) {
             classification = .noFinancialContent
         }
         let logOnly = !ownAccount && !parsed.hasAmount
@@ -169,6 +173,8 @@ struct IngestEngine {
                     merged += 1
                     items.append(try item(recordID: recordID, draft: draft, result: .merged, accounts: accounts))
                 case let .pending(reason, candidates, duplicateOf):
+                    // 没有卡号和署名、只是正文提到账户名称：证据不够直接入账，把它列成候选
+                    let candidates = candidates.isEmpty ? named.map(\.id) : candidates
                     try PendingDAO.insert(db, id: newID(), ingestID: ingestID, partIndex: draft.partIndex, reason: reason, draft: draft, candidates: candidates, duplicateOf: duplicateOf, now: now)
                     pending += 1
                     items.append(Self.pendingItem(draft, reason: reason))
@@ -238,6 +244,27 @@ struct IngestEngine {
         // 出现多个时，像年份的（「24 Oct 2026」）不算
         if found.count > 1 { found = found.filter { !(1990...2099).contains(Int($0) ?? 0) } }
         return found.count == 1 ? found.first : nil
+    }
+
+    /// 正文提到了哪些已添加账户的银行或钱包。认的是用户添加的账户，所以不限于名录里的机构。
+    /// 英文按整个单词比较，不到 4 个字母的简称（ZA、ABC）和不到 3 个字的中文（平安）太容易撞上普通文字，不算
+    static func namedAccounts(in text: String, accounts: [Account]) -> [Account] {
+        accounts.filter { account in
+            guard !account.archived, account.isCard || account.cardType == .wallet else { return false }
+            let entry = BankCatalog.entry(id: account.bankID)
+            let names = [account.bankName, entry?.localName].compactMap { $0 } + (entry?.aliases ?? [])
+            return names.contains { name in
+                let ascii = name.allSatisfy(\.isASCII)
+                guard name.count >= (ascii ? 4 : 3) else { return false }
+                let pattern = NSRegularExpression.escapedPattern(for: name)
+                return text.range(of: ascii ? "(?<![A-Za-z0-9])\(pattern)(?![A-Za-z0-9])" : pattern, options: [.regularExpression, .caseInsensitive]) != nil
+            }
+        }
+    }
+
+    /// 写了明确的币种和两位小数（`PHP 200.00`）：银行和钱包的写法，朋友发的「转我100元」不是这样
+    static func formalAmount(_ amount: AmountText) -> Bool {
+        amount.currencyCandidates.count == 1 && amount.digits.range(of: #"[.,]\d{2}$"#, options: .regularExpression) != nil
     }
 
     /// 通知里写的是账号（户口号码）或完整卡号时，和卡片信息里填写的号码比较。
@@ -461,7 +488,7 @@ struct IngestEngine {
     /// 自己两张卡之间的转账：两边流水都保留，可靠关联时标记同一转账组。
     func linkTransfer(_ record: LedgerRecord, counterpartyTail: String?, accounts: [Account]) throws {
         guard record.status == .posted, record.kind.isTransferLike else { return }
-        let peerAccounts = counterpartyTail.map { tail in accounts.filter { $0.isCard && $0.last4 == tail && $0.id != record.accountID && !$0.archived } } ?? []
+        let peerAccounts = counterpartyTail.map { tail in accounts.filter { $0.isCard && $0.matches(tail: tail) && $0.id != record.accountID && !$0.archived } } ?? []
         let window: TimeInterval = 30 * 60
         var candidates = try RecordDAO.candidates(
             db, amountMinor: record.amountMinor, currency: record.currency, direction: record.direction.opposite,
