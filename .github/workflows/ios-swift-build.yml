@@ -1,0 +1,116 @@
+name: iOS Swift Build
+
+# 独立于 Flutter 的 ci.yml：只在 ios-swift 相关文件变化时运行。
+on:
+  workflow_dispatch:
+    inputs:
+      xcode_app:
+        description: "可选：指定 Xcode 路径（例如 /Applications/Xcode_27.0.app）；留空使用 runner 默认 Xcode"
+        required: false
+        default: ""
+  push:
+    branches: [ios-swift]
+    paths:
+      - "ios-swift/**"
+      - ".github/workflows/ios-swift-build.yml"
+  pull_request:
+    paths:
+      - "ios-swift/**"
+      - ".github/workflows/ios-swift-build.yml"
+
+# 最小权限：只读代码。产物上传使用 Actions 运行时令牌，不需要额外权限。
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-swift-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Test, build (Release iphoneos arm64) and package IPA
+    # GitHub 托管的 Xcode 27 镜像（macOS 27，Apple Silicon），包含 iOS 27 SDK。
+    runs-on: xcode-27
+    timeout-minutes: 60
+    env:
+      OUT: ${{ github.workspace }}/ci-out
+      XCODE_APP: ${{ inputs.xcode_app }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Toolchain
+        run: bash ios-swift/ci/toolchain.sh "$OUT"
+
+      - name: Core business tests (macOS host + iOS Simulator)
+        run: bash ios-swift/ci/test.sh "$OUT"
+
+      # 这个仓库的运行次数从 1 开始，之前的版本是在旧仓库构建的：加 100，构建号不会变小
+      - name: Build Release iphoneos arm64 (unsigned)
+        run: bash ios-swift/ci/build-device.sh "$OUT" "$(( ${{ github.run_number }} + 100 ))"
+
+      - name: Package and verify IPA
+        id: package
+        run: |
+          mkdir -p "$OUT/logs"
+          set -o pipefail
+          bash ios-swift/ci/package-ipa.sh "$OUT" 2>&1 | tee "$OUT/logs/package-ipa.log"
+
+      - name: App icon check and preview
+        if: success()
+        run: bash ios-swift/ci/icon-preview.sh "$OUT"
+
+      - name: Report errors as annotations
+        if: failure()
+        run: bash ios-swift/ci/annotate-failure.sh "$OUT"
+
+      - name: Job summary
+        if: always()
+        run: |
+          {
+            echo "## iOS Swift build"
+            echo
+            echo "- Commit: \`${GITHUB_SHA}\`"
+            echo "- Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            echo
+            echo '```'
+            cat "$OUT/toolchain.txt" 2>/dev/null || echo "toolchain.txt missing"
+            echo '```'
+            if [ -f "$OUT/ipa/build-info.txt" ]; then
+              echo "### IPA"
+              echo '```'
+              cat "$OUT/ipa/build-info.txt"
+              echo '```'
+              echo '```'
+              cat "$OUT/ipa-verification.txt"
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload IPA
+        if: success()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.package.outputs.ipa_name }}
+          path: |
+            ci-out/ipa/*.ipa
+            ci-out/ipa/*.sha256
+            ci-out/ipa/build-info.txt
+            ci-out/ipa/ipa-verification.txt
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload logs and test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: diagnostics-${{ github.run_number }}
+          path: |
+            ci-out/logs/
+            ci-out/results/
+            ci-out/toolchain.txt
+            ci-out/ipa-contents.txt
+            ci-out/ipa-verification.txt
+            ci-out/icon-preview/
+            ci-out/derived-app/Build/Products/Release-iphoneos/*.dSYM
+          if-no-files-found: warn
+          retention-days: 14
