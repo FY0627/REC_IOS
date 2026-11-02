@@ -6,10 +6,12 @@ enum Lexicon {
 
     static let verificationCode = Rx(#"验证码|校验码|动态码|动态密码|短信密码|一次性密码|\bOTP\b|one[- ]time (?:password|code)|verification code|verify code|security code|passcode|bestätigungscode|\bm?TAN\b"#)
     /// 正文里真的给出了一个验证码（只提到「验证码」字样的安全提示不算）
-    static let verificationCodeValue = Rx(#"(?:验证码|校验码|动态码|动态密码|短信密码|一次性密码)\s*(?:是|为)?\s*[：:]?\s*[A-Za-z0-9]{4,8}(?![\d])|(?<![\d.])\d{4,8}\s*(?:是|为)?\s*(?:您的?)?(?:本次)?(?:验证码|校验码|动态码|动态密码)|(?:\bOTP\b|one[- ]time (?:password|code)|verification code|verify code|security code|passcode|bestätigungscode)\s*(?:is|:|ist)?\s*[：:]?\s*\d{4,8}|\d{4,8}\s+is your (?:otp|verification code|code)|\bOTP for\b|\d{4,8}\s*هو\s*رمز|(?:الرقم السري|كلمة السر|رمز التحقق|رمز التفعيل|c[oó]digo de (?:verificaci[oó]n|seguridad)|код подтверждения|doğrulama kodu).{0,80}?(?<![\d.])\d{4,8}(?!\d)"#)
+    static let verificationCodeValue = Rx(#"(?:验证码|校验码|动态码|动态密码|短信密码|一次性密码)\s*(?:是|为)?\s*[：:]?\s*[A-Za-z0-9]{4,8}(?![\d])|(?<![\d.])\d{4,8}\s*(?:是|为)?\s*(?:您的?)?(?:本次)?(?:验证码|校验码|动态码|动态密码)|(?:\bOTP\b|one[- ]time (?:password|code)|verification code|verify code|security code|passcode|bestätigungscode)\s*(?:is|:|ist)?\s*[：:]?\s*\d{4,8}|\d{4,8}\s+is your (?:otp|verification code|code)|\bOTP for\b|\btransaction code is\b|\d{4,8}\s*هو\s*رمز|(?:الرقم السري|كلمة السر|رمز التحقق|رمز التفعيل|c[oó]digo de (?:verificaci[oó]n|seguridad)|код подтверждения|doğrulama kodu).{0,80}?(?<![\d.])\d{4,8}(?!\d)"#)
     static let statement = Rx(#"电子账单|对账单|月结单|账单明细|本期账单明细|e-?statement|monthly statement|statement of account|kontoauszug"#)
-    static let reminder = Rx(#"还款提醒|账单提醒|扣款提醒|温馨提示.{0,20}还款|到期还款日|最后还款日|账单日|最低还款|应还款?额|本期应还|账单已出|已出账|payment due|due date|minimum payment|statement (?:is )?ready|将于|将在|即将|预计.{0,6}(?:扣款|扣收|还款|入账)|请于|请在.{0,12}前|请确保|请保证|请存入|请及时还款|请按时还款|will be (?:debited|charged|deducted)|\bis due\b|\bdue (?:on|by)\b|ignore if (?:already )?paid|payment request|\bmandate\b"#)
+    static let reminder = Rx(#"还款提醒|账单提醒|扣款提醒|温馨提示.{0,20}还款|到期还款日|最后还款日|账单日|最低还款|应还款?额|本期应还|账单已出|已出账|payment due|due date|minimum payment|statement (?:is )?ready|将于|将在|即将|预计.{0,6}(?:扣款|扣收|还款|入账)|请于|请在.{0,12}前|请确保|请保证|请存入|请及时还款|请按时还款|will be (?:debited|charged|deducted)|\bis due\b|\bdue (?:on|by)\b|ignore if (?:already )?paid|payment request|\bmandate\b|collect request|is being processed"#)
     static let completed = Rx(#"processed successfully|已还款|还款成功|成功还款|已入账|已到账|已收到|已扣款|已于|扣款成功|has been (?:credited|debited|received)|was (?:charged|debited|credited)|received your payment"#)
+    /// 只是收到了申请，钱还没动：「has been received … is being processed」的 received 不算完成
+    static let requestOnly = Rx(#"collect request|payment request|is being processed"#)
     static let marketing = Rx(#"退订|(?:get|earn|enjoy)\b.{0,24}cashback|download now|t&c apply|回T\b|回TD|回复TD|拒收请回|unsubscribe|优惠|活动|抽奖|立减|领取|特惠|福利|专享|邀请|免费|promo|offer|最高可(?:借|贷|享|领)|额度高达|申请|办理|分期|诚邀|恭喜"#)
     /// 信用额度调整，以及支出限额、免密上限这类设置：写的金额是上限，不是交易
     static let limitChange = Rx(#"(?:临时|固定|信用|可用)?额度.{0,10}(?:调整|提升|提高|恢复|降低|调低|调为|生效|到期)|credit limit (?:increase|change|adjust)|限额|上限"#)
@@ -23,6 +25,7 @@ enum Lexicon {
     static let bankSignature = Rx(#"银行|信用卡|储蓄卡|借记卡|扣账卡|农商|农信|信用社|商行|邮储|浦发|工银|[工农中建交招]行|广发|兴业|民生|光大|中信|华夏|平安|\bbank\b"#)
 
     // MARK: 金额角色（金额前面最近的标签决定这个数字是什么）
+    // 点号夹在字母中间时 \b 不算单词边界（「UPI.Avl」「mm.AvlBal」「Avl.Limit」），这些标签前面用 (?<![a-z])
 
     enum Role: Int {
         case transaction
@@ -35,8 +38,8 @@ enum Lexicon {
     }
 
     static let roleLabels: [(Role, Rx)] = [
-        (.balance, Rx(#"可用余额|账户余额|活期余额|余额|结余|\bbalance\b|\ba?va?i?l\.? ?bal|avail(?:able)? bal|\bbaln?\b|\bavbl\b|\bavlb?\b|\bavailable\b|доступно|\bremaining\b|kontostand|saldo|bakiye|остаток|رصيد|الرصيد|مانده|المتبقي|คงเหลือ"#)),
-        (.creditLimit, Rx(#"可用额度|信用额度|剩余额度|临时额度|额度|限额|上限|available credit|credit limit|available limit|\blimit\b|\blmt\b|verfügbarer rahmen"#)),
+        (.balance, Rx(#"可用余额|账户余额|活期余额|余额|结余|(?<![a-z])balance\b|(?<![a-z])a?va?i?l\.? ?bal|avail(?:able)? bal|(?<![a-z])baln?\b|(?<![a-z])avbl\b|(?<![a-z])avlb?\b|(?<![a-z])available\b|доступно|\bremaining\b|kontostand|saldo|bakiye|остаток|رصيد|الرصيد|مانده|المتبقي|คงเหลือ"#)),
+        (.creditLimit, Rx(#"可用额度|信用额度|剩余额度|临时额度|额度|限额|上限|available credit|credit limit|available limit|(?<![a-z])limit\b|\blmt\b|\babove the\b|verfügbarer rahmen"#)),
         (.fee, Rx(#"手续费|服务费|工本费|年费|管理费|短信费|\bfees?\b|\bcost\b|\bcharges\b|service charge|\bvat\b|\bgst\b|commission|gebühr|comisi[oó]n|komisyon|رسوم"#)),
         (.cumulative, Rx(#"累计|合计|总计|共计|本月消费|当月消费|\btotal\b"#)),
         (.due, Rx(#"最低还款|应还款?额?|本期账单金额|账单金额|minimum payment|amount due|statement balance|\boutstanding\b|total due|minimum due"#)),
@@ -87,12 +90,12 @@ enum Lexicon {
         KindRule(#"取款|取现|提现|\bATM\b|\bcash[- ]?out\b|(?<!手机银行|网上银行|网银|网上支付|快捷支付)支取|cash withdrawal|withdrawal|withdrawn|abhebung|bargeld"#, .withdrawal, .outflow),
         KindRule(#"存款|现金存入|存入现金|cash deposit|deposited (?:via|at|by|through) (?:atm|cash)|\bcash[- ]?in\b|einzahlung"#, .deposit, .inflow),
         KindRule(#"向您(?:尾号\s*[*xX•]*\d{3,4})?的?(?:账户|账号|卡)?(?:完成)?(?:转账|转存|汇款)|转入|汇入|收款|来账|转账收入|转账存入|received from|transfer from|incoming transfer|überweisung von"#, .transferIn, .inflow),
-        KindRule(#"(?:you made|your)\s+(?:an?\s+)?[\w-]*\s*transfer(?: of)?|credited to (?:the )?beneficiary|(?<!you )(?<!account )(?<!card )has received|转出|汇出|转账支出|[你您]已成功转账|成功转账至|已转账至|转账至|向[^，,。；;\n]{1,20}(?:转账|汇款)|付款给|transfer(?:red)? to|your transfer is successful|\bsent\b(?! by)|outgoing transfer|überweisung an"#, .transferOut, .outflow),
+        KindRule(#"(?:you made|your)\s+(?:an?\s+)?[\w-]*\s*transfer(?: of)?|credited to (?:the )?beneficiary|(?<!you )(?<!account )(?<!card )has received|转出|汇出|转账支出|[你您]已成功转账|成功转账至|已转账至|转账至|向[^，,。；;\n]{1,20}(?:转账|汇款)|付款给|transfer(?:red)? to|\btransfer out\b|your transfer is successful|\bsent\b(?! by)|outgoing transfer|überweisung an"#, .transferOut, .outflow),
         KindRule(#"转账|汇款|\btransfer\b|überweisung"#, .transferOut, nil, transferGeneric: true),
         KindRule(#"消费|刷卡|网上支付|快捷支付|网银支付|支付|购物|扣款|划扣|purchase|spent|charged|was used|made (?:with|on|using) your|done at\b|bill payment|(?:imps|neft|rtgs) payment|card transaction|transaction at\b|card payment|payment (?:at|to)\b|paid (?:to|at)\b|\bPOS\b|kartenzahlung|einkauf"#, .purchase, .outflow),
     ]
 
-    static let inflowCue = Rx(#"存(?:RMB|人民币|CNY)\s*$|收入|入账|到账|存入|收到|退回|返还|credited|\bcredit\b(?! card)|\breceived?\b|deposited|eingang|gutgeschrieben|gutschrift|abono|dep[oó]sito|recibido|recebido|recebeu|re[cç]u\b|зачисл|пополнен|поступ|yatırıl|masuk|diterima|إيداع|ايداع|واریز|รับเงิน|เงินเข้า|โอนเงินเข้า|umepokea"#)
+    static let inflowCue = Rx(#"存(?:RMB|人民币|CNY)\s*$|收入|入账|到账|存入|收到|退回|返还|\binto your\b|credited|\bcredit\b(?! card)|\breceived?\b|deposited|eingang|gutgeschrieben|gutschrift|abono|dep[oó]sito|recibido|recebido|recebeu|re[cç]u\b|зачисл|пополнен|поступ|yatırıl|masuk|diterima|إيداع|ايداع|واریز|รับเงิน|เงินเข้า|โอนเงินเข้า|umepokea"#)
     static let outflowCue = Rx(#"取(?:RMB|人民币|CNY)\s*$|\bfrom:\s*.{0,30}(?:card|account|a/c)|支出|支取|扣除|扣减|扣款|扣收|\bpaid\b|\bspent\b|withdrawn|deducted|\bsent\b(?! by)|debited|\bspending\b|\bcargo\b|\bretiro\b|\bpago\b|\bcompra\b|\bconsumo\b|\bsaque\b|pagamento|\bachat\b|paiement|retrait|покупка|списан|оплата|снятие|harcama|ödeme|çekim|pembayaran|penarikan|شراء|خصم|سحب|برداشت|خرید|ถอน|ชำระ|จ่าย|โอนเงินออก|malipo|umetuma|kwenda|\bdebit\b(?! card)|abgebucht|belastet|belastung"#)
     /// 借贷记号：`NGN4,200.00 DR`、`Dr. Rs. 75.50`。必须是这个大小写，「Dr Smith」「CR7」这类不算
     static let debitMark = Rx(#"(?<![A-Za-z])(?:DR\b|Dr\b\.?(?!\s+(?!Rs\b)[A-Z][a-z]))"#, caseInsensitive: false)
@@ -107,8 +110,10 @@ enum Lexicon {
     static let paymentReceived = Rx(#"\bpayment\b[^;\n]{0,60}\b(?:received|credited)\b(?!\s+by\b)|\b(?:received|credited)\b[^;\n]{0,40}\bpayment\b"#)
     /// 收到钱的是卡：上面的写法再提到卡才算还款。借记卡收到的钱不是还款
     static let cardMention = Rx(#"(?<!debit )card(?:member)?\b|\bcc\b"#)
-    /// 汇款说明后面写的结果：决定方向，后面的「到账」说的是收款人那边
-    static let sentOut = Rx(#"已(?:汇出|转出)"#)
+    /// 没写收入还是支出，但说的是用卡或账户付了钱。只在通知里什么方向词都没有时才用
+    static let cardSpend = Rx(#"\b(?:transaction|txn|trx|used|using)\b.{0,90}(?:card|a/c|acct)|(?:card|a/c|acct)\b.{0,50}\b(?:transaction|txn|trx|used|approved)\b|\bpayment\b.{0,100}\bsuccessful|\byou made a\b.{0,20}\b(?:transaction|purchase)\b"#)
+    /// 汇款说明后面写的结果：决定方向，后面的「到账」说的是收款人那边。「Fund transfer of NPR 250.00 to A/C …」直接写转给谁，也是转出
+    static let sentOut = Rx(#"已(?:汇出|转出)|^\s*(?:[A-Z]{3}\s+)?to\b(?!\s+(?:your|ur)\b)"#)
     /// 括号里的时间说明（「（交易预授权时间10月30日10:20）」）：说的是之前那一步，不决定这笔的性质和状态
     static let timeNote = Rx(#"\([^()]*时间[^()]*\)"#)
     /// 紧跟在这些字后面的时间是之前那笔预授权的时间

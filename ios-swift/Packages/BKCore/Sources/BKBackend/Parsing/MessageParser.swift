@@ -414,7 +414,7 @@ public enum MessageParser {
             let sentence = sentenceText(amount.sentence)
             let sentenceRange = sentences.indices.contains(amount.sentence) ? sentences[amount.sentence] : NSRange(location: 0, length: length)
             // 逾期/将要发生的扣款属于提醒，不入账
-            if Lexicon.reminder.test(sentence), !Lexicon.completed.test(sentence) { continue }
+            if Lexicon.requestOnly.test(sentence) || (Lexicon.reminder.test(sentence) && !Lexicon.completed.test(sentence)) { continue }
 
             let amountEnd = amount.range.location + amount.range.length
             let prefix = ns.substring(with: NSRange(location: sentenceRange.location, length: max(0, amount.range.location - sentenceRange.location)))
@@ -667,6 +667,7 @@ public enum MessageParser {
         }
         guard let rule else {
             if let cue { return KindDetection(kind: .other, direction: cue, status: status, uncertain: false) }
+            if Lexicon.cardSpend.test(message ?? around) { return KindDetection(kind: .purchase, direction: .outflow, status: status, uncertain: false) }
             return KindDetection(kind: .other, direction: nil, status: status, uncertain: true)
         }
         if rule.status != .posted { status = rule.status }
@@ -684,6 +685,10 @@ public enum MessageParser {
         default:
             if rule.kind == .purchase, Lexicon.reversedAfter.test(suffix) {
                 return KindDetection(kind: .reversal, direction: .inflow, status: status, uncertain: false)
+            }
+            // 「支付宝提现收入」：钱从钱包转到这张卡，是转账，不是取现，也不是收入
+            if rule.kind == .withdrawal, cue == .inflow, Lexicon.explicitInflow.test(prefix) {
+                return KindDetection(kind: .transferIn, direction: .inflow, status: status, uncertain: false)
             }
             // 「网上支付收入」「收入(跨行支付)」：「支付」只说明渠道，写明了收入就是钱进来了。不知道具体性质，和只写「收入」一样记为其他
             if rule.kind == .purchase, rule.direction == .outflow, cue == .inflow, Lexicon.explicitInflow.test(prefix) {

@@ -611,6 +611,99 @@ final class ParserSampleTests: XCTestCase {
         XCTAssertEqual(d.cardTail, "0002")
     }
 
+    /// 钱从钱包转到卡上：是转账，不算取现，也不算收入
+    func testWalletWithdrawalToCardIsATransfer() throws {
+        let samples = [
+            "您尾号0001卡10月24日14:30支付宝提现收入500.00元，余额1,400.00元。【工商银行】",
+            "您尾号0001的储蓄卡10月24日14时30分财付通提现收入人民币200.00元,活期余额1600.00元。[建设银行]",
+            "【邮储银行】26年10月24日14:30您尾号017账户提现，收入金额500.00元，余额1400.00元。",
+        ]
+        for text in samples {
+            let d = try XCTUnwrap(single(text), text)
+            XCTAssertEqual(d.kind, .transferIn, text)
+            XCTAssertEqual(d.direction, .inflow, text)
+        }
+        let atm = try XCTUnwrap(single("您尾号0001卡10月24日14:30ATM取款支出1,000.00元，余额600.00元。【工商银行】"))
+        XCTAssertEqual(atm.kind, .withdrawal)
+        XCTAssertEqual(atm.direction, .outflow)
+    }
+
+    /// 点号紧贴在标签前面（「UPI.Avl」「mm.AvlBal」「Avl.Limit」）：后面的数字是余额或额度，不是第二笔交易
+    func testLabelRightAfterADotIsNotASecondAmount() throws {
+        let upi = try XCTUnwrap(single("A/c X0001 credited by INR 125.00 on 01-01-2026 by TEST SHOP thru UPI.Avl INR 9000.00-TEST"))
+        XCTAssertEqual(upi.amount.digits, "125.00")
+        XCTAssertEqual(upi.direction, .inflow)
+        XCTAssertEqual(upi.balanceAfter?.digits, "9000.00")
+        let time = try XCTUnwrap(single("Dear Customer,LKR 3,216.00 Debited from your A/c XXXXXXXX0001 on 06/05/2026 at HH:mm.AvlBal LKR 9,437.61."))
+        XCTAssertEqual(time.amount.digits, "3,216.00")
+        XCTAssertEqual(time.balanceAfter?.digits, "9,437.61")
+        let limit = try XCTUnwrap(single("Thank you for using your card ending 0001 for AED 50.00 at TEST SHOP on 01-JAN-2026 12:00 PM. Avl.Limit: AED 1,000.00"))
+        XCTAssertEqual(limit.amount.digits, "50.00")
+        XCTAssertEqual(limit.kind, .purchase)
+    }
+
+    /// 没写收入还是支出，但说的是用卡或账户付了钱
+    func testCardSpendWithoutADirectionWord() throws {
+        let samples = [
+            "TEST: Transaction for $65.00 was approved on debit card 0001 at TEST STORE at 07:45 AM EDT on 05/11/26.",
+            "Test Alert: A $150.00 transaction was made at TEST.COM on card ending in 0001.",
+            "Your TEST creditcard xxxxx0001 used at TEST SHOP for INR 305.00 on 15-04-26.",
+            "Payment of Rs 1,250.00 using Wallet Balance successful at TEST SHOP.",
+            "You made a $9.17 transaction with TEST CAFE on Mar 17, 2026 at 1:56 PM ET.",
+            "Your txn of Rs.450.00 at TEST STORE on your TEST credit card was successful.",
+        ]
+        for text in samples {
+            let d = try XCTUnwrap(single(text), text)
+            XCTAssertEqual(d.kind, .purchase, text)
+            XCTAssertEqual(d.direction, .outflow, text)
+        }
+    }
+
+    /// 写了方向词的，不按用卡消费算
+    func testDirectionWordWinsOverCardSpend() throws {
+        let d = try XCTUnwrap(single("Transaction of INR 100.00 on your card ending 0001 has been credited to your account."))
+        XCTAssertEqual(d.direction, .inflow)
+    }
+
+    func testEnglishTransferWordings() throws {
+        let fund = try XCTUnwrap(single("Fund transfer of NPR 250.00 to A/C 0100000055 was successful on 19-Feb-2026."))
+        XCTAssertEqual(fund.kind, .transferOut)
+        XCTAssertEqual(fund.direction, .outflow)
+        let out = try XCTUnwrap(single("TEST: Transfer out 3,500.00 THB to A/C x0001 Bal 6,200.00 THB"))
+        XCTAssertEqual(out.kind, .transferOut)
+        XCTAssertEqual(out.balanceAfter?.digits, "6,200.00")
+        let into = try XCTUnwrap(single("Dear Client, an electronic funds transfer of PKR 5,000.00 has been made into your Account No. 0101xxx0001 on 31-01-26."))
+        XCTAssertEqual(into.kind, .transferIn)
+        XCTAssertEqual(into.direction, .inflow)
+    }
+
+    /// 「to your account」是转给自己，不能当成转出
+    func testTransferToYourAccountIsNotAnOutflow() {
+        let event = parse("Transfer of USD 100.00 to your account ending 0001.").events.first
+        XCTAssertEqual(event?.issue, .uncertainKind)
+        XCTAssertNil(event?.draft.direction)
+    }
+
+    func testRequestsAreNotTransactions() {
+        XCTAssertEqual(parse("You have received a collect request of Rs. 500 from test@upi on TEST. Approve or decline in the app.").classification, .reminder)
+        XCTAssertEqual(parse("Your transfer request for TZS 120,000.00 has been received successfully and is being processed.").classification, .reminder)
+    }
+
+    func testProcessedTransferRequestIsATransaction() throws {
+        let d = try XCTUnwrap(single("Dear Customer, your funds transfer request of AED 130.00 from account XXXX0001 to account XXXX0002 has been processed on 05-05-2026."))
+        XCTAssertEqual(d.direction, .outflow)
+    }
+
+    func testTransactionCodeIsAVerificationCode() {
+        XCTAssertEqual(parse("Your online transaction code is 123456 for card number ending with #XXXX0001").classification, .verificationCode)
+    }
+
+    func testAlertThresholdIsNotASecondAmount() throws {
+        let d = try XCTUnwrap(single("A transaction for $150.50 has posted to CREDIT CARD (part of CC0001), which is above the $100.00 value you set."))
+        XCTAssertEqual(d.amount.digits, "150.50")
+        XCTAssertEqual(d.kind, .purchase)
+    }
+
     /// 借记卡、账户收到的钱，刷卡付款，退款：都不是还款
     func testPaymentReceivedThatIsNotARepayment() throws {
         let debit = try XCTUnwrap(single("Payment of INR 500.00 received on your debit card 0001 on 06-MAY-26."))
