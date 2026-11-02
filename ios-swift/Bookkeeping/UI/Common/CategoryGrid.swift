@@ -16,7 +16,7 @@ struct CategoryGrid: View {
     @Environment(LedgerStore.self) private var store
     @State private var expanded: String?
 
-    private static let columns = 4
+    static let columns = 4
 
     private struct Cell: Identifiable {
         let id: String
@@ -38,6 +38,12 @@ struct CategoryGrid: View {
         .onAppear {
             // 选中的是小类：把它所在的大类展开
             if let category = tree.category(selected), let parent = category.parentID { expanded = parent }
+        }
+        .onChange(of: selected) { _, id in
+            // 在上面的「建议」里选了小类：也展开，下面看得出选的是哪个
+            if let parent = tree.category(id)?.parentID, parent != expanded {
+                withAnimation(.snappy(duration: 0.3)) { expanded = parent }
+            }
         }
         if let node = nodes.first(where: { $0.id == expanded }) {
             VStack(alignment: .leading, spacing: 10) {
@@ -88,33 +94,72 @@ struct CategoryGrid: View {
 
     private func button(_ cell: Cell, isSelected: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            VStack(spacing: 6) {
-                Image(systemName: cell.symbol)
-                    .font(.title3)
-                    .foregroundStyle(isSelected ? AnyShapeStyle(.tint) : AnyShapeStyle(Color.primary))
-                    .frame(width: 48, height: 48)
-                    .background(isSelected ? AnyShapeStyle(TintShapeStyle().opacity(0.15)) : AnyShapeStyle(Color.primary.opacity(0.06)), in: Circle())
-                HStack(spacing: 2) {
-                    Text(cell.name)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                    if cell.hasChildren {
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 8, weight: .bold))
-                            .foregroundStyle(Color.secondary)
-                            .rotationEffect(.degrees(expanded == cell.id ? 180 : 0))
-                    }
-                }
-                .font(.caption)
-                .foregroundStyle(Color.primary)
-            }
-            .frame(maxWidth: .infinity)
-            .contentShape(Rectangle())
+            CategoryCell(name: cell.name, symbol: cell.symbol, isSelected: isSelected, hasChildren: cell.hasChildren, expanded: expanded == cell.id)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(cell.name)
         .accessibilityHint(Text(cell.hasChildren ? "展开小类" : ""))
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+    }
+}
+
+/// 这一笔最可能的几个分类，排成一行放在完整的格子上面。和下面的格子是同一个选择：点一下选上，可以换
+struct SuggestedCategories: View {
+    let categories: [LedgerCategory]
+    var selected: String?
+    let pick: (String) -> Void
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 6) {
+            ForEach(categories) { category in
+                Button {
+                    withAnimation(.snappy(duration: 0.25)) { pick(category.id) }
+                } label: {
+                    CategoryCell(name: category.name, symbol: category.symbol, isSelected: selected == category.id)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(category.name)
+                .accessibilityAddTraits(selected == category.id ? [.isSelected] : [])
+            }
+            ForEach(0..<max(0, CategoryGrid.columns - categories.count), id: \.self) { _ in
+                Color.clear.frame(maxWidth: .infinity, maxHeight: 1)
+            }
+        }
+        .padding(.vertical, 6)
+    }
+}
+
+/// 一个分类：圆形图标和名称；有小类的名称旁有个小箭头
+private struct CategoryCell: View {
+    let name: String
+    let symbol: String
+    let isSelected: Bool
+    var hasChildren = false
+    var expanded = false
+
+    var body: some View {
+        VStack(spacing: 6) {
+            Image(systemName: symbol)
+                .font(.title3)
+                .foregroundStyle(isSelected ? AnyShapeStyle(.tint) : AnyShapeStyle(Color.primary))
+                .frame(width: 48, height: 48)
+                .background(isSelected ? AnyShapeStyle(TintShapeStyle().opacity(0.15)) : AnyShapeStyle(Color.primary.opacity(0.06)), in: Circle())
+            HStack(spacing: 2) {
+                Text(name)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                if hasChildren {
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundStyle(Color.secondary)
+                        .rotationEffect(.degrees(expanded ? 180 : 0))
+                }
+            }
+            .font(.caption)
+            .foregroundStyle(Color.primary)
+        }
+        .frame(maxWidth: .infinity)
+        .contentShape(Rectangle())
     }
 }
 

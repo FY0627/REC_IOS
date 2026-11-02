@@ -109,8 +109,10 @@ public struct IngestItem: Sendable, Hashable {
     /// 待处理时是通知里的金额原文，例如 `1,234.56`
     public var amountText: String?
     public var result: Result
+    /// 入账或合并到的流水；待处理时是 nil
+    public var recordID: String?
 
-    public init(cardTail: String?, kind: TransactionKind?, status: SettlementStatus?, amountMinor: Int64?, currency: CurrencyCode?, amountText: String?, result: Result) {
+    public init(cardTail: String?, kind: TransactionKind?, status: SettlementStatus?, amountMinor: Int64?, currency: CurrencyCode?, amountText: String?, result: Result, recordID: String? = nil) {
         self.cardTail = cardTail
         self.kind = kind
         self.status = status
@@ -118,6 +120,7 @@ public struct IngestItem: Sendable, Hashable {
         self.currency = currency
         self.amountText = amountText
         self.result = result
+        self.recordID = recordID
     }
 }
 

@@ -214,6 +214,8 @@ public struct LedgerRecord: Identifiable, Hashable, Sendable, Codable {
     public var categoryID: String?
     /// 一单用了几张卡：同一单的几笔共用这个标识
     public var orderGroupID: String?
+    /// 分类是按学到的规律自动归的（ADR 0017），不是用户选的，也不是通知写明的；用户改过就不再是
+    public var categoryAuto: Bool
 
     public init(
         id: String, accountID: String, amountMinor: Int64, currency: CurrencyCode, direction: FlowDirection,
@@ -221,7 +223,7 @@ public struct LedgerRecord: Identifiable, Hashable, Sendable, Codable {
         receivedAt: Date?, processedAt: Date, source: SourceKind, ingestID: String, partIndex: Int,
         bankReference: String?, balanceAfterMinor: Int64?, includedFeeMinor: Int64?, note: String,
         transferGroupID: String?, relatedRecordID: String?, transferParty: TransferParty? = nil, settlement: Money? = nil,
-        categoryID: String? = nil, orderGroupID: String? = nil
+        categoryID: String? = nil, orderGroupID: String? = nil, categoryAuto: Bool = false
     ) {
         self.id = id
         self.accountID = accountID
@@ -247,6 +249,7 @@ public struct LedgerRecord: Identifiable, Hashable, Sendable, Codable {
         self.settlement = settlement
         self.categoryID = categoryID
         self.orderGroupID = orderGroupID
+        self.categoryAuto = categoryAuto
     }
 
     /// 排序和按日分组使用的系统时间。

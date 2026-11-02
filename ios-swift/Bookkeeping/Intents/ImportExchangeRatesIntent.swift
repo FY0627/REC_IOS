@@ -63,8 +63,6 @@ struct ImportExchangeRatesIntent: AppIntent {
     /// 没有通知权限时系统不显示。同一个标识：通知中心里只留最新一条
     private static func notifyImported(_ rates: ExchangeRates) async {
         let center = UNUserNotificationCenter.current()
-        // App 正在前台时（例如「打开 REC 时」触发）也显示横幅
-        center.delegate = NotificationPresenter.shared
         let content = UNMutableNotificationContent()
         content.title = "汇率已更新"
         content.body = "已导入 \(rates.rates.count) 个币种的汇率，数据更新于\(Fmt.dateTime(rates.updatedAt))"

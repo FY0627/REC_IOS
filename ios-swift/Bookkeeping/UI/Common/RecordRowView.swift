@@ -26,6 +26,7 @@ struct RecordRowView: View {
                         .font(.body.weight(.medium)).foregroundStyle(.primary).lineLimit(1)
                     if r.status != .posted { badge(r.status.displayName) }
                     if r.isRefund { badge("退款") }
+                    if r.categoryAuto { badge("自动") }
                 }
                 Text(subtitle)
                     .font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
@@ -186,7 +187,8 @@ struct RecordDetailView: View {
                 // 只显示；改分类在右上角「编辑」里
                 if row.entryType != .transfer {
                     LabeledContent("分类") {
-                        Text(row.categoryText).foregroundStyle(row.isUncategorized ? AppTheme.debt : Color.secondary)
+                        Text(r.categoryAuto ? "\(row.categoryText)（自动归类）" : row.categoryText)
+                            .foregroundStyle(row.isUncategorized ? AppTheme.debt : Color.secondary)
                     }
                 }
                 if (r.kind == .transferIn || r.kind == .transferOut), r.transferGroupID == nil, r.status == .posted {

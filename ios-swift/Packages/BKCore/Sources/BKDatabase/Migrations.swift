@@ -5,7 +5,7 @@
 /// - 每个迁移在一个事务里执行，失败整体回滚，版本号不变；
 /// - 每次修改表结构都要在 `DatabaseTests` 里补迁移测试。
 public enum Migrations {
-    public static let latestVersion = 10
+    public static let latestVersion = 11
 
     static let steps: [(version: Int, sql: String)] = [
         (1, """
@@ -223,6 +223,22 @@ public enum Migrations {
         ALTER TABLE accounts ADD COLUMN face_outline_color INTEGER;
         ALTER TABLE accounts ADD COLUMN face_amount_x REAL NOT NULL DEFAULT 1;
         ALTER TABLE accounts ADD COLUMN face_amount_y REAL NOT NULL DEFAULT 0;
+        """),
+        // 学习归类（ADR 0017）：一个商户选过哪些分类（`merchant` 是「类型|归一化的商户」，`picks` 一共选过几次，
+        // `streak` 连续选了几次，只有最近选的那个分类不是 0）；流水记下分类是不是自动归的。
+        // `counterparty_rules` 一个键只能存一个分类，也早就不读写了，删掉
+        (11, """
+        ALTER TABLE records ADD COLUMN category_auto INTEGER NOT NULL DEFAULT 0;
+        DROP TABLE counterparty_rules;
+        CREATE TABLE merchant_categories (
+            merchant TEXT NOT NULL,
+            category_id TEXT NOT NULL,
+            picks INTEGER NOT NULL,
+            streak INTEGER NOT NULL,
+            last_picked_at REAL NOT NULL,
+            PRIMARY KEY (merchant, category_id)
+        );
+        CREATE INDEX merchant_categories_category ON merchant_categories(category_id);
         """),
     ]
 

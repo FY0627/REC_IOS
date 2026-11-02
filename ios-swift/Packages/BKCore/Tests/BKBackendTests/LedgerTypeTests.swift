@@ -4,7 +4,7 @@ import XCTest
 import BKDatabase
 import BKModel
 
-/// 参考 MOZE 基础记账的部分：支出 / 收入 / 转帐、分类（只按通知写明的归类，不猜）、首页合并显示、手动记账、合成一单、
+/// 参考 MOZE 基础记账的部分：支出 / 收入 / 转帐、分类（通知写明的直接归类，学习归类见 `CategoryLearningTests`）、首页合并显示、手动记账、合成一单、
 /// 按分类统计、换算成主要币种的本月合计、电子钱包自动记账。
 final class LedgerTypeTests: XCTestCase {
     var calendar: Calendar { ParserSampleTests.calendar }
@@ -72,7 +72,7 @@ final class LedgerTypeTests: XCTestCase {
         XCTAssertNil(rows.first { $0.record.kind == .transferOut }?.category, "转给谁不知道：待分类")
     }
 
-    func testCategoriesAreNotGuessedFromCounterpartyOrTime() async throws {
+    func testOnePickIsNotEnoughToCategorizeTheSameCounterparty() async throws {
         let backend = try makeBackend()
         try await addAccount(backend, bank: "boc", bankName: "中国银行", last4: "8810", type: .credit)
         try await ingest(backend, "您尾号8810的信用卡10月20日12:10消费人民币25.00元，商户：财付通-美团。【中国银行】")
@@ -89,7 +89,7 @@ final class LedgerTypeTests: XCTestCase {
 
         try await ingest(backend, "您尾号8810的信用卡10月24日08:10消费人民币12.00元，商户：财付通-美团。【中国银行】")
         let count = try await backend.uncategorizedCount()
-        XCTAssertEqual(count, 2, "新来的也不猜，留在待分类")
+        XCTAssertEqual(count, 2, "只选过一次，新来的也留在待分类")
     }
 
     func testRefundFollowsOriginalCategoryAndReducesIt() async throws {

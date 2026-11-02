@@ -173,7 +173,8 @@ public enum RecordDAO {
     static let columns = """
     r.id, r.account_id, r.amount_minor, r.currency, r.direction, r.kind, r.status, r.counterparty, r.txn_time, r.txn_year_inferred, \
     r.received_at, r.processed_at, r.source, r.ingest_id, r.part_index, r.bank_reference, r.balance_after_minor, r.included_fee_minor, \
-    r.note, r.transfer_group, r.related_record_id, r.transfer_party, r.settlement_minor, r.settlement_currency, r.category_id, r.order_group
+    r.note, r.transfer_group, r.related_record_id, r.transfer_party, r.settlement_minor, r.settlement_currency, r.category_id, r.order_group, \
+    r.category_auto
     """
     /// 列表行：记录 + 账户 + 分类 + 配对转帐另一边的账户和金额 + 合并显示的手续费和退款
     static let rowColumns = columns + """
@@ -209,27 +210,27 @@ public enum RecordDAO {
             transferGroupID: row.optionalString(19), relatedRecordID: row.optionalString(20),
             transferParty: row.optionalString(21).flatMap(TransferParty.init(rawValue:)),
             settlement: row.optionalInt(22).flatMap { minor in row.optionalString(23).map { Money(minorUnits: minor, currency: CurrencyCode($0)) } },
-            categoryID: row.optionalString(24), orderGroupID: row.optionalString(25)
+            categoryID: row.optionalString(24), orderGroupID: row.optionalString(25), categoryAuto: row.bool(26)
         )
     }
 
     static func mapRow(_ row: SQLiteConnection.Row) -> RecordRow {
-        let primary = CurrencyCode(row.string(30))
-        let currencies = [primary] + Account.normalizedExtras(AccountDAO.decodeCurrencies(row.string(31)), primary: primary)
-        let category = row.optionalString(33).map { id in
-            CategoryLabel(id: id, name: row.string(34), symbol: row.string(35), parentName: row.optionalString(36))
+        let primary = CurrencyCode(row.string(31))
+        let currencies = [primary] + Account.normalizedExtras(AccountDAO.decodeCurrencies(row.string(32)), primary: primary)
+        let category = row.optionalString(34).map { id in
+            CategoryLabel(id: id, name: row.string(35), symbol: row.string(36), parentName: row.optionalString(37))
         }
-        let peer = row.optionalString(37).map { name in
+        let peer = row.optionalString(38).map { name in
             AccountLabel(
-                name: name, bankName: row.string(38), last4: row.string(39), cardType: CardType(rawValue: row.string(40)) ?? .other, deleted: row.bool(44)
+                name: name, bankName: row.string(39), last4: row.string(40), cardType: CardType(rawValue: row.string(41)) ?? .other, deleted: row.bool(45)
             )
         }
         return RecordRow(
-            record: map(row), accountName: row.string(26), bankName: row.string(27), last4: row.string(28), paletteID: row.string(29),
-            accountCurrencies: currencies, cardType: CardType(rawValue: row.string(32)) ?? .other, accountDeleted: row.bool(43),
+            record: map(row), accountName: row.string(27), bankName: row.string(28), last4: row.string(29), paletteID: row.string(30),
+            accountCurrencies: currencies, cardType: CardType(rawValue: row.string(33)) ?? .other, accountDeleted: row.bool(44),
             category: category, peer: peer,
-            peerMoney: row.optionalInt(45).flatMap { minor in row.optionalString(46).map { Money(minorUnits: minor, currency: CurrencyCode($0)) } },
-            feeMinor: row.optionalInt(41), refundedMinor: row.optionalInt(42)
+            peerMoney: row.optionalInt(46).flatMap { minor in row.optionalString(47).map { Money(minorUnits: minor, currency: CurrencyCode($0)) } },
+            feeMinor: row.optionalInt(42), refundedMinor: row.optionalInt(43)
         )
     }
 
@@ -240,15 +241,15 @@ public enum RecordDAO {
             INSERT OR IGNORE INTO records (id, account_id, amount_minor, currency, direction, kind, status, counterparty, txn_time, \
             txn_year_inferred, received_at, processed_at, effective_at, source, ingest_id, part_index, bank_reference, balance_after_minor, \
             included_fee_minor, note, transfer_group, related_record_id, transfer_party, settlement_minor, settlement_currency, category_id, \
-            order_group, dedupe_key, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            order_group, category_auto, dedupe_key, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             [
                 r.id, r.accountID, r.amountMinor, r.currency.rawValue, r.direction.rawValue, r.kind.rawValue, r.status.rawValue,
                 r.counterparty, r.transactionTime.map(WallClockCodec.encode), r.transactionTime?.yearInferred ?? false,
                 r.receivedAt, r.processedAt, r.effectiveAt, r.source.rawValue, r.ingestID, r.partIndex, r.bankReference,
                 r.balanceAfterMinor, r.includedFeeMinor, r.note, r.transferGroupID, r.relatedRecordID, r.transferParty?.rawValue,
-                r.settlement?.minorUnits, r.settlement?.currency.rawValue, r.categoryID, r.orderGroupID, dedupeKey, now,
+                r.settlement?.minorUnits, r.settlement?.currency.rawValue, r.categoryID, r.orderGroupID, r.categoryAuto, dedupeKey, now,
             ]
         )
         return changed > 0
@@ -261,13 +262,13 @@ public enum RecordDAO {
             """
             UPDATE records SET account_id = ?, amount_minor = ?, currency = ?, direction = ?, kind = ?, counterparty = ?, txn_time = ?, \
             txn_year_inferred = ?, received_at = ?, effective_at = ?, note = ?, transfer_group = ?, transfer_party = ?, \
-            settlement_minor = ?, settlement_currency = ?, category_id = ? WHERE id = ?
+            settlement_minor = ?, settlement_currency = ?, category_id = ?, category_auto = ? WHERE id = ?
             """,
             [
                 r.accountID, r.amountMinor, r.currency.rawValue, r.direction.rawValue, r.kind.rawValue, r.counterparty,
                 r.transactionTime.map(WallClockCodec.encode), r.transactionTime?.yearInferred ?? false, r.receivedAt, r.effectiveAt,
                 r.note, r.transferGroupID, r.transferParty?.rawValue, r.settlement?.minorUnits, r.settlement?.currency.rawValue,
-                r.categoryID, r.id,
+                r.categoryID, r.categoryAuto, r.id,
             ]
         ) > 0
     }
@@ -291,16 +292,42 @@ public enum RecordDAO {
 
     // MARK: 分类与合单
 
-    /// 设置分类（nil 为待分类）
-    public static func setCategory(_ db: SQLiteConnection, ids: [String], categoryID: String?) throws {
-        for id in ids { try db.run("UPDATE records SET category_id = ? WHERE id = ?", [categoryID, id]) }
+    /// 设置分类（nil 为待分类）。`auto`：按学到的规律自动归的
+    public static func setCategory(_ db: SQLiteConnection, ids: [String], categoryID: String?, auto: Bool = false) throws {
+        for id in ids { try db.run("UPDATE records SET category_id = ?, category_auto = ? WHERE id = ?", [categoryID, auto, id]) }
     }
 
-    /// 分类删除或合并：原来记在这些分类上的流水改记到 `to`（nil 为待分类）
+    /// 分类删除或合并：原来记在这些分类上的流水改记到 `to`（nil 为待分类，不再算自动归类）
     public static func reassignCategory(_ db: SQLiteConnection, from ids: [String], to: String?) throws {
         guard !ids.isEmpty else { return }
         let placeholders = ids.map { _ in "?" }.joined(separator: ", ")
-        try db.run("UPDATE records SET category_id = ? WHERE category_id IN (\(placeholders))", ([to] as [SQLBindable]) + ids.map { $0 as SQLBindable })
+        try db.run(
+            "UPDATE records SET category_id = ?, category_auto = category_auto AND ? IS NOT NULL WHERE category_id IN (\(placeholders))",
+            ([to, to] as [SQLBindable]) + ids.map { $0 as SQLBindable }
+        )
+    }
+
+    /// 已经选了分类的流水，从早到晚（回放给学习用）。自动归的不算，那不是用户选的
+    public static func categorized(_ db: SQLiteConnection) throws -> [LedgerRecord] {
+        try db.query(
+            "SELECT \(columns) FROM records r WHERE r.status = 'posted' AND r.category_id IS NOT NULL AND r.category_auto = 0 ORDER BY r.effective_at, r.id",
+            [], map
+        )
+    }
+
+    /// 最近 `recent` 笔里用得最多的分类，多的在前。通知写明的（手续费、扣息、工资、利息）和退款不算，那不是用户选的
+    public static func frequentCategories(_ db: SQLiteConnection, type: CategoryType, recent: Int = 200) throws -> [String] {
+        try db.query(
+            """
+            SELECT category_id FROM (
+                SELECT r.category_id, r.effective_at FROM records r JOIN categories c ON c.id = r.category_id
+                WHERE r.status = 'posted' AND c.type = ?
+                    AND r.kind NOT IN ('fee', 'interestCharge', 'salary', 'interestIncome', 'refund', 'reversal')
+                ORDER BY r.effective_at DESC, r.id DESC LIMIT ?
+            ) GROUP BY category_id ORDER BY COUNT(*) DESC, MAX(effective_at) DESC, category_id
+            """,
+            [type.rawValue, recent]
+        ) { $0.string(0) }
     }
 
     /// 待分类：已入账的支出、收入还没有分类（合成一单的只留一行）
@@ -991,6 +1018,60 @@ public enum CategoryDAO {
 
     public static func delete(_ db: SQLiteConnection, id: String) throws {
         try db.run("DELETE FROM categories WHERE id = ?", [id])
+    }
+}
+
+/// 学到的分类：同一个商户选过哪些分类。`merchant` 是「类型|归一化的商户」（见 `CategoryLearner`）。
+public enum MerchantCategoryDAO {
+    public struct Pick: Hashable, Sendable {
+        public var categoryID: String
+        public var picks: Int
+        public var streak: Int
+    }
+
+    /// 这个商户选过的分类，最近选的在前
+    public static func picks(_ db: SQLiteConnection, merchant: String) throws -> [Pick] {
+        try db.query(
+            """
+            SELECT category_id, picks, streak FROM merchant_categories WHERE merchant = ?
+            ORDER BY streak DESC, last_picked_at DESC, picks DESC, category_id
+            """,
+            [merchant]
+        ) { Pick(categoryID: $0.string(0), picks: Int($0.int(1)), streak: Int($0.int(2))) }
+    }
+
+    /// 选了一次这个分类：它连续的次数 +1，这个商户别的分类重新数
+    public static func addPick(_ db: SQLiteConnection, merchant: String, categoryID: String, at time: Date) throws {
+        try db.run("UPDATE merchant_categories SET streak = 0 WHERE merchant = ? AND category_id <> ?", [merchant, categoryID])
+        try db.run(
+            """
+            INSERT INTO merchant_categories (merchant, category_id, picks, streak, last_picked_at) VALUES (?, ?, 1, 1, ?)
+            ON CONFLICT(merchant, category_id) DO UPDATE SET picks = picks + 1, streak = streak + 1, last_picked_at = excluded.last_picked_at
+            """,
+            [merchant, categoryID, time]
+        )
+    }
+
+    /// 这些分类并进 `target`。`keepStreak` 为 false 时不带连续次数，要重新学
+    public static func move(_ db: SQLiteConnection, from ids: [String], to target: String, keepStreak: Bool) throws {
+        guard !ids.isEmpty else { return }
+        let placeholders = ids.map { _ in "?" }.joined(separator: ", ")
+        try db.run(
+            """
+            INSERT INTO merchant_categories (merchant, category_id, picks, streak, last_picked_at)
+            SELECT merchant, ?, picks, CASE WHEN ? THEN streak ELSE 0 END, last_picked_at FROM merchant_categories WHERE category_id IN (\(placeholders))
+            ON CONFLICT(merchant, category_id) DO UPDATE SET
+                picks = picks + excluded.picks, streak = MAX(streak, excluded.streak), last_picked_at = MAX(last_picked_at, excluded.last_picked_at)
+            """,
+            ([target, keepStreak] as [SQLBindable]) + ids.map { $0 as SQLBindable }
+        )
+        try remove(db, categoryIDs: ids)
+    }
+
+    public static func remove(_ db: SQLiteConnection, categoryIDs ids: [String]) throws {
+        guard !ids.isEmpty else { return }
+        let placeholders = ids.map { _ in "?" }.joined(separator: ", ")
+        try db.run("DELETE FROM merchant_categories WHERE category_id IN (\(placeholders))", ids.map { $0 as SQLBindable })
     }
 }
 

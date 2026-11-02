@@ -2,15 +2,15 @@ import Foundation
 import BKModel
 import BKDatabase
 
-/// 自动归类：自动记账入账后，只给通知里写明了是什么的流水配上分类，不猜。
+/// 自动归类：自动记账入账后配上分类。
 ///
 /// 1. 转帐不用分类（按交易性质对应到转帐分类，不保存）；
 /// 2. 手续费、扣息、工资、利息：通知里写明了，直接归到对应的分类；
 /// 3. 退款：跟着原来那笔的分类（从那个分类里减掉）；
-/// 4. 剩下的是「待分类」，由用户选。
+/// 4. 同一个商户连续选过同一个分类：归到这个分类，流水标成自动归类（`CategoryLearner`，ADR 0017）；
+/// 5. 剩下的是「待分类」，由用户选。没确认对方的转账也是，不管选过什么。
 ///
-/// 不按交易对方记住分类、不按时间猜三餐：先把识别和记账做可靠（ADR 0014 的修订）。
-/// 所有函数都在 `Database.write` 的闭包里执行。
+/// 不按时间猜三餐。所有函数都在 `Database.write` 的闭包里执行。
 struct Categorizer {
     let db: SQLiteConnection
 
@@ -18,8 +18,12 @@ struct Categorizer {
     func categorize(recordID: String) throws {
         guard let record = try RecordDAO.find(db, id: recordID), record.status == .posted, record.categoryID == nil,
               !record.needsTransferConfirmation else { return }
-        guard let category = try category(for: record, tree: CategoryTree(try CategoryDAO.all(db))) else { return }
-        try RecordDAO.setCategory(db, ids: [record.id], categoryID: category.id)
+        let tree = CategoryTree(try CategoryDAO.all(db))
+        if let category = try category(for: record, tree: tree) {
+            try RecordDAO.setCategory(db, ids: [record.id], categoryID: category.id)
+        } else if let learned = try CategoryLearner(db: db).autoCategory(for: record, tree: tree) {
+            try RecordDAO.setCategory(db, ids: [record.id], categoryID: learned.id, auto: true)
+        }
     }
 
     func category(for record: LedgerRecord, tree: CategoryTree) throws -> LedgerCategory? {

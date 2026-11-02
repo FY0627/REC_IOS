@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import UserNotifications
 
 enum AppearanceMode: String, CaseIterable, Identifiable {
     case system
@@ -51,8 +52,17 @@ enum AppearanceMode: String, CaseIterable, Identifiable {
     }
 }
 
+final class AppDelegate: NSObject, UIApplicationDelegate {
+    func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        // 系统要求启动完成之前设好：点通知上的分类按钮时 App 可能正是被它拉起来的
+        UNUserNotificationCenter.current().delegate = NotificationPresenter.shared
+        return true
+    }
+}
+
 @main
 struct BookkeepingApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var store = LedgerStore()
     @State private var rates = ExchangeRateStore()
     @AppStorage("appearance") private var appearance = AppearanceMode.system.rawValue

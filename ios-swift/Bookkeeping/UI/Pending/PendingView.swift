@@ -2,7 +2,8 @@ import SwiftUI
 import BKModel
 
 /// 待处理：上面是「待分类」——已经入账、还没分类的支出和收入。点一笔打开面板：写备注、选分类，点「确定」才保存，
-/// 选错了可以换；没确认对方的转账在面板里选「转给自己」（不算收支）或直接选分类（算转给别人）。
+/// 选错了可以换。最可能的几个分类排在面板上面，这个商户选过的预先选好（`CategorySuggestions`）；
+/// 没确认对方的转账在面板里选「转给自己」（不算收支）或直接选分类（算转给别人）。
 /// 列表里每笔只是一行，不在每一行里放分类格子（旧流水升级后可能有几百笔待分类）。
 /// 下面是「通知待处理」：只能「确认系统给出的候选」或「忽略」，不能借此手动编辑金额、方向、时间。
 /// 认不准的写法可以用这条通知「做成识别模板」，之后同样写法的通知按模板识别。
@@ -18,6 +19,7 @@ struct PendingView: View {
     @State private var errorText: String?
     @State private var templateSource: PendingItem?
     @State private var categorizing: RecordRow?
+    @State private var suggestions = CategorySuggestions()
 
     var body: some View {
         NavigationStack {
@@ -28,7 +30,7 @@ struct PendingView: View {
                 if !shownWaiting.isEmpty {
                     Section {
                         ForEach(shownWaiting) { row in
-                            Button { categorizing = row } label: { UncategorizedRow(row: row) }
+                            Button { Task { await open(row) } } label: { UncategorizedRow(row: row) }
                         }
                     } header: {
                         Text("待分类")
@@ -77,9 +79,15 @@ struct PendingView: View {
                 TemplateEditorView(item: item)
             }
             .sheet(item: $categorizing, onDismiss: { Task { await reload() } }) { row in
-                CategorizeSheet(row: row)
+                CategorizeSheet(row: row, suggestions: suggestions)
             }
         }
+    }
+
+    /// 先取好候选再打开面板，面板里的内容不会在打开之后才跳出来
+    private func open(_ row: RecordRow) async {
+        suggestions = await store.categorySuggestions(recordID: row.id)
+        categorizing = row
     }
 
     /// 待分类的笔数；超过一次列出的数量时说明只列了最近的
@@ -146,9 +154,11 @@ private struct UncategorizedRow: View {
 }
 
 /// 给一笔待分类选分类：先写备注（选填），点分类选上（可以换），点「确定」才保存。
+/// 「建议」是最可能的几个分类，这个商户选过的已经选好，看一眼点「确定」就行。
 /// 没确认对方的转账多一个「转给自己的账户」：算转帐，不算收支（选了分类就是转给别人）
 private struct CategorizeSheet: View {
     let row: RecordRow
+    let suggested: [LedgerCategory]
 
     @Environment(LedgerStore.self) private var store
     @Environment(\.dismiss) private var dismiss
@@ -156,6 +166,12 @@ private struct CategorizeSheet: View {
     @State private var categoryID: String?
     @State private var busy = false
     @State private var errorText: String?
+
+    init(row: RecordRow, suggestions: CategorySuggestions) {
+        self.row = row
+        suggested = suggestions.categories
+        _categoryID = State(initialValue: suggestions.preferredID)
+    }
 
     var body: some View {
         let r = row.record
@@ -180,6 +196,11 @@ private struct CategorizeSheet: View {
                         }
                     } footer: {
                         Text("转给别人的话，直接在下面选分类。")
+                    }
+                }
+                if !suggested.isEmpty {
+                    Section("建议") {
+                        SuggestedCategories(categories: suggested, selected: categoryID) { categoryID = $0 }
                     }
                 }
                 Section("分类") {

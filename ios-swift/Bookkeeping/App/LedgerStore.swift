@@ -64,6 +64,8 @@ final class LedgerStore {
             backend = opened
             // 更新前只缓存了最新一份汇率：放进按天保存的汇率表（已有就跳过）
             if let cached = ExchangeRateStore.cached() { _ = try? await opened.saveExchangeRates(cached) }
+            // 更新前手选的分类：回放一遍，学习不从零开始（只做一次）
+            try? await opened.seedCategoryLearning()
             await refresh()
             _ = try? await backend?.purgeExpiredRawContent()
         } catch {
@@ -273,6 +275,10 @@ final class LedgerStore {
 
     func uncategorized() async -> [RecordRow] {
         (try? await backend?.uncategorized()) ?? []
+    }
+
+    func categorySuggestions(recordID: String) async -> CategorySuggestions {
+        (try? await backend?.categorySuggestions(recordID: recordID)) ?? CategorySuggestions()
     }
 
     /// 给一笔选分类，可以顺手写备注

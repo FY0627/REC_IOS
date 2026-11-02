@@ -295,7 +295,7 @@ public final class LedgerBackend: Sendable {
     /// 配对的内部转账：另一边是手动补记的就跟着改（金额、币种、时间），仍是一对；填了到账多少（`edit.peerAmountMinor`）就用填的。
     /// 另一边是银行通知记的：填了到账多少时改它的金额和币种，仍是一对；
     /// 没填时改了账户、金额、币种、方向，或不再是转账类，就不再配对。
-    /// 转帐可以换另一边的账户（`edit.peer`）。改了分类：同一单的几笔一起改。转帐不保存分类
+    /// 转帐可以换另一边的账户（`edit.peer`）。改了分类：同一单的几笔一起改，这笔不再算自动归类，这个商户重新学。转帐不保存分类
     public func updateRecord(id: String, _ edit: RecordEdit) async throws {
         guard edit.amountMinor > 0, (edit.peerAmountMinor ?? 1) > 0 else { throw BackendError.invalidAmount }
         let calendar = calendar
@@ -367,9 +367,14 @@ public final class LedgerBackend: Sendable {
                 // 支出改成了收入（或反过来）：原来的分类对不上了
                 record.categoryID = nil
             }
+            let categoryChanged = record.categoryID != original.categoryID
+            if categoryChanged { record.categoryAuto = false }
             try RecordDAO.update(db, record)
-            if let categoryID = record.categoryID, categoryID != original.categoryID, let group = record.orderGroupID {
-                try RecordDAO.setCategory(db, ids: try RecordDAO.inOrderGroup(db, groups: [group]).map(\.id), categoryID: categoryID)
+            if categoryChanged, let categoryID = record.categoryID {
+                if let group = record.orderGroupID {
+                    try RecordDAO.setCategory(db, ids: try RecordDAO.inOrderGroup(db, groups: [group]).map(\.id), categoryID: categoryID)
+                }
+                try CategoryLearner(db: db).learn(record, categoryID: categoryID, at: now)
             }
         }
     }
@@ -437,9 +442,10 @@ public final class LedgerBackend: Sendable {
         try await database.read { try CategoryDAO.all($0) }
     }
 
-    /// 给一笔选分类（待分类、详情里改分类），可以顺手写备注。
-    /// 没确认对方的转账选了分类就是转给别人。同一单的几笔一起改
+    /// 给一笔选分类（待分类、记账结果通知的按钮），可以顺手写备注。
+    /// 没确认对方的转账选了分类就是转给别人。同一单的几笔一起改。选了和原来不一样的分类时这个商户记一次（`CategoryLearner`）
     public func setCategory(recordID: String, categoryID: String, note: String? = nil) async throws {
+        let now = clock()
         try await database.write { db in
             guard var record = try RecordDAO.find(db, id: recordID) else { throw BackendError.notFound }
             guard let category = try CategoryDAO.find(db, id: categoryID), category.type != .transfer else { throw BackendError.invalidCategory }
@@ -451,7 +457,30 @@ public final class LedgerBackend: Sendable {
             var ids = [record.id]
             if let group = record.orderGroupID { ids = try RecordDAO.inOrderGroup(db, groups: [group]).map(\.id) }
             try RecordDAO.setCategory(db, ids: ids, categoryID: categoryID)
+            if record.categoryID != categoryID { try CategoryLearner(db: db).learn(record, categoryID: categoryID, at: now) }
             if let note { _ = try RecordDAO.updateNote(db, id: record.id, note: String(note.prefix(500))) }
+        }
+    }
+
+    /// 这一笔的候选分类（待分类面板、记账结果通知的按钮）
+    public func categorySuggestions(recordID: String) async throws -> CategorySuggestions {
+        try await database.read { db in
+            guard let record = try RecordDAO.find(db, id: recordID) else { throw BackendError.notFound }
+            return try CategoryLearner(db: db).suggestions(for: record, tree: CategoryTree(try CategoryDAO.all(db)))
+        }
+    }
+
+    static let learningSeededKey = "category.learning_seeded"
+
+    /// 把已有的手选记录按时间回放一遍，学习不从零开始。只做一次
+    public func seedCategoryLearning() async throws {
+        try await database.write { db in
+            guard try SettingsDAO.get(db, Self.learningSeededKey) == nil else { return }
+            let learner = CategoryLearner(db: db)
+            for record in try RecordDAO.categorized(db) {
+                if let categoryID = record.categoryID { try learner.learn(record, categoryID: categoryID, at: record.effectiveAt) }
+            }
+            try SettingsDAO.set(db, Self.learningSeededKey, "1")
         }
     }
 
@@ -526,7 +555,7 @@ public final class LedgerBackend: Sendable {
         }
     }
 
-    /// 合并：`id` 的流水改记到 `targetID`，然后删掉 `id`。
+    /// 合并：`id` 的流水改记到 `targetID`，学到的也并过去，然后删掉 `id`。
     /// 合并的是大类：它的小类挪到目标大类下面（目标是小类时，小类的流水也并进目标）
     public func mergeCategory(id: String, into targetID: String) async throws {
         try await database.write { db in
@@ -541,17 +570,20 @@ public final class LedgerBackend: Sendable {
                     try CategoryDAO.setParent(db, id: child.id, parentID: target.id, sortOrder: try CategoryDAO.nextSortOrder(db, type: target.type, parentID: target.id))
                 } else {
                     try RecordDAO.reassignCategory(db, from: [child.id], to: target.id)
+                    try MerchantCategoryDAO.move(db, from: [child.id], to: target.id, keepStreak: true)
                     try CategoryDAO.delete(db, id: child.id)
                 }
             }
             try RecordDAO.reassignCategory(db, from: [id], to: target.id)
+            try MerchantCategoryDAO.move(db, from: [id], to: target.id, keepStreak: true)
             try CategoryDAO.delete(db, id: id)
             // 自动归类用的标识（例如「工资」）交给目标分类
             if let key = source.autoKey, target.autoKey == nil { try CategoryDAO.setAutoKey(db, id: target.id, autoKey: key) }
         }
     }
 
-    /// 删除分类（连同它的小类）。原来记在上面的流水改记到 `moveRecordsTo`；nil 时回到待分类。记录不删
+    /// 删除分类（连同它的小类）。原来记在上面的流水改记到 `moveRecordsTo`；nil 时回到待分类。记录不删。
+    /// 学到的跟着流水走，但不再自动归类，要重新学；回到待分类时清掉
     public func deleteCategory(id: String, moveRecordsTo targetID: String?) async throws {
         try await database.write { db in
             guard let category = try CategoryDAO.find(db, id: id) else { throw BackendError.notFound }
@@ -563,6 +595,11 @@ public final class LedgerBackend: Sendable {
                 }
             }
             try RecordDAO.reassignCategory(db, from: removed, to: targetID)
+            if let targetID {
+                try MerchantCategoryDAO.move(db, from: removed, to: targetID, keepStreak: false)
+            } else {
+                try MerchantCategoryDAO.remove(db, categoryIDs: removed)
+            }
             for child in removed.dropFirst() { try CategoryDAO.delete(db, id: child) }
             try CategoryDAO.delete(db, id: id)
         }
@@ -650,6 +687,7 @@ public final class LedgerBackend: Sendable {
                 _ = try RecordDAO.insertIfAbsent(db, r, dedupeKey: "m|" + r.id, now: now)
                 try RecordDAO.addEvidence(db, recordID: r.id, ingestID: ingestID, source: .manual, at: now)
             }
+            if let category { try CategoryLearner(db: db).learn(records[0], categoryID: category, at: now) }
             try SettingsDAO.set(db, Self.lastManualAccountKey, account.id)
             return records.map(\.id)
         }

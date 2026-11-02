@@ -86,7 +86,7 @@ struct RecordBankMessageIntent: AppIntent {
         AppServices.logger.info("ingest outcome=\(result.outcome.rawValue, privacy: .public) class=\(result.classification.rawValue, privacy: .public) recorded=\(result.recordedCount) pending=\(result.pendingCount)")
         await MainActor.run { NotificationCenter.default.post(name: .ledgerDidChange, object: nil) }
         // 记账结果通知（「我的」里打开后才发）
-        await IngestNotifier.post(result)
+        await IngestNotifier.post(result, backend: backend)
         return .result(value: result.summary)
     }
 }

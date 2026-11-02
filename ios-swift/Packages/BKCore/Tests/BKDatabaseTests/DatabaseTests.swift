@@ -260,6 +260,40 @@ final class DatabaseTests: XCTestCase {
         XCTAssertEqual(try db.readSync { try AccountDAO.find($0, id: "a") }?.face, face)
     }
 
+    func testMigrationFromVersion10AddsLearningAndKeepsRecords() throws {
+        let path = tempPath()
+        do {
+            let old = try SQLiteConnection(path: path)
+            for step in Migrations.steps where step.version <= 10 { try old.execute(step.sql) }
+            try old.setUserVersion(10)
+            try old.execute("""
+            INSERT INTO accounts (id, name, bank_name, last4, card_type, currency, palette_id, sort_order, created_at) VALUES ('a', '卡', '银行', '0427', 'debit', 'CNY', 'ocean', 0, 0);
+            INSERT INTO ingests (id, fingerprint, source, processed_at, classification, outcome, parser_version) VALUES ('i', 'f', 'sms', 0, 'transaction', 'recorded', 1);
+            INSERT INTO records (id, account_id, amount_minor, currency, direction, kind, status, counterparty, processed_at, effective_at, source, ingest_id, part_index, dedupe_key, created_at, category_id)
+                VALUES ('pay', 'a', 3800, 'CNY', 'outflow', 'purchase', 'posted', '测试外卖', 0, 0, 'sms', 'i', 0, 'k', 0, 'ex.food');
+            INSERT INTO counterparty_rules (key, category_id, updated_at) VALUES ('expense|旧规则', 'ex.food', 0);
+            """)
+        }
+        let db = try Database(path: path)
+        XCTAssertEqual(try db.readSync { $0.userVersion }, Migrations.latestVersion)
+        let rows = try db.readSync { try RecordDAO.page($0, filter: RecordFilter(), before: nil, limit: 10) }
+        XCTAssertEqual(rows.first?.record.categoryID, "ex.food")
+        XCTAssertEqual(rows.first?.record.categoryAuto, false, "已有的分类都不是自动归的")
+        XCTAssertEqual(rows.first?.category?.name, "饮食", "列表行的列顺序没错开")
+        XCTAssertEqual(rows.first?.account.text, "银行 ·0427")
+        XCTAssertThrowsError(try db.readSync { try $0.scalarInt("SELECT COUNT(*) FROM counterparty_rules") }, "旧表删掉了")
+
+        try db.writeSync { conn in
+            try MerchantCategoryDAO.addPick(conn, merchant: "expense|测试外卖", categoryID: "ex.food", at: Date(timeIntervalSince1970: 1))
+            try MerchantCategoryDAO.addPick(conn, merchant: "expense|测试外卖", categoryID: "ex.food", at: Date(timeIntervalSince1970: 2))
+            try MerchantCategoryDAO.addPick(conn, merchant: "expense|测试外卖", categoryID: "ex.daily", at: Date(timeIntervalSince1970: 3))
+        }
+        let picks = try db.readSync { try MerchantCategoryDAO.picks($0, merchant: "expense|测试外卖") }
+        XCTAssertEqual(picks.map(\.categoryID), ["ex.daily", "ex.food"], "最近选的在前")
+        XCTAssertEqual(picks.map(\.streak), [1, 0], "换了分类，原来的重新数")
+        XCTAssertEqual(picks.map(\.picks), [1, 2], "选过几次留着")
+    }
+
     func testAmountKeywordsMatchEachMinorUnit() {
         XCTAssertEqual(RecordDAO.amountMinors("38").map(\.minor), [38, 3800, 38000])
         XCTAssertEqual(RecordDAO.amountMinors("38.5").map(\.exponent), [2, 3])

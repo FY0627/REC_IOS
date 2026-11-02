@@ -222,7 +222,7 @@ struct IngestEngine {
             return Self.pendingItem(draft, result: result)
         }
         let tail = accounts.first { $0.id == record.accountID }?.last4 ?? draft.cardTail
-        return IngestItem(cardTail: tail, kind: record.kind, status: record.status, amountMinor: record.amountMinor, currency: record.currency, amountText: nil, result: result)
+        return IngestItem(cardTail: tail, kind: record.kind, status: record.status, amountMinor: record.amountMinor, currency: record.currency, amountText: nil, result: result, recordID: record.id)
     }
 
     /// 没有入账的一笔：只有通知里写的尾号和金额原文
