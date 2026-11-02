@@ -165,6 +165,8 @@ enum AppLayout {
     static let peekRatio: CGFloat = 52.0 / 295.0
     /// 详情页卡片顶端：顶部按钮行下方
     static let detailTop: CGFloat = 54
+    /// 首页、统计页顶部一行下面到列表的距离
+    static let topBarBottom: CGFloat = 6
 
     static func cardWidth(_ viewport: CGFloat) -> CGFloat { max(1, viewport - cardInset * 2) }
     static func cardHeight(_ viewport: CGFloat) -> CGFloat { cardWidth(viewport) / cardAspect }

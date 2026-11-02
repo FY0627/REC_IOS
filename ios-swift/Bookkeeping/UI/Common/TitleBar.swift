@@ -39,6 +39,75 @@ extension View {
     }
 }
 
+/// 列表第一组的位置，从状态栏下面算
+struct FirstBoxPosition: Equatable {
+    /// 第一个白框的顶端
+    let box: CGFloat
+    /// 分组标题文字的底边
+    let title: CGFloat
+}
+
+/// 首页第一组的实际位置。系统列表顶上的间距随系统版本、字号变，有导航栏时也不一样，所以不写死：
+/// 首页、统计由系统排，资产页和「我的」跟着首页排，四个标签页的第一个白框一样高。
+@MainActor
+@Observable
+final class FirstBoxLayout {
+    static let shared = FirstBoxLayout()
+    var home: FirstBoxPosition?
+}
+
+extension View {
+    /// 列表顶部的内边距，给 `FirstBoxProbe` 用：内边距变了要重新算
+    func trackingListInset(_ inset: Binding<CGFloat>) -> some View {
+        onScrollGeometryChange(for: CGFloat.self) { $0.contentInsets.top } action: { _, value in
+            inset.wrappedValue = value
+        }
+    }
+}
+
+/// 放在列表第一组的分组标题上，算出这一组停在顶部时的位置。
+/// 用列表内容里的坐标算，滚动和下拉都不影响结果，也不用每帧计算。
+struct FirstBoxProbe: UIViewRepresentable {
+    /// 这个值变了 SwiftUI 才会调 `updateUIView` 重新算；算的时候读列表自己的内边距
+    let listInset: CGFloat
+    let report: @MainActor (FirstBoxPosition) -> Void
+
+    func makeUIView(context: Context) -> Probe {
+        let view = Probe()
+        view.isUserInteractionEnabled = false
+        return view
+    }
+
+    func updateUIView(_ uiView: Probe, context: Context) {
+        uiView.report = report
+        uiView.scheduleMeasure()
+    }
+
+    final class Probe: UIView {
+        var report: @MainActor (FirstBoxPosition) -> Void = { _ in }
+
+        override func layoutSubviews() {
+            super.layoutSubviews()
+            scheduleMeasure()
+        }
+
+        /// 放到布局之后：这时列表的格子都排好了
+        func scheduleMeasure() {
+            Task { [weak self] in self?.measure() }
+        }
+
+        private func measure() {
+            var view = superview
+            while let current = view, !(current is UICollectionView) { view = current.superview }
+            guard let window, let list = view as? UICollectionView else { return }
+            let title = convert(bounds, to: list).maxY
+            guard let box = list.visibleCells.map(\.frame.minY).filter({ $0 >= title }).min() else { return }
+            let top = list.convert(list.bounds.origin, to: nil).y + list.adjustedContentInset.top - window.safeAreaInsets.top
+            report(FirstBoxPosition(box: top + box, title: top + title))
+        }
+    }
+}
+
 /// 页面顶部一行：左边大标题，右边可以有几个玻璃胶囊下拉按钮（写着当前选的，点开是菜单）。
 /// 和首页、资产页的标题行一样高、一样的字号。统计页用它选看哪些数据和时间段（时间段和卡片详情的时间段胶囊一样）；「我的」只有标题。
 struct TitleBar: UIViewRepresentable {

@@ -26,6 +26,7 @@ struct HomeView: View {
     @State private var adding = false
     /// 列表滚到了顶部那一行下面：显示磨砂背景
     @State private var scrolledUnderBar = false
+    @State private var listInset: CGFloat = 0
     @State private var swipe = RecordSwipeState()
 
     enum SearchScope: Hashable, CaseIterable {
@@ -71,6 +72,7 @@ struct HomeView: View {
             .listStyle(.insetGrouped)
             .scrollDismissesKeyboard(.immediately)
             .trackingScrollUnderTopBar($scrolledUnderBar)
+            .trackingListInset($listInset)
             .navigationTitle("首页")
             // 系统导航栏藏起来了，但默认的大标题模式仍在：往下拉时列表先停在「大标题展开」的位置再弹回，
             // 点状态栏回到顶部时列表停在大标题展开的位置（多出一截空白）。改成小标题就没有这一截
@@ -83,7 +85,7 @@ struct HomeView: View {
                     .frame(height: HomeTopBarView.height)
                     .padding(.horizontal, AppLayout.cardInset)
                     .padding(.top, 2)
-                    .padding(.bottom, 6)
+                    .padding(.bottom, AppLayout.topBarBottom)
                     .background { TopBarBackdrop(visible: scrolledUnderBar) }
             }
             .navigationDestination(for: String.self) { id in RecordDetailView(recordID: id) }
@@ -103,6 +105,9 @@ struct HomeView: View {
             ConvertedTotalsView(total: store.monthStats?.converted, expenseTitle: "本月支出", incomeTitle: "本月收入")
         } header: {
             Text(Self.monthTitle)
+                .background(FirstBoxProbe(listInset: listInset) { position in
+                    if FirstBoxLayout.shared.home != position { FirstBoxLayout.shared.home = position }
+                })
         }
         if store.pendingCount + store.uncategorizedCount > 0 {
             Section { pendingBanner }

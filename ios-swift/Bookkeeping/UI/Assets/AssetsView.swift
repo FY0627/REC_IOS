@@ -172,13 +172,18 @@ private struct OverviewCard: View {
     var body: some View {
         let summary = NetWorth(store: store, rates: rates.rates, primary: CurrencyCode(primaryCode))
         let main = summary.main
-        // 和首页、统计页的分组标题同一行，下面的白框才和它们一样高（真机上量的：标题行到白框 42.67pt）
+        // 和首页、统计页的分组标题同一行，下面的白框才和它们一样高：位置取首页实际排出来的（`FirstBoxLayout`）
+        let first = FirstBoxLayout.shared.home
         Text("合计（\(main.currency.chineseName)）")
             .font(.subheadline.weight(.semibold))
             .foregroundStyle(.secondary)
             .padding(.horizontal, 16)
-            .frame(maxWidth: .infinity, minHeight: 32.67, alignment: .bottomLeading)
-            .padding(.bottom, 10)
+            .frame(
+                maxWidth: .infinity,
+                minHeight: first.map { max(0, $0.title - WalletHeader.titleTop - GlassControls.size) },
+                alignment: .bottomLeading
+            )
+            .padding(.bottom, first.map { $0.box - $0.title } ?? 0)
         VStack(alignment: .leading, spacing: 0) {
             Text("净资产").font(.subheadline).foregroundStyle(.secondary)
             Text(Fmt.money(main.net, main.currency))

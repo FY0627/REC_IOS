@@ -104,7 +104,7 @@ struct StatsView: View {
                 .frame(height: GlassControls.size)
                 .padding(.horizontal, AppLayout.cardInset)
                 .padding(.top, 2)
-                .padding(.bottom, 6)
+                .padding(.bottom, AppLayout.topBarBottom)
                 .background { TopBarBackdrop(visible: scrolledUnderBar) }
             }
             .sheet(isPresented: $choosingCustom) {

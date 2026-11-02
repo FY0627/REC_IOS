@@ -45,12 +45,15 @@ private struct ProfileList: View {
     /// 导航栈外面的安全区到状态栏下面，里面的页面到导航栏下面，差的就是导航栏的高度
     @State private var stackSafeTop: CGFloat = 0
     @State private var pageSafeTop: CGFloat = 0
+    @State private var listInset: CGFloat = 0
+    /// 顶部一行下面到列表的距离：先和首页一样，再按第一个白框的实际位置补齐（`alignFirstBox`）
+    @State private var barBottom = AppLayout.topBarBottom
     @Environment(\.openURL) private var openURL
 
     var body: some View {
         NavigationStack(path: $path) {
             Form {
-                Section("显示") {
+                Section {
                     // 菜单按钮右边的文字（选中的项）换了主题色不会马上重画，按主题色重建这一行
                     Picker(selection: $appearance) {
                         ForEach(AppearanceMode.allCases) { Text($0.title).tag($0.rawValue) }
@@ -77,6 +80,8 @@ private struct ProfileList: View {
                         }
                         .background(UndimmedList())
                     }
+                } header: {
+                    Text("显示").background(FirstBoxProbe(listInset: listInset) { alignFirstBox($0) })
                 }
 
                 Section("币种与汇率") {
@@ -172,6 +177,7 @@ private struct ProfileList: View {
                 Text("在系统设置里允许 REC 发送通知。")
             }
             .trackingScrollUnderTopBar($scrolledUnderBar)
+            .trackingListInset($listInset)
             .navigationTitle("我的")
             .navigationBarTitleDisplayMode(.inline)
             // 系统导航栏一直留着，里面什么也不放（标题留给二级页面的返回按钮，这里换成空的）。
@@ -181,14 +187,14 @@ private struct ProfileList: View {
                     .sharedBackgroundVisibility(.hidden)
             }
             // 系统的大标题比资产页的标题行低，自己放一行。它排在导航栏下面，往上提回状态栏下面（高度不写死，系统版本不同高度不同）。
-            // 底部比首页少 8pt：这里的第一个白框比首页低 8pt（真机上量的），这样四个标签页的第一个白框一样高
+            // 底部跟着首页第一个白框的实际位置补齐（`alignFirstBox`），四个标签页的第一个白框一样高
             .safeAreaBar(edge: .top) {
                 TitleBar(title: "我的")
                     .frame(height: GlassControls.size)
                     .padding(.horizontal, AppLayout.cardInset)
                     .padding(.top, 2 - (pageSafeTop - stackSafeTop))
-                    .padding(.bottom, -2)
-                    .background { TopBarBackdrop(visible: scrolledUnderBar).padding(.bottom, -8) }
+                    .padding(.bottom, barBottom)
+                    .background { TopBarBackdrop(visible: scrolledUnderBar).padding(.bottom, barBottom - AppLayout.topBarBottom) }
             }
             .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.top } action: { pageSafeTop = $0 }
             .navigationDestination(for: ProfileRoute.self) { destination($0) }
@@ -210,6 +216,13 @@ private struct ProfileList: View {
         case .help: HelpView()
         case .performance: PerformanceSettingsView()
         }
+    }
+
+    /// 有导航栏时系统在列表上面留的空隙和首页不一样：差多少补多少。差得很小时不动，免得来回调整
+    private func alignFirstBox(_ position: FirstBoxPosition) {
+        guard let home = FirstBoxLayout.shared.home else { return }
+        let gap = home.box - position.box
+        if abs(gap) > 0.5 { barBottom += gap }
     }
 
     /// 打开一种通知时要通知权限；被拒绝就关回去，提示去系统设置
