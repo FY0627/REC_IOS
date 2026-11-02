@@ -374,7 +374,7 @@ public final class LedgerBackend: Sendable {
                 if let group = record.orderGroupID {
                     try RecordDAO.setCategory(db, ids: try RecordDAO.inOrderGroup(db, groups: [group]).map(\.id), categoryID: categoryID)
                 }
-                try CategoryLearner(db: db).learn(record, categoryID: categoryID, at: now)
+                try CategoryLearner(db: db).learn(record, categoryID: categoryID, replacing: original.categoryID, at: now)
             }
         }
     }
@@ -457,7 +457,7 @@ public final class LedgerBackend: Sendable {
             var ids = [record.id]
             if let group = record.orderGroupID { ids = try RecordDAO.inOrderGroup(db, groups: [group]).map(\.id) }
             try RecordDAO.setCategory(db, ids: ids, categoryID: categoryID)
-            if record.categoryID != categoryID { try CategoryLearner(db: db).learn(record, categoryID: categoryID, at: now) }
+            if record.categoryID != categoryID { try CategoryLearner(db: db).learn(record, categoryID: categoryID, replacing: record.categoryID, at: now) }
             if let note { _ = try RecordDAO.updateNote(db, id: record.id, note: String(note.prefix(500))) }
         }
     }
@@ -467,6 +467,14 @@ public final class LedgerBackend: Sendable {
         try await database.read { db in
             guard let record = try RecordDAO.find(db, id: recordID) else { throw BackendError.notFound }
             return try CategoryLearner(db: db).suggestions(for: record, tree: CategoryTree(try CategoryDAO.all(db)))
+        }
+    }
+
+    /// 这一笔选了大类之后的小类候选（记账结果通知的第二步）
+    public func subcategorySuggestions(recordID: String) async throws -> [LedgerCategory] {
+        try await database.read { db in
+            guard let record = try RecordDAO.find(db, id: recordID) else { throw BackendError.notFound }
+            return try CategoryLearner(db: db).subcategories(for: record, tree: CategoryTree(try CategoryDAO.all(db)))
         }
     }
 

@@ -281,6 +281,12 @@ final class LedgerStore {
         (try? await backend?.categorySuggestions(recordID: recordID)) ?? CategorySuggestions()
     }
 
+    /// 从通知打开选分类面板：流水已经删了时是 nil
+    func categorizeTarget(recordID: String) async -> CategorizeTarget? {
+        guard let row = await detail(recordID: recordID)?.row else { return nil }
+        return CategorizeTarget(row: row, suggestions: await categorySuggestions(recordID: recordID))
+    }
+
     /// 给一笔选分类，可以顺手写备注
     func setCategory(recordID: String, categoryID: String, note: String? = nil) async throws {
         guard let backend else { throw BackendError.notFound }

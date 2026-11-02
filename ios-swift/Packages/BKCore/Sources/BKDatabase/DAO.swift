@@ -1052,6 +1052,13 @@ public enum MerchantCategoryDAO {
         )
     }
 
+    /// 刚选的大类换成它下面的小类：两步算一次选择，退掉大类那一次，记到小类上
+    public static func refine(_ db: SQLiteConnection, merchant: String, from parent: String, to child: String, at time: Date) throws {
+        try db.run("UPDATE merchant_categories SET picks = picks - 1 WHERE merchant = ? AND category_id = ?", [merchant, parent])
+        try db.run("DELETE FROM merchant_categories WHERE merchant = ? AND category_id = ? AND picks <= 0", [merchant, parent])
+        try addPick(db, merchant: merchant, categoryID: child, at: time)
+    }
+
     /// 这些分类并进 `target`。`keepStreak` 为 false 时不带连续次数，要重新学
     public static func move(_ db: SQLiteConnection, from ids: [String], to target: String, keepStreak: Bool) throws {
         guard !ids.isEmpty else { return }

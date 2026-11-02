@@ -11,6 +11,8 @@ import BKModel
 struct CategoryGrid: View {
     let type: CategoryType
     var selected: String?
+    /// 打开时选中的是大类，也展开它的小类
+    var expandsSelected = false
     let pick: (String) -> Void
 
     @Environment(LedgerStore.self) private var store
@@ -37,7 +39,11 @@ struct CategoryGrid: View {
         .alignmentGuide(.listRowSeparatorLeading) { $0[.leading] }
         .onAppear {
             // 选中的是小类：把它所在的大类展开
-            if let category = tree.category(selected), let parent = category.parentID { expanded = parent }
+            if let category = tree.category(selected), let parent = category.parentID {
+                expanded = parent
+            } else if expandsSelected, nodes.contains(where: { $0.id == selected && !$0.children.isEmpty }) {
+                expanded = selected
+            }
         }
         .onChange(of: selected) { _, id in
             // 在上面的「建议」里选了小类：也展开，下面看得出选的是哪个

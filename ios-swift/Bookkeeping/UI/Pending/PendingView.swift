@@ -62,7 +62,7 @@ struct PendingView: View {
                 TemplateEditorView(item: item)
             }
             .sheet(item: $categorizing, onDismiss: { Task { await reload() } }) { target in
-                CategorizeSheet(row: target.row, suggestions: target.suggestions)
+                CategorizeSheet(target: target)
             }
         }
     }
@@ -113,7 +113,7 @@ struct PendingView: View {
 }
 
 /// 要打开面板的这一笔和它的候选。候选放在 sheet 的 item 里传：只在 sheet 闭包里读的 `@State` 打开时可能还是旧值
-private struct CategorizeTarget: Identifiable {
+struct CategorizeTarget: Identifiable {
     let row: RecordRow
     let suggestions: CategorySuggestions
 
@@ -141,8 +141,9 @@ private struct UncategorizedRow: View {
 
 /// 给一笔待分类选分类：先写备注（选填），点分类选上（可以换），点「确定」才保存。
 /// 「建议」是最可能的几个分类，这个商户选过的已经选好，看一眼点「确定」就行。
-/// 没确认对方的转账多一个「转给自己的账户」：算转帐，不算收支（选了分类就是转给别人）
-private struct CategorizeSheet: View {
+/// 没确认对方的转账多一个「转给自己的账户」：算转帐，不算收支（选了分类就是转给别人）。
+/// 从通知点进来也是这个面板；自动归类的那笔，现在的分类已经选好
+struct CategorizeSheet: View {
     let row: RecordRow
     let suggested: [LedgerCategory]
 
@@ -153,10 +154,10 @@ private struct CategorizeSheet: View {
     @State private var busy = false
     @State private var errorText: String?
 
-    init(row: RecordRow, suggestions: CategorySuggestions) {
-        self.row = row
-        suggested = suggestions.categories
-        _categoryID = State(initialValue: suggestions.preferredID)
+    init(target: CategorizeTarget) {
+        row = target.row
+        suggested = target.suggestions.categories
+        _categoryID = State(initialValue: target.suggestions.preferredID ?? target.row.record.categoryID)
     }
 
     var body: some View {
@@ -190,7 +191,7 @@ private struct CategorizeSheet: View {
                     }
                 }
                 Section("分类") {
-                    CategoryGrid(type: CategoryType(row.entryType), selected: categoryID) { categoryID = $0 }
+                    CategoryGrid(type: CategoryType(row.entryType), selected: categoryID, expandsSelected: true) { categoryID = $0 }
                 }
                 if let errorText {
                     Section { Text(errorText).foregroundStyle(.red) }

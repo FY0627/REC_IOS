@@ -145,14 +145,18 @@ public struct CategoryTree: Hashable, Sendable {
 
 /// 给一笔流水推荐的分类，最可能的排在前面（待分类面板、记账结果通知的按钮）。
 public struct CategorySuggestions: Hashable, Sendable {
+    /// 待分类面板的「建议」，可能是小类
     public var categories: [LedgerCategory]
+    /// 通知上的按钮，都是大类：只看小类的名字认不出是哪一类，选完大类再选小类
+    public var topCategories: [LedgerCategory]
     /// 打开待分类面板时预先选好的：这个商户选过的分类。看不出商户、没选过、没确认对方的转账都是 nil
     public var preferredID: String?
     /// 这笔已经自动归到的分类（不在 `categories` 里）；nil 表示还没分类
     public var autoCategory: LedgerCategory?
 
-    public init(categories: [LedgerCategory] = [], preferredID: String? = nil, autoCategory: LedgerCategory? = nil) {
+    public init(categories: [LedgerCategory] = [], topCategories: [LedgerCategory] = [], preferredID: String? = nil, autoCategory: LedgerCategory? = nil) {
         self.categories = categories
+        self.topCategories = topCategories
         self.preferredID = preferredID
         self.autoCategory = autoCategory
     }

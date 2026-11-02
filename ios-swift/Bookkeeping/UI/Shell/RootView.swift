@@ -43,11 +43,13 @@ final class DetailMotionState {
 enum ActiveSheet: Identifiable {
     case addAccount
     case pending
+    case categorize(CategorizeTarget)
 
-    var id: Int {
+    var id: String {
         switch self {
-        case .addAccount: 0
-        case .pending: 1
+        case .addAccount: "addAccount"
+        case .pending: "pending"
+        case .categorize(let target): target.id
         }
     }
 }
@@ -72,6 +74,11 @@ struct RootView: View {
         }
     }
 
+    /// 点通知要打开的这一笔；账本打开之后才接手
+    private var notificationRecordID: String? {
+        store.state == .ready ? CategorizeRequest.shared.recordID : nil
+    }
+
     var body: some View {
         TabView(selection: selection) {
             Tab(AppTab.home.title, systemImage: AppTab.home.symbol, value: AppTab.home) {
@@ -94,6 +101,16 @@ struct RootView: View {
                 AddAccountView()
             case .pending:
                 PendingView()
+            case .categorize(let target):
+                CategorizeSheet(target: target)
+            }
+        }
+        .onChange(of: notificationRecordID, initial: true) { _, recordID in
+            guard let recordID else { return }
+            CategorizeRequest.shared.recordID = nil
+            Task {
+                guard let target = await store.categorizeTarget(recordID: recordID) else { return }
+                sheet = .categorize(target)
             }
         }
         .environment(detail)
