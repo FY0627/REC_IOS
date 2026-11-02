@@ -631,7 +631,7 @@ final class IngestTests: XCTestCase {
         let pending = try await backend.pendingCount()
         XCTAssertEqual(pending, 0)
         let log = try await backend.ingestLog()
-        XCTAssertEqual(log.count, 2, "和不是动账的通知不同，留在「最近已过滤」")
+        XCTAssertEqual(log.count, 2, "和不是动账的通知不同，留在接收日志")
         XCTAssertTrue(log.allSatisfy { $0.rawText != nil })
     }
 

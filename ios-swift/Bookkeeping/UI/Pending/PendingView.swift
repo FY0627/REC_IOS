@@ -14,7 +14,6 @@ struct PendingView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var items: [PendingItem] = []
     @State private var waiting: [RecordRow] = []
-    @State private var log: [IngestLogEntry] = []
     @State private var loaded = false
     @State private var errorText: String?
     @State private var templateSource: PendingItem?
@@ -53,21 +52,6 @@ struct PendingView: View {
                 } header: {
                     Text(account.map { "\($0.displayTitle) 的通知" } ?? "通知待处理")
                 }
-                if account == nil, !filteredLog.isEmpty {
-                    Section {
-                        ForEach(filteredLog) { entry in
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(entry.classification.displayName).font(.subheadline)
-                                Text("\(entry.source.displayName) · \(Fmt.dateTime(entry.processedAt))").font(.caption).foregroundStyle(.secondary)
-                                if let raw = entry.rawText {
-                                    Text(raw).font(.caption).foregroundStyle(.secondary).lineLimit(3)
-                                }
-                            }
-                        }
-                    } header: {
-                        Text("最近已过滤（未入账）")
-                    }
-                }
             }
             .navigationTitle(account == nil ? "待处理" : "待处理账单")
             .navigationBarTitleDisplayMode(.inline)
@@ -96,10 +80,6 @@ struct PendingView: View {
         return "共 \(total) 笔\(listed)。点一笔选分类，可以顺手写备注。"
     }
 
-    private var filteredLog: [IngestLogEntry] {
-        Array(log.filter { $0.outcome == .filtered }.prefix(30))
-    }
-
     private var shownWaiting: [RecordRow] {
         guard let account else { return waiting }
         return waiting.filter { $0.record.accountID == account.id }
@@ -118,7 +98,6 @@ struct PendingView: View {
     private func reload() async {
         items = await store.pendingItems()
         waiting = await store.uncategorized()
-        log = await store.ingestLog()
         loaded = true
     }
 

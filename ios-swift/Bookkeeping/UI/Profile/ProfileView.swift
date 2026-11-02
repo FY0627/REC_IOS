@@ -306,6 +306,10 @@ struct AutomationStatusView: View {
                         }
                         Text("处理于 \(Fmt.dateTime(entry.processedAt))" + (entry.receivedAt.map { " · 接收于 \(Fmt.dateTime($0))" } ?? " · 系统未提供接收时间"))
                             .font(.footnote).foregroundStyle(.secondary)
+                        // 被过滤的写上原文，银行通知被误滤时能看出来
+                        if entry.outcome == .filtered, let raw = entry.rawText {
+                            Text(raw).font(.footnote).foregroundStyle(.secondary).lineLimit(3)
+                        }
                     }
                 }
             } header: {
