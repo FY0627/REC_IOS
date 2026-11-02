@@ -27,6 +27,7 @@ enum ProfileRoute: Hashable {
 }
 
 /// 「我的」的列表和导航栈。顶部一行和首页、资产页一样高、一样的位置；列表滚到它下面时垫一层磨砂背景（和首页一样）。
+/// 列表和首页、统计是同一种，顶部一行也一样高，第一个白框和灰字自然和它们一样，不用再算。
 private struct ProfileList: View {
     @Binding var path: [ProfileRoute]
 
@@ -42,18 +43,14 @@ private struct ProfileList: View {
     @State private var notifyDenied = false
     @State private var scrolledUnderBar = false
     @State private var choosingTheme = false
-    /// 导航栈外面的安全区到状态栏下面，里面的页面到导航栏下面，差的就是导航栏的高度
+    /// 导航栈外面的安全区：状态栏的高度
     @State private var stackSafeTop: CGFloat = 0
-    @State private var pageSafeTop: CGFloat = 0
-    @State private var listInset: CGFloat = 0
-    /// 顶部一行下面到列表的距离：先和首页一样，再按第一个白框的实际位置补齐（`alignFirstBox`）
-    @State private var barBottom = AppLayout.topBarBottom
     @Environment(\.openURL) private var openURL
 
     var body: some View {
         NavigationStack(path: $path) {
-            Form {
-                Section {
+            List {
+                Section("显示") {
                     // 菜单按钮右边的文字（选中的项）换了主题色不会马上重画，按主题色重建这一行
                     Picker(selection: $appearance) {
                         ForEach(AppearanceMode.allCases) { Text($0.title).tag($0.rawValue) }
@@ -80,8 +77,6 @@ private struct ProfileList: View {
                         }
                         .background(UndimmedList())
                     }
-                } header: {
-                    Text("显示").background(FirstBoxProbe(listInset: listInset) { alignFirstBox($0) })
                 }
 
                 Section("币种与汇率") {
@@ -164,6 +159,7 @@ private struct ProfileList: View {
                     Link(ExchangeRateFeed.attribution, destination: ExchangeRateFeed.attributionURL)
                 }
             }
+            .listStyle(.insetGrouped)
             // 这里的 themeColor 比 App 那层的 .tint 先变：按主题色重建的菜单行如果只靠外面的 .tint，
             // 重建时拿到的还是上一个颜色（比现在选的晚一个）。用同一个值，重建时就是新颜色
             .tint(ThemeColor.color(stored: themeColor))
@@ -177,7 +173,6 @@ private struct ProfileList: View {
                 Text("在系统设置里允许 REC 发送通知。")
             }
             .trackingScrollUnderTopBar($scrolledUnderBar)
-            .trackingListInset($listInset)
             .navigationTitle("我的")
             .navigationBarTitleDisplayMode(.inline)
             // 系统导航栏一直留着，里面什么也不放（标题留给二级页面的返回按钮，这里换成空的）。
@@ -186,17 +181,18 @@ private struct ProfileList: View {
                 ToolbarItem(placement: .principal) { Color.clear.frame(width: 1, height: 1) }
                     .sharedBackgroundVisibility(.hidden)
             }
-            // 系统的大标题比资产页的标题行低，自己放一行。它排在导航栏下面，往上提回状态栏下面（高度不写死，系统版本不同高度不同）。
-            // 底部跟着首页第一个白框的实际位置补齐（`alignFirstBox`），四个标签页的第一个白框一样高
+            // 系统的大标题比资产页的标题行低，自己放一行
             .safeAreaBar(edge: .top) {
                 TitleBar(title: "我的")
                     .frame(height: GlassControls.size)
                     .padding(.horizontal, AppLayout.cardInset)
-                    .padding(.top, 2 - (pageSafeTop - stackSafeTop))
-                    .padding(.bottom, barBottom)
-                    .background { TopBarBackdrop(visible: scrolledUnderBar).padding(.bottom, barBottom - AppLayout.topBarBottom) }
+                    .padding(.top, stackSafeTop + 2)
+                    .padding(.bottom, AppLayout.topBarBottom)
+                    .background { TopBarBackdrop(visible: scrolledUnderBar) }
             }
-            .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.top } action: { pageSafeTop = $0 }
+            // 不让出导航栏的位置，从屏幕顶端排：列表离状态栏的距离和首页、统计一样，和导航栏多高无关。
+            // 缩短顶部一行做不到：缩到 0 时列表还在导航栏下面，再缩也不会往上走
+            .ignoresSafeArea(.container, edges: .top)
             .navigationDestination(for: ProfileRoute.self) { destination($0) }
             .task { retention = await store.retentionDays() }
             .onChange(of: retention) { _, days in Task { await store.setRetentionDays(days) } }
@@ -216,13 +212,6 @@ private struct ProfileList: View {
         case .help: HelpView()
         case .performance: PerformanceSettingsView()
         }
-    }
-
-    /// 有导航栏时系统在列表上面留的空隙和首页不一样：差多少补多少。差得很小时不动，免得来回调整
-    private func alignFirstBox(_ position: FirstBoxPosition) {
-        guard let home = FirstBoxLayout.shared.home else { return }
-        let gap = home.box - position.box
-        if abs(gap) > 0.5 { barBottom += gap }
     }
 
     /// 打开一种通知时要通知权限；被拒绝就关回去，提示去系统设置
