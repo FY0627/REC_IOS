@@ -587,6 +587,46 @@ final class ParserSampleTests: XCTestCase {
         XCTAssertEqual(d.kind, .repayment)
     }
 
+    /// 金额夹在「Payment of … received」中间，「Bill Payment System」不能把它变成消费
+    func testEnglishCardRepaymentReceived() throws {
+        let samples = [
+            "Payment of Rs 1,200.00 has been received on your TEST Bank Credit Card XX0001 through Bharat Bill Payment System on 06-MAY-26.",
+            "Payment of INR 1,200.00 received for your TESTCARD ending 0001 on 2026-05-06.",
+            "TEST Bank Cardmember, Online Payment of Rs.1200 vide Ref# 000XXXXXX was credited to your card ending 0001 on 06/MAY/2026.",
+            "Dear Customer, we have received a payment of INR 1200.00 for credit card ending 0001 on 06-MAY-26.",
+            "Thank you Rs.1200.00/- has been received as payment towards your TEST credit card XX0001 via Online Payment.",
+            "Your credit card payment of USD 1,200.00 was received on 06 May 2026.",
+        ]
+        for text in samples {
+            let d = try XCTUnwrap(single(text), text)
+            XCTAssertEqual(d.kind, .repayment, text)
+            XCTAssertEqual(d.direction, .inflow, text)
+        }
+    }
+
+    func testEnglishCardRepaymentFromBankAccount() throws {
+        let d = try XCTUnwrap(single("A/c XX0002 debited with Rs.1,200.00 on 05-10-2026 towards TEST credit card payment."))
+        XCTAssertEqual(d.kind, .repayment)
+        XCTAssertEqual(d.direction, .outflow)
+        XCTAssertEqual(d.cardTail, "0002")
+    }
+
+    /// 借记卡、账户收到的钱，刷卡付款，退款：都不是还款
+    func testPaymentReceivedThatIsNotARepayment() throws {
+        let debit = try XCTUnwrap(single("Payment of INR 500.00 received on your debit card 0001 on 06-MAY-26."))
+        XCTAssertEqual(debit.kind, .other)
+        XCTAssertEqual(debit.direction, .inflow)
+        let account = try XCTUnwrap(single("Payment of INR 500.00 received in your account XX0001 from TEST PERSON."))
+        XCTAssertEqual(account.kind, .other)
+        XCTAssertEqual(account.direction, .inflow)
+        let purchase = try XCTUnwrap(single("Card payment of USD 20.00 at TEST STORE on your card ending 0001."))
+        XCTAssertEqual(purchase.kind, .purchase)
+        XCTAssertEqual(purchase.direction, .outflow)
+        let refund = try XCTUnwrap(single("Refund payment of USD 20.00 credited to your credit card ending 0001."))
+        XCTAssertEqual(refund.kind, .refund)
+        XCTAssertEqual(refund.direction, .inflow)
+    }
+
     func testOutstandingAndCashbackAreNotTransactions() throws {
         let d = try XCTUnwrap(single("Rs.2000 spent on Credit Card XX0001. Avbl credit limit Rs.50000. Outstanding Rs.10000"))
         XCTAssertEqual(d.amount.digits, "2000")

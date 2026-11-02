@@ -78,7 +78,7 @@ enum Lexicon {
         KindRule(#"冻结|暂扣|预扣|on hold|frozen"#, .other, .outflow, status: .hold),
         KindRule(#"冲正|撤销|冲销|撤单|reversal|reversed|cancell?ed your (?:purchase|transaction|payment)|storniert|storno"#, .reversal, nil),
         KindRule(#"退款|退货|退回|退税|返还|refund(?:ed)?|erstattung|rückerstattung|reembolso|devoluci[oó]n|estorno|возврат|\biade\b|استرجاع"#, .refund, .inflow),
-        KindRule(#"还款|repayment|payment received|payment thank you|received your payment|your payment of\b|towards your .{0,30}card\b|for your .{0,30}credit card\b"#, .repayment, nil),
+        KindRule(#"还款|repayment|payment received|payment thank you|received your payment|your payment of\b|towards your .{0,30}card\b|towards .{0,30}credit card\b|for your .{0,30}credit card\b"#, .repayment, nil),
         KindRule(#"扣息|利息扣收|扣收利息|贷款利息|透支利息|interest charged?|sollzinsen"#, .interestCharge, .outflow),
         KindRule(#"结息|利息入账|利息收入|付息|存款利息|interest (?:paid|credited|earned)|\binterest\b|zinsgutschrift|利息"#, .interestIncome, .inflow),
         KindRule(#"手续费|年费|管理费|服务费|短信费|扣费|\bfees?\b|gebühr"#, .fee, .outflow),
@@ -89,7 +89,7 @@ enum Lexicon {
         KindRule(#"向您(?:尾号\s*[*xX•]*\d{3,4})?的?(?:账户|账号|卡)?(?:完成)?(?:转账|转存|汇款)|转入|汇入|收款|来账|转账收入|转账存入|received from|transfer from|incoming transfer|überweisung von"#, .transferIn, .inflow),
         KindRule(#"(?:you made|your)\s+(?:an?\s+)?[\w-]*\s*transfer(?: of)?|credited to (?:the )?beneficiary|(?<!you )(?<!account )(?<!card )has received|转出|汇出|转账支出|[你您]已成功转账|成功转账至|已转账至|转账至|向[^，,。；;\n]{1,20}(?:转账|汇款)|付款给|transfer(?:red)? to|your transfer is successful|\bsent\b(?! by)|outgoing transfer|überweisung an"#, .transferOut, .outflow),
         KindRule(#"转账|汇款|\btransfer\b|überweisung"#, .transferOut, nil, transferGeneric: true),
-        KindRule(#"消费|刷卡|网上支付|快捷支付|网银支付|支付|购物|扣款|划扣|purchase|spent|charged|was used|made (?:with|on|using) your|done at\b|bill payment|(?:imps|neft|rtgs) payment|card transaction|transaction at\b|card payment|payment (?:at|to)|paid (?:to|at)\b|\bPOS\b|kartenzahlung|einkauf"#, .purchase, .outflow),
+        KindRule(#"消费|刷卡|网上支付|快捷支付|网银支付|支付|购物|扣款|划扣|purchase|spent|charged|was used|made (?:with|on|using) your|done at\b|bill payment|(?:imps|neft|rtgs) payment|card transaction|transaction at\b|card payment|payment (?:at|to)\b|paid (?:to|at)\b|\bPOS\b|kartenzahlung|einkauf"#, .purchase, .outflow),
     ]
 
     static let inflowCue = Rx(#"存(?:RMB|人民币|CNY)\s*$|收入|入账|到账|存入|收到|退回|返还|credited|\bcredit\b(?! card)|\breceived?\b|deposited|eingang|gutgeschrieben|gutschrift|abono|dep[oó]sito|recibido|recebido|recebeu|re[cç]u\b|зачисл|пополнен|поступ|yatırıl|masuk|diterima|إيداع|ايداع|واریز|รับเงิน|เงินเข้า|โอนเงินเข้า|umepokea"#)
@@ -103,6 +103,10 @@ enum Lexicon {
     static let fromYourAccount = Rx(#"^\D{0,12}\bfrom your\b"#)
     /// 明确说钱进来了：比「网上支付」这种渠道词更能决定方向。不含「入账」，信用卡的「消费入账」是支出
     static let explicitInflow = Rx(#"收入|存入|到账"#)
+    /// 「Payment of Rs 100 has been received」「received a payment of …」：金额夹在中间，要把金额前后连起来看
+    static let paymentReceived = Rx(#"\bpayment\b[^;\n]{0,60}\b(?:received|credited)\b(?!\s+by\b)|\b(?:received|credited)\b[^;\n]{0,40}\bpayment\b"#)
+    /// 收到钱的是卡：上面的写法再提到卡才算还款。借记卡收到的钱不是还款
+    static let cardMention = Rx(#"(?<!debit )card(?:member)?\b|\bcc\b"#)
     /// 汇款说明后面写的结果：决定方向，后面的「到账」说的是收款人那边
     static let sentOut = Rx(#"已(?:汇出|转出)"#)
     /// 括号里的时间说明（「（交易预授权时间10月30日10:20）」）：说的是之前那一步，不决定这笔的性质和状态

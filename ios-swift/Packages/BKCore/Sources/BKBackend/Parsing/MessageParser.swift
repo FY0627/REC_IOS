@@ -650,7 +650,11 @@ public enum MessageParser {
         let suffixForKind = feeClause.replace(suffix, with: " ")
         // 标题和金额不在一句时看整条通知。「Purchase Refund」两个词都有，退款是结果
         let refund = message.flatMap { text in Lexicon.kindRules.first { ($0.kind == .refund || $0.kind == .reversal) && $0.rx.test(text) } }
-        let rule = lastRule(in: prefix)?.0 ?? summary.flatMap(firstRule(in:)) ?? firstRule(in: suffixForKind) ?? refund ?? message.flatMap(firstRule(in:))
+        var rule = lastRule(in: prefix)?.0 ?? summary.flatMap(firstRule(in:)) ?? firstRule(in: suffixForKind) ?? refund ?? message.flatMap(firstRule(in:))
+        // 「Payment of Rs 100 has been received on your … Credit Card」：金额前后分开看认不出还款，后面的「Bill Payment System」还会被当成消费
+        if rule == nil || rule?.kind == .purchase, Lexicon.paymentReceived.test(around), Lexicon.cardMention.test(around) {
+            rule = Lexicon.kindRules.first { $0.kind == .repayment }
+        }
         var status: SettlementStatus = .posted
         if let statusRule = Lexicon.kindRules.first(where: { $0.status != .posted && $0.rx.test(around) }) { status = statusRule.status }
         // 紧贴金额的借贷记号最可靠；标题和金额不在一句时（`شراء…` 换行后才是金额）再看整条通知
