@@ -18,8 +18,7 @@ struct PendingView: View {
     @State private var loaded = false
     @State private var errorText: String?
     @State private var templateSource: PendingItem?
-    @State private var categorizing: RecordRow?
-    @State private var suggestions = CategorySuggestions()
+    @State private var categorizing: CategorizeTarget?
 
     var body: some View {
         NavigationStack {
@@ -78,16 +77,16 @@ struct PendingView: View {
             .sheet(item: $templateSource, onDismiss: { Task { await reload() } }) { item in
                 TemplateEditorView(item: item)
             }
-            .sheet(item: $categorizing, onDismiss: { Task { await reload() } }) { row in
-                CategorizeSheet(row: row, suggestions: suggestions)
+            .sheet(item: $categorizing, onDismiss: { Task { await reload() } }) { target in
+                CategorizeSheet(row: target.row, suggestions: target.suggestions)
             }
         }
     }
 
     /// 先取好候选再打开面板，面板里的内容不会在打开之后才跳出来
     private func open(_ row: RecordRow) async {
-        suggestions = await store.categorySuggestions(recordID: row.id)
-        categorizing = row
+        let suggestions = await store.categorySuggestions(recordID: row.id)
+        categorizing = CategorizeTarget(row: row, suggestions: suggestions)
     }
 
     /// 待分类的笔数；超过一次列出的数量时说明只列了最近的
@@ -132,6 +131,14 @@ struct PendingView: View {
         }
         await reload()
     }
+}
+
+/// 要打开面板的这一笔和它的候选。候选放在 sheet 的 item 里传：只在 sheet 闭包里读的 `@State` 打开时可能还是旧值
+private struct CategorizeTarget: Identifiable {
+    let row: RecordRow
+    let suggestions: CategorySuggestions
+
+    var id: String { row.id }
 }
 
 /// 待分类列表里的一行：标题、时间和账户、金额
