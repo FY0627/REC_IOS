@@ -39,7 +39,7 @@ struct WalletPage: UIViewControllerRepresentable {
     /// 卡包顺序：使用中的卡在前，已停用的卡在后
     let accounts: [Account]
     let activeCount: Int
-    /// 卡包里卡面上显示的余额（多币种的卡是换算后的合计）；打开的那张卡另外显示正在看的币种
+    /// 卡包里卡面上显示的余额（换算成「我的」主要币种，多币种的卡是合计）；打开的那张卡另外显示正在看的币种
     let balanceTexts: [String: String]
     let revision: Int
     let store: LedgerStore
@@ -250,7 +250,7 @@ final class WalletController: UIViewController, UIScrollViewDelegate, UIGestureR
         }
     }
 
-    /// 卡面上的余额：卡包里多币种的卡是换算后的合计；打开的那张卡显示详情里正在看的币种，默认账户主币种（ADR 0018）
+    /// 卡面上的余额：卡包里换算成「我的」主要币种（多币种的卡是合计）；打开的那张卡显示详情里正在看的币种，默认账户主币种（ADR 0018）
     private func cardBalance(_ account: Account) -> CardBalance {
         guard let selectedIndex, accounts.indices.contains(selectedIndex), accounts[selectedIndex].id == account.id else {
             return CardBalance(text: balanceTexts[account.id] ?? "余额未知", currency: nil)
@@ -515,7 +515,7 @@ final class WalletController: UIViewController, UIScrollViewDelegate, UIGestureR
         behindFollowsScroll = true
         dropDistance = view.bounds.height + max(0, -pileTop)
         detailList.open(account)
-        // 和动画同一次提交：卡面从第一帧起就是账户主币种的余额
+        // 和动画同一次提交：卡面从第一帧起就是账户主币种（原币种）的余额
         refreshCard(at: index)
         topBar.setPeriodTitle(detailModel.period.title, animated: false)
         topBar.setDetail(true, animated: true)
@@ -612,7 +612,7 @@ final class WalletController: UIViewController, UIScrollViewDelegate, UIGestureR
         let before = cards.map(\.center.y)
         let closing = selectedIndex
         selectedIndex = nil
-        // 回卡包：换回卡包里的余额（多币种的卡是换算后的合计），和动画同一次提交
+        // 回卡包：换回卡包里换算成主要币种的余额，和动画同一次提交
         if let closing { refreshCard(at: closing) }
         behindFollowsScroll = false
         // 只有回到屏幕上的卡做动画；回到屏幕外的直接放回卡包

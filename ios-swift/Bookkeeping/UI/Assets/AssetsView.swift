@@ -36,7 +36,7 @@ struct AssetsView: View {
         WalletPage(
             accounts: store.accounts + store.archivedAccounts,
             activeCount: store.accounts.count,
-            // 多币种的卡换算成「我的」主要币种后的合计；打开详情后那张卡显示正在看的币种（`WalletController`）
+            // 卡包里都换算成「我的」主要币种（多币种的卡是合计）；打开详情后那张卡显示正在看的币种（`WalletController`）
             balanceTexts: store.balances.mapValues { $0.stackText(rates: rates.rates, primary: CurrencyCode(primaryCode)) },
             revision: store.revision,
             store: store,

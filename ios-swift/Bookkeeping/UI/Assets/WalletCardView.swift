@@ -219,10 +219,10 @@ extension AccountBalances {
     /// 卡面上显示一个币种的余额：主币种有余额就用主币种，否则用第一个有余额的币种。
     var cardText: String { display?.cardText ?? "余额未知" }
 
-    /// 卡包里的卡面（ADR 0018）：多币种账户把各币种的余额按最新汇率换算成「我的」主要币种后相加，换算过就写「≈」。
-    /// 没有汇率、有余额的币种缺汇率时显示账户主币种的余额，不显示少算了一部分的合计；余额未知的币种不计入。单币种账户显示原币种
+    /// 卡包里的卡面（ADR 0018）：每张卡都按最新汇率换算成「我的」主要币种，多币种账户把各币种换算后相加，换算过就写「≈」。
+    /// 没有汇率、有余额的币种缺汇率时显示账户主币种的余额，不显示少算了一部分的合计；余额未知的币种不计入
     func stackText(rates: ExchangeRates?, primary: CurrencyCode) -> String {
-        guard items.count > 1, let rates else { return cardText }
+        guard let rates else { return cardText }
         var total: Int64 = 0
         var known = false
         var converted = false

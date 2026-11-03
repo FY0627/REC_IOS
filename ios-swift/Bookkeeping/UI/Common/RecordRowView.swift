@@ -181,7 +181,7 @@ struct RecordDetailView: View {
                     .foregroundStyle(row.amountColor(inAccount: true))
                     .strikethrough(r.status == .failed)
                 if let charge = row.charge {
-                    chargeRow(charge, row: row)
+                    chargeRow(charge, record: r)
                 }
                 LabeledContent("类型", value: r.isRefund ? "支出（退款，从支出里减掉）" : row.entryType.displayName)
                 // 只显示；改分类在右上角「编辑」里
@@ -298,23 +298,20 @@ struct RecordDetailView: View {
         }
     }
 
-    /// 换成账户的另一个币种扣：卡里没有这个币种（按主币种），或者这个币种不够（ADR 0018）。扣了多少，估算的写明用哪天的汇率
-    private func chargeRow(_ charge: RecordCharge, row: RecordRow) -> some View {
+    /// 换成账户的另一个币种扣（卡里没有这个币种，或者这个币种不够，ADR 0018）：扣了多少（估算的写明用哪天的汇率）
+    private func chargeRow(_ charge: RecordCharge, record: LedgerRecord) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            LabeledContent(row.record.direction == .inflow ? "存入\(charge.currency.chineseName)" : "从\(charge.currency.chineseName)扣款") {
+            LabeledContent(record.direction == .inflow ? "存入\(charge.currency.chineseName)" : "从\(charge.currency.chineseName)扣款") {
                 Text(charge.amountMinor.map { Fmt.money($0, charge.currency) } ?? "还没有汇率").monospacedDigit()
             }
-            Text(chargeNote(charge, row: row)).font(.footnote).foregroundStyle(.secondary)
+            Text(chargeNote(charge)).font(.footnote).foregroundStyle(.secondary)
         }
     }
 
-    private func chargeNote(_ charge: RecordCharge, row: RecordRow) -> String {
-        // 账户有这个币种还换了：入账时这个币种的余额不够，或者自己改的
-        let held = row.accountCurrencies.contains(row.record.currency)
-        let reason = held && row.record.direction == .outflow ? "\(row.record.currency.chineseName)余额不够这笔时整笔从\(charge.currency.chineseName)扣。" : ""
-        if charge.isActual { return reason + "通知写明或你填写的实际金额" }
-        guard let day = charge.rateDay else { return reason + "导入汇率后按交易当天的汇率估算，可以在编辑里改成实际金额或别的币种" }
-        return reason + "按 \(Fmt.rateDay(day)) 的汇率估算，可以在编辑里改成实际金额或别的币种"
+    private func chargeNote(_ charge: RecordCharge) -> String {
+        if charge.isActual { return "你填写的实际金额" }
+        guard let day = charge.rateDay else { return "导入汇率后按交易当天的汇率估算，可以在编辑里改成实际金额" }
+        return "按 \(Fmt.rateDay(day)) 的汇率估算，可以在编辑里改成实际金额"
     }
 
     private func reload() async {
