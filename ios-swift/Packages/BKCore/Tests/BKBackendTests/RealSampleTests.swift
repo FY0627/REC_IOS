@@ -91,8 +91,8 @@ final class RealSampleTests: XCTestCase {
             let amount = MoneyFormat.plain(r.amountMinor, exponent: r.currency.minorUnitExponent, grouping: false)
             var line = "入账 \(row.last4) \(r.direction == .inflow ? "+" : "-")\(amount) \(r.currency) \(r.kind) \(r.status)"
             if let counterparty = r.counterparty { line += " @\(counterparty)" }
-            if let settlement = r.settlement {
-                line += " 实扣" + MoneyFormat.plain(settlement.minorUnits, exponent: settlement.currency.minorUnitExponent, grouping: false)
+            if let settlement = r.settlementMinor, let charged = r.chargeCurrency {
+                line += " 实扣" + MoneyFormat.plain(settlement, exponent: charged.minorUnitExponent, grouping: false)
             }
             lines.append(line)
         }

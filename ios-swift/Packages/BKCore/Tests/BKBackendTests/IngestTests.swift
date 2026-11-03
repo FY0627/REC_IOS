@@ -360,8 +360,8 @@ final class IngestTests: XCTestCase {
         _ = try await backend.ingest(IngestRequest(text: "您尾号0105的账户于10月24日15:30消费港币100.00元【恒生银行】", source: .sms, receivedAt: now.addingTimeInterval(120)))
         // 只写了「元」：记为主币种
         _ = try await backend.ingest(IngestRequest(text: "您尾号0105的账户于10月24日16:30消费20.00元【恒生银行】", source: .sms, receivedAt: now.addingTimeInterval(180)))
-        // ¥ 在中文通知里可能是人民币或日元：账户持有人民币，记为人民币
-        _ = try await backend.ingest(IngestRequest(text: "您尾号0105的账户于10月24日17:30消费¥30.00【恒生银行】", source: .sms, receivedAt: now.addingTimeInterval(240)))
+        // ¥ 在中文通知里可能是人民币或日元：账户持有人民币，记为人民币（收入：人民币余额是 0，消费会换成港币扣）
+        _ = try await backend.ingest(IngestRequest(text: "您尾号0105的账户于10月24日17:30收入¥30.00【恒生银行】", source: .sms, receivedAt: now.addingTimeInterval(240)))
 
         let rows = try await backend.records(accountID: account.id)
         XCTAssertEqual(Set(rows.map(\.record.currency)), [.usd, .hkd, .cny])
@@ -371,11 +371,11 @@ final class IngestTests: XCTestCase {
         XCTAssertEqual(balances.items.map(\.currency), [.hkd, .usd, .cny])
         XCTAssertEqual(balances.item(.hkd)?.ledgerDerivedMinor, 1_000_00 - 100_00 - 20_00)
         XCTAssertEqual(balances.item(.usd)?.ledgerDerivedMinor, 200_00 - 12_50)
-        XCTAssertEqual(balances.item(.cny)?.ledgerDerivedMinor, -30_00, "人民币没填余额，从 0 开始")
+        XCTAssertEqual(balances.item(.cny)?.ledgerDerivedMinor, 30_00, "人民币没填余额，从 0 开始")
 
         try await backend.setOpeningBalance(accountID: account.id, currency: .cny, amountMinor: 500_00)
         var updated = try await backend.balanceSummaries()[account.id]
-        XCTAssertEqual(updated?.item(.cny)?.ledgerDerivedMinor, 500_00 - 30_00, "之后到达的人民币流水加到初始余额上")
+        XCTAssertEqual(updated?.item(.cny)?.ledgerDerivedMinor, 500_00 + 30_00, "之后到达的人民币流水加到初始余额上")
 
         // 去掉人民币：它的初始余额一起删除，已有流水保留
         try await backend.updateCardInfo(accountID: account.id, name: "", cardNumber: nil, extraCurrencies: [.usd])
@@ -386,6 +386,91 @@ final class IngestTests: XCTestCase {
         XCTAssertEqual(updated?.items.map(\.currency), [.hkd, .usd])
         let count = try await backend.recordCount(accountID: account.id)
         XCTAssertEqual(count, 4)
+    }
+
+    /// 恒生的多币种扣账卡：交易币种的余额不够时，整笔换成港币扣（ADR 0018）。通知只写交易金额，港币按汇率估算
+    func testPurchaseBeyondCurrencyBalanceIsChargedToPrimary() async throws {
+        let backend = try makeBackend()
+        try await backend.saveExchangeRates(ExchangeRates(base: .usd, rates: ["USD": 1, "HKD": 7.8, "CNY": 7.2], updatedAt: now, fetchedAt: now))
+        let account = try await backend.addAccount(AccountDraft(
+            name: "", bankID: nil, bankName: "恒生银行", last4: "0105", cardType: .debit, currency: .hkd, paletteID: "ocean",
+            openingBalanceMinor: 1_000_00, extraCurrencies: [.cny], extraOpeningBalances: [.cny: 50_00]
+        ))
+        func pay(_ amount: String, _ minutes: Double) async throws -> IngestResult {
+            try await backend.ingest(IngestRequest(
+                text: "【恒生銀行】恒生：你在24/10/2026透過結尾號碼0105的扣賬卡以「無卡支付」交易向WEIXIN*test shop Shenzhen CN支付了\(amount)。如懷疑電28220228。",
+                source: .auto, receivedAt: now.addingTimeInterval(minutes * 60)
+            ))
+        }
+
+        // 人民币只有 50，这笔 80：整笔按港币扣，80 人民币 = 11.11 美元 = 86.67 港币
+        let short = try await pay("CNY80", 1)
+        let item = try XCTUnwrap(short.items.first)
+        XCTAssertEqual(item.charge?.currency, .hkd)
+        XCTAssertEqual(item.charge?.amountMinor, 86_67)
+        XCTAssertEqual(item.charge?.isActual, false)
+        XCTAssertTrue(item.insufficientBalance)
+        var rows = try await backend.records(accountID: account.id)
+        var record = try XCTUnwrap(rows.first?.record)
+        XCTAssertEqual(record.currency, .cny, "流水仍是人民币 80")
+        XCTAssertEqual(record.chargeCurrency, .hkd, "入账时记下从港币扣，之后余额变了也不改")
+        XCTAssertNil(record.settlementMinor)
+
+        // 人民币够：扣人民币
+        let enough = try await pay("CNY20", 2)
+        XCTAssertNil(enough.items.first?.charge)
+        rows = try await backend.records(accountID: account.id)
+        record = try XCTUnwrap(rows.first?.record)
+        XCTAssertNil(record.chargeCurrency)
+
+        // 港币是主币种，不够也没有别的币种可换
+        _ = try await pay("HKD2000", 3)
+        rows = try await backend.records(accountID: account.id)
+        record = try XCTUnwrap(rows.first?.record)
+        XCTAssertNil(record.chargeCurrency)
+
+        let summaries = try await backend.balanceSummaries()
+        let balances = try XCTUnwrap(summaries[account.id])
+        XCTAssertEqual(balances.item(.cny)?.ledgerDerivedMinor, 50_00 - 20_00)
+        XCTAssertEqual(balances.item(.hkd)?.ledgerDerivedMinor, 1_000_00 - 86_67 - 2_000_00)
+
+        // 按币种看流水：换成港币扣的那笔在港币里，不在人民币里
+        let hkdRows = try await backend.records(filter: RecordFilter(accountID: account.id, currency: .hkd))
+        XCTAssertEqual(hkdRows.map(\.record.amountMinor).sorted(), [80_00, 2_000_00])
+        XCTAssertEqual(hkdRows.first { $0.record.currency == .cny }?.charge?.amountMinor, 86_67)
+        let cnyRows = try await backend.records(filter: RecordFilter(accountID: account.id, currency: .cny))
+        XCTAssertEqual(cnyRows.map(\.record.amountMinor), [20_00])
+    }
+
+    /// 可用余额要减去还没结清的冻结：冻结之后人民币不够下一笔，下一笔换成主币种扣
+    func testOpenHoldsCountAgainstAvailableBalance() async throws {
+        let backend = try makeBackend()
+        let account = try await backend.addAccount(AccountDraft(
+            name: "", bankID: "boc", bankName: "中国银行", last4: "0006", cardType: .debit, currency: .cny, paletteID: "ocean",
+            openingBalanceMinor: 100_00, extraCurrencies: [.usd], extraOpeningBalances: [.usd: 10_00]
+        ))
+        _ = try await backend.ingest(IngestRequest(
+            text: "您的借记卡0006于0618发生双信息无卡消费交易，金额8.00美元，已冻结8.00美元。【中国银行】", source: .auto, receivedAt: now.addingTimeInterval(60)
+        ))
+        var rows = try await backend.records(accountID: account.id)
+        XCTAssertEqual(rows.first?.record.status, .hold)
+        XCTAssertNil(rows.first?.record.chargeCurrency, "冻结前美元有 10，够")
+
+        var summaries = try await backend.balanceSummaries()
+        var usd = try XCTUnwrap(summaries[account.id]?.item(.usd))
+        XCTAssertEqual(usd.ledgerDerivedMinor, 10_00, "冻结不动余额")
+        XCTAssertEqual(usd.openHoldsMinor, 8_00)
+        XCTAssertEqual(usd.availableMinor, 2_00)
+
+        _ = try await backend.ingest(IngestRequest(
+            text: "您的借记卡账户0006，于06月19日网上支付支取美元5.00元【中国银行】", source: .auto, receivedAt: now.addingTimeInterval(120)
+        ))
+        rows = try await backend.records(accountID: account.id)
+        let paid = try XCTUnwrap(rows.first { $0.record.status == .posted }?.record)
+        XCTAssertEqual(paid.chargeCurrency, .cny, "美元可用的只有 2")
+        summaries = try await backend.balanceSummaries()
+        usd = try XCTUnwrap(summaries[account.id]?.item(.usd))
+        XCTAssertEqual(usd.ledgerDerivedMinor, 10_00)
     }
 
     func testSingleCurrencyAccountStillResolvesYenSymbolByPreference() async throws {
@@ -705,7 +790,8 @@ final class IngestTests: XCTestCase {
         XCTAssertEqual(held.status, .hold)
         XCTAssertEqual(held.amountMinor, 1000)
         XCTAssertEqual(held.currency, .jpy)
-        XCTAssertEqual(held.settlement, Money(minorUnits: 48_00, currency: .cny))
+        XCTAssertEqual(held.chargeCurrency, .cny)
+        XCTAssertEqual(held.settlementMinor, 48_00)
         var balances = try await backend.balanceSummaries()
         XCTAssertEqual(balances[account.id]?.primary?.ledgerDerivedMinor, 100_00, "冻结不动余额")
 
@@ -755,21 +841,38 @@ final class IngestTests: XCTestCase {
         ))
         _ = try await backend.ingest(IngestRequest(text: "您尾号0002账户10月24日14:30消费JPY1000.00（人民币48.00）【招商银行】", source: .auto, receivedAt: now.addingTimeInterval(60)))
         let row = try await backend.records(accountID: account.id)[0]
-        XCTAssertEqual(row.record.settlement, Money(minorUnits: 48_00, currency: .cny))
+        XCTAssertEqual(row.record.chargeCurrency, .cny)
+        XCTAssertEqual(row.record.settlementMinor, 48_00)
         XCTAssertEqual(row.charge?.isActual, true)
         let balances = try await backend.balanceSummaries()
         XCTAssertEqual(balances[account.id]?.primary?.ledgerDerivedMinor, 52_00, "按通知写的实际扣款，不按汇率估算")
     }
 
-    func testBracketedChargeIsNotUsedWhenAccountHoldsTheCurrency() async throws {
+    /// 账户有这个币种：括号里的只是折合多少，扣的还是日元；日元不够、整笔换成人民币扣时，括号里的就是扣了多少
+    func testBracketedChargeIsUsedOnlyWhenHeldCurrencyIsShort() async throws {
         let backend = try makeBackend()
         let account = try await backend.addAccount(AccountDraft(
-            name: "", bankID: "cmb", bankName: "招商银行", last4: "0002", cardType: .debit, currency: .cny, paletteID: "ocean", extraCurrencies: [.jpy]
+            name: "", bankID: "cmb", bankName: "招商银行", last4: "0002", cardType: .debit, currency: .cny, paletteID: "ocean",
+            openingBalanceMinor: 1_000_00, extraCurrencies: [.jpy], extraOpeningBalances: [.jpy: 5_000]
         ))
-        _ = try await backend.ingest(IngestRequest(text: "您尾号0002账户10月24日14:30消费JPY1000.00（人民币48.00）【招商银行】", source: .auto))
-        let r = try await backend.records(accountID: account.id)[0].record
+        _ = try await backend.ingest(IngestRequest(
+            text: "您尾号0002账户10月24日14:30消费JPY1000.00（人民币48.00）【招商银行】", source: .auto, receivedAt: now.addingTimeInterval(60)
+        ))
+        var r = try await backend.records(accountID: account.id)[0].record
         XCTAssertEqual(r.currency, .jpy)
-        XCTAssertNil(r.settlement)
+        XCTAssertNil(r.chargeCurrency)
+        XCTAssertNil(r.settlementMinor)
+
+        _ = try await backend.ingest(IngestRequest(
+            text: "您尾号0002账户10月24日15:30消费JPY10000.00（人民币480.00）【招商银行】", source: .auto, receivedAt: now.addingTimeInterval(120)
+        ))
+        r = try await backend.records(accountID: account.id)[0].record
+        XCTAssertEqual(r.amountMinor, 10_000)
+        XCTAssertEqual(r.chargeCurrency, .cny, "日元只剩 4000")
+        XCTAssertEqual(r.settlementMinor, 480_00)
+        let balances = try await backend.balanceSummaries()
+        XCTAssertEqual(balances[account.id]?.item(.cny)?.ledgerDerivedMinor, 1_000_00 - 480_00)
+        XCTAssertEqual(balances[account.id]?.item(.jpy)?.ledgerDerivedMinor, 4_000)
     }
 
     func testBalanceOnlyMessageCreatesNoRecord() async throws {

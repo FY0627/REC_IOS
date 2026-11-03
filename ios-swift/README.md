@@ -73,9 +73,12 @@ docker run --rm -v "<仓库>/ios-swift/Packages/BKCore:/pkg" -w /pkg bk-swift sw
 
 ## 多币种与汇率
 
-- 账户有一个主币种，多币种账户另有其他币种；余额按「卡 × 币种」分别推算，卡片和流水始终是原币种。
+- 账户有一个主币种，多币种账户另有其他币种；余额按「卡 × 币种」分别推算，流水始终是原币种。
+  卡包里多币种的卡显示各币种换算成主要币种后的合计（≈），打开详情显示正在看的币种的余额（[ADR 0018](../docs/decisions/0018-ios-swift-charge-currency-and-converted-cards.md)）。
 - 卡里没有的币种的交易按主币种扣款，计入主币种余额：用户在流水编辑里填的实际扣款优先，
   否则按交易当天的汇率估算（那天没有用记录当天的，再没有用最近的一天；`BKBackend/ChargeCalculator.swift`，[ADR 0013](../docs/decisions/0013-ios-swift-record-editing-and-foreign-charges.md)）。
+- 多币种账户这个币种的可用余额不够这笔消费时，整笔从主币种扣（恒生的规则）；扣款币种存在流水上，记一笔、编辑时可以改
+  （`LedgerRecord.chargeCurrency`，[ADR 0018](../docs/decisions/0018-ios-swift-charge-currency-and-converted-cards.md)）。
 - 币种从汇率数据源支持的全部 160 多个币种里选（`UI/Common/CurrencyPicker.swift`，按拼音首字母分组、侧边 A–Z 索引，搜索框在最下面）。
 - 「我的 › 币种与汇率」选择主要币种；有汇率时资产页净资产按主要币种换算合计（`App/ExchangeRateStore.swift`）。
 - 汇率来源：共享的快捷指令「导入汇率」（「获取 URL 内容」→ App 动作「导入汇率」，`Intents/ImportExchangeRatesIntent.swift`），

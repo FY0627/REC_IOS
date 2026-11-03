@@ -16,6 +16,7 @@ struct AssetsView: View {
     @Environment(ExchangeRateStore.self) private var rates
     @Environment(DetailMotionState.self) private var motion
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @AppStorage(ExchangeRateStore.primaryKey) private var primaryCode = CurrencyCode.cny.rawValue
 
     @State private var detail = WalletDetailModel()
     @State private var bridge = WalletBridge()
@@ -35,7 +36,8 @@ struct AssetsView: View {
         WalletPage(
             accounts: store.accounts + store.archivedAccounts,
             activeCount: store.accounts.count,
-            balanceTexts: store.balances.mapValues(\.cardText),
+            // 多币种的卡换算成「我的」主要币种后的合计；打开详情后那张卡显示正在看的币种（`WalletController`）
+            balanceTexts: store.balances.mapValues { $0.stackText(rates: rates.rates, primary: CurrencyCode(primaryCode)) },
             revision: store.revision,
             store: store,
             rates: rates,

@@ -111,8 +111,15 @@ public struct IngestItem: Sendable, Hashable {
     public var result: Result
     /// 入账或合并到的流水；待处理时是 nil
     public var recordID: String?
+    /// 新入账的支出换成账户的另一个币种扣：扣了多少（多半是按汇率估算的）
+    public var charge: RecordCharge?
+    /// 换币种是因为这个币种的余额不够（多币种账户），不是账户没有这个币种
+    public var insufficientBalance: Bool
 
-    public init(cardTail: String?, kind: TransactionKind?, status: SettlementStatus?, amountMinor: Int64?, currency: CurrencyCode?, amountText: String?, result: Result, recordID: String? = nil) {
+    public init(
+        cardTail: String?, kind: TransactionKind?, status: SettlementStatus?, amountMinor: Int64?, currency: CurrencyCode?, amountText: String?,
+        result: Result, recordID: String? = nil, charge: RecordCharge? = nil, insufficientBalance: Bool = false
+    ) {
         self.cardTail = cardTail
         self.kind = kind
         self.status = status
@@ -121,6 +128,8 @@ public struct IngestItem: Sendable, Hashable {
         self.amountText = amountText
         self.result = result
         self.recordID = recordID
+        self.charge = charge
+        self.insufficientBalance = insufficientBalance
     }
 }
 
@@ -341,8 +350,8 @@ public struct AccountBalances: Hashable, Sendable {
     }
 }
 
-/// 某张卡某个币种的余额：从用户填写的初始余额出发，加上之后已入账的流水。
-/// 主币种还要加上这张卡不持有的币种的交易（按主币种扣款，`RecordCharge`）。
+/// 某张卡某个币种的余额：从用户填写的初始余额出发，加上之后从这个币种扣款（入账）的已入账流水，
+/// 包括别的币种换成它扣的（账户没有的币种按主币种，多币种账户余额不够时换主币种，`RecordCharge`）。
 /// 银行通知里写的余额不使用（很多银行不提供，写法也不统一）。
 public struct AccountBalanceSummary: Hashable, Sendable {
     public var accountID: String
@@ -354,8 +363,10 @@ public struct AccountBalanceSummary: Hashable, Sendable {
     public var ledgerDerivedMinor: Int64?
     /// 推算用到的、晚于初始余额的流水笔数
     public var recordsAfterBase: Int
-    /// 不持有的币种的交易里，还没有任何汇率、算不出扣款而没有计入的笔数
+    /// 换成这个币种扣的交易里，还没有任何汇率、算不出扣款而没有计入的笔数
     public var unconvertedCount: Int
+    /// 晚于初始余额、还没结清的冻结（预授权）合计：不计入余额，但这部分钱已经不能用
+    public var openHoldsMinor: Int64
 
     public init(
         accountID: String,
@@ -364,7 +375,8 @@ public struct AccountBalanceSummary: Hashable, Sendable {
         recordsAfterBase: Int,
         openingBalanceMinor: Int64? = nil,
         openingBalanceAt: Date? = nil,
-        unconvertedCount: Int = 0
+        unconvertedCount: Int = 0,
+        openHoldsMinor: Int64 = 0
     ) {
         self.accountID = accountID
         self.currency = currency
@@ -373,7 +385,11 @@ public struct AccountBalanceSummary: Hashable, Sendable {
         self.openingBalanceMinor = openingBalanceMinor
         self.openingBalanceAt = openingBalanceAt
         self.unconvertedCount = unconvertedCount
+        self.openHoldsMinor = openHoldsMinor
     }
+
+    /// 可用余额：推算余额减去还没结清的冻结；余额未知时为 nil
+    public var availableMinor: Int64? { ledgerDerivedMinor.map { $0 - openHoldsMinor } }
 }
 
 /// 某账户的自动记账可观测状态。App 读不到快捷指令自动化是否启用，只能展示实际接收情况。

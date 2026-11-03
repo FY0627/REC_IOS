@@ -209,7 +209,7 @@ public enum RecordDAO {
             balanceAfterMinor: row.optionalInt(16), includedFeeMinor: row.optionalInt(17), note: row.string(18),
             transferGroupID: row.optionalString(19), relatedRecordID: row.optionalString(20),
             transferParty: row.optionalString(21).flatMap(TransferParty.init(rawValue:)),
-            settlement: row.optionalInt(22).flatMap { minor in row.optionalString(23).map { Money(minorUnits: minor, currency: CurrencyCode($0)) } },
+            chargeCurrency: row.optionalString(23).map { CurrencyCode($0) }, settlementMinor: row.optionalInt(22),
             categoryID: row.optionalString(24), orderGroupID: row.optionalString(25), categoryAuto: row.bool(26)
         )
     }
@@ -249,7 +249,7 @@ public enum RecordDAO {
                 r.counterparty, r.transactionTime.map(WallClockCodec.encode), r.transactionTime?.yearInferred ?? false,
                 r.receivedAt, r.processedAt, r.effectiveAt, r.source.rawValue, r.ingestID, r.partIndex, r.bankReference,
                 r.balanceAfterMinor, r.includedFeeMinor, r.note, r.transferGroupID, r.relatedRecordID, r.transferParty?.rawValue,
-                r.settlement?.minorUnits, r.settlement?.currency.rawValue, r.categoryID, r.orderGroupID, r.categoryAuto, dedupeKey, now,
+                r.settlementMinor, r.chargeCurrency?.rawValue, r.categoryID, r.orderGroupID, r.categoryAuto, dedupeKey, now,
             ]
         )
         return changed > 0
@@ -267,7 +267,7 @@ public enum RecordDAO {
             [
                 r.accountID, r.amountMinor, r.currency.rawValue, r.direction.rawValue, r.kind.rawValue, r.counterparty,
                 r.transactionTime.map(WallClockCodec.encode), r.transactionTime?.yearInferred ?? false, r.receivedAt, r.effectiveAt,
-                r.note, r.transferGroupID, r.transferParty?.rawValue, r.settlement?.minorUnits, r.settlement?.currency.rawValue,
+                r.note, r.transferGroupID, r.transferParty?.rawValue, r.settlementMinor, r.chargeCurrency?.rawValue,
                 r.categoryID, r.categoryAuto, r.id,
             ]
         ) > 0
@@ -479,8 +479,16 @@ public enum RecordDAO {
         return Int(try db.scalarInt("SELECT COUNT(*) \(rowFrom) \(whereClause)", values))
     }
 
-    /// 账户持有这笔流水的币种（主币种或其他币种之一）
-    static let heldByAccount = "(r.currency = a.currency OR instr(',' || a.extra_currencies || ',', ',' || r.currency || ',') > 0)"
+    /// 账户持有 `column` 这个币种（主币种或其他币种之一）
+    static func held(_ column: String) -> String {
+        "(\(column) = a.currency OR instr(',' || a.extra_currencies || ',', ',' || \(column) || ',') > 0)"
+    }
+
+    /// 这笔从账户的哪个币种扣款（入账），和 `LedgerRecord.chargedCurrency(in:)` 一样：
+    /// 记下的扣款币种（账户还有它时）> 这笔自己的币种（账户有时）> 主币种
+    static let chargedCurrency = """
+    (CASE WHEN r.settlement_currency IS NOT NULL AND \(held("r.settlement_currency")) THEN r.settlement_currency WHEN \(held("r.currency")) THEN r.currency ELSE a.currency END)
+    """
 
     /// 没有小数、三位小数的币种：按关键字找金额时区分小数位数
     static let zeroDecimalCodes = CurrencyCode.supported.filter { $0.minorUnitExponent == 0 }.map(\.rawValue)
@@ -494,9 +502,8 @@ public enum RecordDAO {
             values.append(accountID)
         }
         if let currency = filter.currency {
-            // 主币种还包括账户不持有的币种的交易（按主币种扣款）
-            conditions.append("(r.currency = ? OR (a.currency = ? AND NOT \(heldByAccount)))")
-            values.append(currency.rawValue)
+            // 从这个币种扣款（入账）的：包括账户没有的币种按主币种扣的、余额不够换成它扣的
+            conditions.append("\(chargedCurrency) = ?")
             values.append(currency.rawValue)
         }
         if let direction = filter.direction {
@@ -681,19 +688,12 @@ public enum RecordDAO {
         )
     }
 
-    public static func postedAfter(_ db: SQLiteConnection, accountID: String, currency: CurrencyCode) throws -> [LedgerRecord] {
-        try db.query(
-            "SELECT \(columns) FROM records r WHERE r.account_id = ? AND r.currency = ? AND r.status = 'posted' ORDER BY r.effective_at",
-            [accountID, currency.rawValue], map
-        )
-    }
-
-    /// 这张卡不持有的币种的已入账流水（按主币种扣款）
-    public static func postedForeign(_ db: SQLiteConnection, accountID: String) throws -> [LedgerRecord] {
+    /// 推算余额用的流水：这张卡已入账的，和还在冻结中的流出（算可用余额）
+    public static func forBalance(_ db: SQLiteConnection, accountID: String) throws -> [LedgerRecord] {
         try db.query(
             """
-            SELECT \(columns) FROM records r JOIN accounts a ON a.id = r.account_id
-            WHERE r.account_id = ? AND r.status = 'posted' AND NOT \(heldByAccount) ORDER BY r.effective_at
+            SELECT \(columns) FROM records r
+            WHERE r.account_id = ? AND (r.status = 'posted' OR (r.status = 'hold' AND r.direction = 'outflow')) ORDER BY r.effective_at
             """,
             [accountID], map
         )

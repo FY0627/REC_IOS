@@ -39,7 +39,7 @@ struct WalletPage: UIViewControllerRepresentable {
     /// 卡包顺序：使用中的卡在前，已停用的卡在后
     let accounts: [Account]
     let activeCount: Int
-    /// 卡面上显示的余额
+    /// 卡包里卡面上显示的余额（多币种的卡是换算后的合计）；打开的那张卡另外显示正在看的币种
     let balanceTexts: [String: String]
     let revision: Int
     let store: LedgerStore
@@ -147,6 +147,7 @@ final class WalletController: UIViewController, UIScrollViewDelegate, UIGestureR
         detailList.onDeleteRecord = { [weak self] row in self?.actions.deleteRecord(row) }
         detailList.onOpenPending = { [weak self] in self?.actions.openPending() }
         detailList.onActivateCard = { [weak self] in self?.close() }
+        detailList.onCurrencyChange = { [weak self] in self?.refreshSelectedCard() }
 
         stackScroll.delegate = self
         stackScroll.backgroundColor = .clear
@@ -239,12 +240,34 @@ final class WalletController: UIViewController, UIScrollViewDelegate, UIGestureR
             self.revision = revision
             detailList.reload()
         }
+        // 打开的卡显示详情里的币种；卡片换了位置时上面按旧位置算过一次，这里按新位置再对一遍（没变的卡不重画）
+        for index in cards.indices { refreshCard(at: index) }
         if needsLayout {
             view.setNeedsLayout()
             view.layoutIfNeeded()
         } else if textsChanged {
             updateCardElements(stackLayout)
         }
+    }
+
+    /// 卡面上的余额：卡包里多币种的卡是换算后的合计；打开的那张卡显示详情里正在看的币种，默认账户主币种（ADR 0018）
+    private func cardBalance(_ account: Account) -> CardBalance {
+        guard let selectedIndex, accounts.indices.contains(selectedIndex), accounts[selectedIndex].id == account.id else {
+            return CardBalance(text: balanceTexts[account.id] ?? "余额未知", currency: nil)
+        }
+        let currency = detailModel.currency ?? account.currency
+        let text = store.balances[account.id]?.item(currency)?.cardText ?? "余额未知"
+        return CardBalance(text: text, currency: account.isMultiCurrency ? currency : nil)
+    }
+
+    private func refreshCard(at index: Int) {
+        guard cards.indices.contains(index), accounts.indices.contains(index) else { return }
+        cards[index].update(account: accounts[index], balance: cardBalance(accounts[index]))
+    }
+
+    /// 详情里换了币种
+    private func refreshSelectedCard() {
+        if let selectedIndex { refreshCard(at: selectedIndex) }
     }
 
     /// 卡片视图和账户一一对应：新卡新建，没了的卡移除，其余更新卡面。层级按卡包顺序，后面的卡在上层
@@ -255,12 +278,12 @@ final class WalletController: UIViewController, UIScrollViewDelegate, UIGestureR
         let size = CGSize(width: AppLayout.cardWidth(width), height: AppLayout.cardHeight(width))
         var ordered: [StackCardView] = []
         for account in accounts {
-            let text = balanceTexts[account.id] ?? "余额未知"
+            let balance = cardBalance(account)
             if let card = existing.removeValue(forKey: account.id) {
-                card.update(account: account, balanceText: text)
+                card.update(account: account, balance: balance)
                 ordered.append(card)
             } else {
-                let card = StackCardView(account: account, balanceText: text)
+                let card = StackCardView(account: account, balance: balance)
                 card.bounds = CGRect(origin: .zero, size: size)
                 addChild(card.host)
                 cardsView.addSubview(card)
@@ -492,6 +515,8 @@ final class WalletController: UIViewController, UIScrollViewDelegate, UIGestureR
         behindFollowsScroll = true
         dropDistance = view.bounds.height + max(0, -pileTop)
         detailList.open(account)
+        // 和动画同一次提交：卡面从第一帧起就是账户主币种的余额
+        refreshCard(at: index)
         topBar.setPeriodTitle(detailModel.period.title, animated: false)
         topBar.setDetail(true, animated: true)
         // 只有看得见的卡做动画：选中的卡，和本来就在屏幕上的上面、下面的卡。
@@ -585,7 +610,10 @@ final class WalletController: UIViewController, UIScrollViewDelegate, UIGestureR
         placeCards(only: [.selected, .behind])
         let roles = cards.indices.map { role($0) }
         let before = cards.map(\.center.y)
+        let closing = selectedIndex
         selectedIndex = nil
+        // 回卡包：换回卡包里的余额（多币种的卡是换算后的合计），和动画同一次提交
+        if let closing { refreshCard(at: closing) }
         behindFollowsScroll = false
         // 只有回到屏幕上的卡做动画；回到屏幕外的直接放回卡包
         let layout = stackLayout
@@ -755,7 +783,7 @@ final class WalletController: UIViewController, UIScrollViewDelegate, UIGestureR
                 width: width,
                 height: last ? layout.cardHeight : layout.peek
             )
-            element.accessibilityLabel = "\(account.spokenTitle)，\(balanceTexts[account.id] ?? "余额未知")"
+            element.accessibilityLabel = "\(account.spokenTitle)，\(cardBalance(account).text)"
             element.accessibilityHint = account.archived ? "已停用，打开账户详情" : "打开账户详情"
             element.accessibilityTraits = .button
             element.activate = { [weak self] in self?.openCard(index) }
@@ -782,12 +810,12 @@ final class WalletController: UIViewController, UIScrollViewDelegate, UIGestureR
 private final class StackCardView: UIView {
     let host: UIHostingController<CardFace>
     private(set) var account: Account
-    private var balanceText: String
+    private var balance: CardBalance
 
-    init(account: Account, balanceText: String) {
+    init(account: Account, balance: CardBalance) {
         self.account = account
-        self.balanceText = balanceText
-        host = UIHostingController(rootView: CardFace(account: account, balanceText: balanceText))
+        self.balance = balance
+        host = UIHostingController(rootView: CardFace(account: account, balance: balance))
         super.init(frame: .zero)
         // 不使用安全区：卡片滚到状态栏下面时卡面不重新布局
         host.safeAreaRegions = []
@@ -801,24 +829,31 @@ private final class StackCardView: UIView {
         fatalError("init(coder:) has not been implemented")
     }
 
-    func update(account: Account, balanceText: String) {
-        guard account != self.account || balanceText != self.balanceText else { return }
+    func update(account: Account, balance: CardBalance) {
+        guard account != self.account || balance != self.balance else { return }
         self.account = account
-        self.balanceText = balanceText
-        host.rootView = CardFace(account: account, balanceText: balanceText)
+        self.balance = balance
+        host.rootView = CardFace(account: account, balance: balance)
     }
+}
+
+/// 卡面上的余额，和右下角的币种
+private struct CardBalance: Equatable {
+    var text: String
+    /// 详情里多币种的卡正在看的币种；nil 时写账户的币种（「HKD +2」）
+    var currency: CurrencyCode?
 }
 
 /// 已停用的卡画成灰色
 private struct CardFace: View {
     let account: Account
-    let balanceText: String
+    let balance: CardBalance
 
     var body: some View {
         if account.archived {
-            WalletCardView(account: account, balanceText: balanceText).grayscale(1)
+            WalletCardView(account: account, balanceText: balance.text, currency: balance.currency).grayscale(1)
         } else {
-            WalletCardView(account: account, balanceText: balanceText)
+            WalletCardView(account: account, balanceText: balance.text, currency: balance.currency)
         }
     }
 }

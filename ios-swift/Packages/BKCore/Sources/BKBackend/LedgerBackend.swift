@@ -281,12 +281,12 @@ public final class LedgerBackend: Sendable {
     }
 
     static func withCharges(_ rows: [RecordRow], db: SQLiteConnection, calendar: Calendar) throws -> [RecordRow] {
-        guard rows.contains(where: \.isForeignCurrency) else { return rows }
+        guard rows.contains(where: \.isConverted) else { return rows }
         let calculator = ChargeCalculator(db: db, calendar: calendar)
         return try rows.map { row in
-            guard row.isForeignCurrency, let primary = row.accountCurrencies.first else { return row }
+            guard row.isConverted, let charged = row.chargedCurrency else { return row }
             var row = row
-            row.charge = try calculator.charge(row.record, primary: primary)
+            row.charge = try calculator.charge(row.record, to: charged)
             return row
         }
     }
@@ -318,12 +318,8 @@ public final class LedgerBackend: Sendable {
                 record.transactionTime = WallClock(year: c.year, month: c.month, day: c.day, hour: c.hour, minute: c.minute)
                 record.receivedAt = time
             }
-            // 账户不持有这个币种：保存用户填写的实际扣款（账户主币种）
-            if !account.currencies.contains(edit.currency), let minor = edit.settlementMinor, minor > 0 {
-                record.settlement = Money(minorUnits: minor, currency: account.currency)
-            } else {
-                record.settlement = nil
-            }
+            // 从账户的哪个币种扣、实际扣了多少（账户没有这个币种，或者换了别的币种扣）
+            record.setCharge(edit.chargeCurrency, actualMinor: edit.settlementMinor, account: account)
             if let party = edit.transferParty { record.transferParty = party }
             if record.kind != .transferIn, record.kind != .transferOut { record.transferParty = nil }
             if let group = original.transferGroupID {
@@ -338,7 +334,10 @@ public final class LedgerBackend: Sendable {
                     var synced = peer
                     synced.amountMinor = edit.peerAmountMinor ?? (matched ? record.amountMinor : peer.amountMinor)
                     synced.currency = edit.peerCurrency ?? (matched ? record.currency : peer.currency)
-                    if synced.amountMinor != peer.amountMinor || synced.currency != peer.currency { synced.settlement = nil }
+                    if synced.amountMinor != peer.amountMinor || synced.currency != peer.currency {
+                        synced.chargeCurrency = nil
+                        synced.settlementMinor = nil
+                    }
                     if peer.source == .manual {
                         synced.direction = record.direction.opposite
                         synced.transactionTime = record.transactionTime
@@ -642,23 +641,20 @@ public final class LedgerBackend: Sendable {
             let counterparty = entry.counterparty
                 .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
                 .flatMap { $0.isEmpty ? nil : String($0.prefix(200)) }
-            // 账户没有这个币种：按账户主币种扣款（入账），填了实际金额就存下来，否则按汇率估算
+            // 从账户的哪个币种扣款（入账）：选了就用选的，没选、账户又没有这个币种时按主币种。填了实际金额就存下来，否则按汇率估算
             func record(
-                _ account: Account, _ direction: FlowDirection, _ kind: TransactionKind, part: Int, category: String?, settlement: Int64?,
-                amount: Int64? = nil, currency: CurrencyCode? = nil
+                _ account: Account, _ direction: FlowDirection, _ kind: TransactionKind, part: Int, category: String?,
+                charge: CurrencyCode?, settlement: Int64?, amount: Int64? = nil, currency: CurrencyCode? = nil
             ) -> LedgerRecord {
-                let currency = currency ?? entry.currency
-                var settled: Money?
-                if !account.currencies.contains(currency), let settlement, settlement > 0 {
-                    settled = Money(minorUnits: settlement, currency: account.currency)
-                }
-                return LedgerRecord(
-                    id: newID(), accountID: account.id, amountMinor: amount ?? entry.amountMinor, currency: currency, direction: direction,
-                    kind: kind, status: .posted, counterparty: counterparty,
+                var record = LedgerRecord(
+                    id: newID(), accountID: account.id, amountMinor: amount ?? entry.amountMinor, currency: currency ?? entry.currency,
+                    direction: direction, kind: kind, status: .posted, counterparty: counterparty,
                     transactionTime: time, receivedAt: entry.time, processedAt: now, source: .manual, ingestID: ingestID, partIndex: part,
                     bankReference: nil, balanceAfterMinor: nil, includedFeeMinor: nil, note: String(entry.note.prefix(500)),
-                    transferGroupID: nil, relatedRecordID: nil, settlement: settled, categoryID: category
+                    transferGroupID: nil, relatedRecordID: nil, categoryID: category
                 )
+                record.setCharge(charge, actualMinor: settlement, account: account)
+                return record
             }
             let tree = CategoryTree(try CategoryDAO.all(db))
             var category: String?
@@ -671,10 +667,12 @@ public final class LedgerBackend: Sendable {
             case .expense:
                 records = [record(
                     account, entry.isRefund ? .inflow : .outflow, entry.isRefund ? .refund : .purchase, part: 0, category: category,
-                    settlement: entry.settlementMinor
+                    charge: entry.chargeCurrency, settlement: entry.settlementMinor
                 )]
             case .income:
-                records = [record(account, .inflow, .income, part: 0, category: category, settlement: entry.settlementMinor)]
+                records = [record(
+                    account, .inflow, .income, part: 0, category: category, charge: entry.chargeCurrency, settlement: entry.settlementMinor
+                )]
             case .transfer:
                 guard let toID = entry.toAccountID, let target = try AccountDAO.find(db, id: toID),
                       toID != account.id || (entry.toCurrency ?? entry.currency) != entry.currency else {
@@ -682,9 +680,12 @@ public final class LedgerBackend: Sendable {
                 }
                 let repayment = target.cardType == .credit && toID != account.id
                 records = [
-                    record(account, .outflow, repayment ? .repayment : .transferOut, part: 0, category: nil, settlement: entry.settlementMinor),
                     record(
-                        target, .inflow, repayment ? .repayment : .transferIn, part: 2, category: nil, settlement: nil,
+                        account, .outflow, repayment ? .repayment : .transferOut, part: 0, category: nil,
+                        charge: entry.chargeCurrency, settlement: entry.settlementMinor
+                    ),
+                    record(
+                        target, .inflow, repayment ? .repayment : .transferIn, part: 2, category: nil, charge: nil, settlement: nil,
                         amount: entry.toAmountMinor, currency: entry.toCurrency
                     ),
                 ]
@@ -952,46 +953,52 @@ public final class LedgerBackend: Sendable {
             let charges = ChargeCalculator(db: db, calendar: calendar)
             var result: [String: AccountBalances] = [:]
             for account in try AccountDAO.all(db, includeArchived: true) {
-                let items = try account.currencies.map { try Self.balanceSummary(db, account: account, currency: $0, charges: charges) }
-                result[account.id] = AccountBalances(accountID: account.id, items: items)
+                result[account.id] = AccountBalances(accountID: account.id, items: try Self.balanceSummaries(db, account: account, charges: charges))
             }
             return result
         }
     }
 
-    /// 推算余额：从用户填写的初始余额出发，加上之后到达的已入账流水。没有初始余额时余额未知，不用部分流水冒充。
-    /// 主币种还要减去（或加上）这张卡不持有的币种的交易按主币种扣的款；还没有任何汇率、估算不出的不计入。
+    /// 推算余额：每个币种从用户填写的初始余额出发，加上之后到达的、从这个币种扣款（入账）的已入账流水。没有初始余额时余额未知，不用部分流水冒充。
+    /// 换成这个币种扣的（账户没有的币种按主币种，余额不够时换主币种，见 `LedgerRecord.chargedCurrency(in:)`）按实际金额或汇率估算计入；
+    /// 还没有任何汇率、估算不出的不计入。还在冻结中的流出不计入余额，另外合计（`openHoldsMinor`），算可用余额用。
     /// 银行通知里写的余额不使用：很多银行的通知不带余额，写法和含义也不统一。
     ///
     /// 初始余额是用户在手机上填写的时刻；流水按「通知到达手机的时间」和它比较
     /// （通知内时间是银行所在地的时间，和手机时区可能不同）。
-    static func balanceSummary(_ db: SQLiteConnection, account: Account, currency: CurrencyCode, charges: ChargeCalculator) throws -> AccountBalanceSummary {
-        guard let opening = account.openingBalance(currency) else {
-            return AccountBalanceSummary(accountID: account.id, currency: currency, ledgerDerivedMinor: nil, recordsAfterBase: 0)
-        }
-        var total = opening.amountMinor
-        var count = 0
-        var unconverted = 0
-        for record in try RecordDAO.postedAfter(db, accountID: account.id, currency: currency) {
-            guard (record.receivedAt ?? record.processedAt) > opening.at else { continue }
-            total += record.direction == .inflow ? record.amountMinor : -record.amountMinor
-            count += 1
-        }
-        if currency == account.currency {
-            for record in try RecordDAO.postedForeign(db, accountID: account.id) {
-                guard (record.receivedAt ?? record.processedAt) > opening.at else { continue }
-                guard let amount = try charges.charge(record, primary: currency).amountMinor else {
-                    unconverted += 1
+    static func balanceSummaries(_ db: SQLiteConnection, account: Account, charges: ChargeCalculator) throws -> [AccountBalanceSummary] {
+        let currencies = account.currencies
+        let records = try RecordDAO.forBalance(db, accountID: account.id)
+        return try currencies.map { currency in
+            guard let opening = account.openingBalance(currency) else {
+                return AccountBalanceSummary(accountID: account.id, currency: currency, ledgerDerivedMinor: nil, recordsAfterBase: 0)
+            }
+            var total = opening.amountMinor
+            var count = 0
+            var unconverted = 0
+            var holds: Int64 = 0
+            for record in records where record.chargedCurrency(in: currencies) == currency && (record.receivedAt ?? record.processedAt) > opening.at {
+                let amount: Int64
+                if record.currency == currency {
+                    amount = record.amountMinor
+                } else if let value = try charges.charge(record, to: currency).amountMinor {
+                    amount = value
+                } else {
+                    if record.status == .posted { unconverted += 1 }
                     continue
                 }
-                total += record.direction == .inflow ? amount : -amount
-                count += 1
+                if record.status == .posted {
+                    total += record.direction == .inflow ? amount : -amount
+                    count += 1
+                } else {
+                    holds += amount
+                }
             }
+            return AccountBalanceSummary(
+                accountID: account.id, currency: currency, ledgerDerivedMinor: total, recordsAfterBase: count,
+                openingBalanceMinor: opening.amountMinor, openingBalanceAt: opening.at, unconvertedCount: unconverted, openHoldsMinor: holds
+            )
         }
-        return AccountBalanceSummary(
-            accountID: account.id, currency: currency, ledgerDerivedMinor: total, recordsAfterBase: count,
-            openingBalanceMinor: opening.amountMinor, openingBalanceAt: opening.at, unconvertedCount: unconverted
-        )
     }
 
     // MARK: 汇率
@@ -1132,7 +1139,7 @@ enum StatsCalculator {
             let amount: Int64
             if r.currency == primary {
                 amount = r.amountMinor
-            } else if let value = try charges.charge(r, primary: primary).amountMinor {
+            } else if let value = try charges.charge(r, to: primary).amountMinor {
                 amount = value
             } else {
                 unconverted.insert(r.currency)

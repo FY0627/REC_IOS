@@ -6,7 +6,8 @@ import BKBackend
 /// 顺序：金额和币种 → 账户（默认上次用的）→ 分类 → 备注（选填）→ 保存。转帐选从哪个账户转到哪个账户，转进信用卡算还款。
 /// 转帐还要填到账的币种和金额（有手续费、换汇时和转出不一样，见 `TransferSideFields`），同一个账户的两个币种之间也可以转。
 /// 先选币种再选账户：币种可以选任何一种（默认「我的」里的主要币种）。账户没有这个币种时按账户的主币种扣款（入账），
-/// 默认按当天的汇率估算，银行实际扣了多少可以直接填。
+/// 默认按当天的汇率估算，银行实际扣了多少可以直接填。多币种的卡可以选从哪个币种扣：支出时这个币种的可用余额不够，
+/// 默认整笔从主币种扣（恒生就是这样，ADR 0018）。
 /// 保存前查一下同一个账户前后 3 小时有没有同样金额的记录（多半是自动记账已经记过了），有就先问一句。
 struct AddRecordView: View {
     @Environment(LedgerStore.self) private var store
@@ -18,8 +19,10 @@ struct AddRecordView: View {
     @State private var note = ""
     @State private var accountID: String?
     @State private var toAccountID: String?
-    /// 账户没有这个币种时，实际扣款（入账）多少账户主币种；空着按汇率估算
+    /// 扣的不是这个币种时，实际扣款（入账）多少；空着按汇率估算
     @State private var settlementText = ""
+    /// 多币种的卡选的扣款（入账）币种；nil 时自动（`autoCharge`）
+    @State private var chargeChoice: CurrencyCode?
     @State private var estimate: RecordCharge?
     /// 转帐到账的币种和金额
     @State private var toCurrency: CurrencyCode?
@@ -41,10 +44,25 @@ struct AddRecordView: View {
 
     private var transferTarget: Account? { accounts.first { $0.id == toAccountID } }
 
-    /// 账户没有选的币种：按它的主币种记
+    /// 从账户的哪个币种扣款（入账）；和选的币种一样时为 nil。多币种的卡选过就用选的（转帐不选）
     private func chargeCurrency(_ id: String?) -> CurrencyCode? {
-        guard let currency, let account = accounts.first(where: { $0.id == id }), !account.currencies.contains(currency) else { return nil }
-        return account.currency
+        guard let currency, let account = accounts.first(where: { $0.id == id }) else { return nil }
+        var charged = autoCharge(account, currency)
+        if type != .transfer, let chargeChoice, account.currencies.contains(chargeChoice) { charged = chargeChoice }
+        return charged == currency ? nil : charged
+    }
+
+    /// 没选时：账户没有这个币种按主币种；多币种的卡支出时这个币种的可用余额不够，整笔从主币种扣（和自动记账一样）
+    private func autoCharge(_ account: Account, _ currency: CurrencyCode) -> CurrencyCode {
+        guard account.currencies.contains(currency) else { return account.currency }
+        return shortOf(account, currency) != nil ? account.currency : currency
+    }
+
+    /// 支出时这个币种的可用余额不够：可用的有多少；够、余额未知或者不用看时为 nil
+    private func shortOf(_ account: Account, _ currency: CurrencyCode) -> Int64? {
+        guard type == .expense, account.isMultiCurrency, account.cardType != .credit, currency != account.currency, let amount,
+              let available = store.balances[account.id]?.item(currency)?.availableMinor, available < amount else { return nil }
+        return available
     }
 
     private var amount: Int64? {
@@ -74,6 +92,17 @@ struct AddRecordView: View {
                 Section {
                     Picker(type == .transfer ? "从" : "账户", selection: $accountID) {
                         accountOptions(accounts)
+                    }
+                    if type != .transfer, let currency, let account = accounts.first(where: { $0.id == accountID }), account.isMultiCurrency {
+                        Picker(type == .income ? "入账币种" : "扣款币种", selection: Binding(
+                            get: { chargeCurrency(accountID) ?? currency },
+                            set: { code in
+                                chargeChoice = code
+                                settlementText = ""
+                            }
+                        )) {
+                            ForEach(account.currencies, id: \.self) { Text($0.chineseName).tag($0) }
+                        }
                     }
                     if let charge = chargeCurrency(accountID) {
                         settlementRow(type == .income ? "实际入账" : "实际扣款", charge, text: $settlementText, estimate: estimate)
@@ -137,11 +166,13 @@ struct AddRecordView: View {
             .onChange(of: accountID) {
                 if let toAccountID, !transferTargets.contains(where: { $0.id == toAccountID }) { self.toAccountID = nil }
                 settlementText = ""
+                chargeChoice = nil
                 resetTransferSide()
             }
             .onChange(of: toAccountID) { resetTransferSide() }
             .onChange(of: currency) {
                 settlementText = ""
+                chargeChoice = nil
                 resetTransferSide()
             }
             .onChange(of: type) {
@@ -194,8 +225,15 @@ struct AddRecordView: View {
     }
 
     private var chargeNote: String? {
-        guard let currency, chargeCurrency(accountID) != nil else { return nil }
-        let head = "账户里没有\(currency.chineseName)，按账户的主币种记。"
+        guard let currency, let charge = chargeCurrency(accountID), let account = accounts.first(where: { $0.id == accountID }) else { return nil }
+        let head: String
+        if !account.currencies.contains(currency) {
+            head = charge == account.currency ? "账户里没有\(currency.chineseName)，按账户的主币种记。" : "账户里没有\(currency.chineseName)，从\(charge.chineseName)扣。"
+        } else if chargeChoice == nil, let available = shortOf(account, currency) {
+            head = "\(currency.chineseName)可用的只有 \(Fmt.money(available, currency))，不够这笔，整笔从\(charge.chineseName)扣。"
+        } else {
+            head = "从\(charge.chineseName)扣。"
+        }
         guard let day = estimate?.rateDay else {
             return head + "还没有汇率：可以直接填银行实际扣了多少，不填就等导入汇率后估算。"
         }
@@ -266,7 +304,7 @@ struct AddRecordView: View {
             type: type, accountID: accountID, toAccountID: type == .transfer ? toAccountID : nil, amountMinor: amount, currency: currency,
             toAmountMinor: toAmount, toCurrency: type == .transfer ? toCurrency : nil,
             categoryID: type == .transfer ? nil : categoryID, counterparty: type == .transfer ? nil : counterparty, note: note, time: time,
-            settlementMinor: from.minor
+            chargeCurrency: chargeCurrency(accountID), settlementMinor: from.minor
         )
     }
 

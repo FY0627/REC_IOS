@@ -221,8 +221,18 @@ struct IngestEngine {
         guard let record = try RecordDAO.find(db, id: recordID) else {
             return Self.pendingItem(draft, result: result)
         }
-        let tail = accounts.first { $0.id == record.accountID }?.last4 ?? draft.cardTail
-        return IngestItem(cardTail: tail, kind: record.kind, status: record.status, amountMinor: record.amountMinor, currency: record.currency, amountText: nil, result: result, recordID: record.id)
+        let account = accounts.first { $0.id == record.accountID }
+        // 支出换成账户的另一个币种扣：通知里写明扣了多少；账户有这个币种还换了，是这个币种的余额不够
+        var charge: RecordCharge?
+        var insufficient = false
+        if let account, record.direction == .outflow, let charged = record.chargedCurrency(in: account.currencies), charged != record.currency {
+            charge = try ChargeCalculator(db: db, calendar: calendar).charge(record, to: charged)
+            insufficient = account.currencies.contains(record.currency)
+        }
+        return IngestItem(
+            cardTail: account?.last4 ?? draft.cardTail, kind: record.kind, status: record.status, amountMinor: record.amountMinor,
+            currency: record.currency, amountText: nil, result: result, recordID: record.id, charge: charge, insufficientBalance: insufficient
+        )
     }
 
     /// 没有入账的一笔：只有通知里写的尾号和金额原文
@@ -406,20 +416,30 @@ struct IngestEngine {
             return .pending(.uncertainKind, candidates: [account.id], duplicateOf: nil)
         }
 
-        // 通知写明的实际扣款：只有账户不持有交易币种、扣的是主币种时才用得上（和用户手动填的一样，见 `ChargeCalculator`）
-        var settlement: Money?
-        if let written = draft.settlement, !account.currencies.contains(currency), resolveCurrency(written, account: account) == account.currency,
-           case let .success(minor) = AmountParser.minorUnits(written.digits, exponent: account.currency.minorUnitExponent), minor > 0 {
-            settlement = Money(minorUnits: minor, currency: account.currency)
-        }
-
-        let record = LedgerRecord(
+        var record = LedgerRecord(
             id: newID(), accountID: account.id, amountMinor: amountMinor, currency: currency, direction: direction,
             kind: draft.kind, status: draft.status, counterparty: draft.counterparty, transactionTime: draft.transactionTime,
             receivedAt: meta.receivedAt, processedAt: meta.processedAt, source: meta.source, ingestID: meta.ingestID,
             partIndex: draft.partIndex, bankReference: draft.bankReference, balanceAfterMinor: balanceMinor,
-            includedFeeMinor: includedFeeMinor, note: "", transferGroupID: nil, relatedRecordID: nil, settlement: settlement
+            includedFeeMinor: includedFeeMinor, note: "", transferGroupID: nil, relatedRecordID: nil
         )
+        // 从账户的哪个币种扣（ADR 0018）：账户没有这笔的币种、通知写明了扣的是账户的哪个币种多少（「JPY1000.00（人民币48.00）」）时用它
+        // （账户有这个币种时，括号里多半只是折合多少）；
+        // 多币种账户这个币种的余额不够这笔消费时，整笔换成主币种扣，按汇率估算（恒生就是这样）；
+        // 其余记在这笔自己的币种，账户没有这个币种时按主币种估算（`chargedCurrency(in:)`）
+        if let written = draft.settlement, !account.currencies.contains(currency), let writtenCurrency = resolveCurrency(written, account: account),
+           account.currencies.contains(writtenCurrency),
+           case let .success(minor) = AmountParser.minorUnits(written.digits, exponent: writtenCurrency.minorUnitExponent), minor > 0 {
+            record.chargeCurrency = writtenCurrency
+            record.settlementMinor = minor
+        } else if draft.holdTime == nil, try lacksBalance(record, account: account) {
+            record.chargeCurrency = account.currency
+            // 括号里写了折合主币种多少：换成主币种扣时，多半就是扣了这么多
+            if let written = draft.settlement, resolveCurrency(written, account: account) == account.currency,
+               case let .success(minor) = AmountParser.minorUnits(written.digits, exponent: account.currency.minorUnitExponent), minor > 0 {
+                record.settlementMinor = minor
+            }
+        }
 
         let key = forcedDedupeKey ?? dedupeKey(record)
         if let existingID = try RecordDAO.idForDedupeKey(db, key), let existing = try RecordDAO.find(db, id: existingID) {
@@ -449,6 +469,17 @@ struct IngestEngine {
         try closeHold(of: record, holdTime: draft.holdTime)
         try Categorizer(db: db).categorize(recordID: record.id)
         return .recorded(record.id)
+    }
+
+    /// 多币种账户的消费：这个币种的可用余额（推算余额减还没结清的冻结）不够这一笔，银行会整笔换成主币种扣（ADR 0018）。
+    /// 只看非信用卡账户里不是主币种的持有币种；这个币种余额未知时不判断。
+    /// 完成之前预授权的那笔（通知写了预授权时间）不判断：冻结时银行已经扣起，那笔冻结还没关掉，算进去会重复
+    func lacksBalance(_ record: LedgerRecord, account: Account) throws -> Bool {
+        guard account.isMultiCurrency, account.cardType != .credit, record.direction == .outflow, record.kind == .purchase,
+              record.status == .posted || record.status == .hold, account.extraCurrencies.contains(record.currency) else { return false }
+        let balances = try LedgerBackend.balanceSummaries(db, account: account, charges: ChargeCalculator(db: db, calendar: calendar))
+        guard let available = balances.first(where: { $0.currency == record.currency })?.availableMinor else { return false }
+        return available < record.amountMinor
     }
 
     /// 去重键：可信交易标识 > 精确到分钟的交易时间 + 金额特征 > 本次输入内唯一。

@@ -7,6 +7,7 @@ import BKBackend
 /// 以及另一边的币种和金额（到账多少，见 `TransferSideFields`）。交易性质和方向按选的类型换，尽量保留原来的。
 /// 币种可以选任何一种；卡里没有这笔流水的币种时（银行按主币种结汇扣款），
 /// 还可以填实际扣了多少主币种，不填就按交易当天的汇率估算（空着时提示大概多少）。
+/// 多币种的卡可以选从哪个币种扣（例如人民币不够，银行整笔扣了港币，ADR 0018），扣的不是这笔的币种时同样可以填实际金额。
 /// 余额从「校准余额」那一刻算起：比它早的流水换账户、改金额，卡上的余额不变，这时在账户下面写明。
 struct RecordEditor: View {
     let detail: RecordDetail
@@ -26,6 +27,8 @@ struct RecordEditor: View {
     @State private var timeChanged = false
     @State private var note: String
     @State private var settlementText: String
+    /// 选的扣款（入账）币种；nil 时用默认的（账户有这个币种就是它，没有就是主币种）
+    @State private var chargeChoice: CurrencyCode?
     @State private var estimate: RecordCharge?
     @State private var peer: PeerChoice
     /// 另一边的币种和金额；空着表示和这一笔一样多
@@ -57,7 +60,10 @@ struct RecordEditor: View {
         _counterparty = State(initialValue: r.counterparty ?? "")
         _time = State(initialValue: Self.initialTime(r))
         _note = State(initialValue: r.note)
-        _settlementText = State(initialValue: r.settlement.map { MoneyInput.editingText($0.minorUnits, currency: $0.currency) } ?? "")
+        _settlementText = State(initialValue: r.settlementMinor.flatMap { minor in
+            r.chargeCurrency.map { MoneyInput.editingText(minor, currency: $0) }
+        } ?? "")
+        _chargeChoice = State(initialValue: r.chargeCurrency)
         let peer = detail.transferPeer.map { PeerChoice.account($0.record.accountID) } ?? PeerChoice.untracked
         _peer = State(initialValue: peer)
         initialPeer = peer
@@ -127,10 +133,17 @@ struct RecordEditor: View {
         return inflow ? "实际入账" : "实际扣款"
     }
 
-    /// 卡里没有这个币种：要按主币种扣款
+    /// 从账户的哪个币种扣款（入账）：多币种的卡选过的（转帐不选）；没选时账户有这个币种就是它，没有就是主币种
+    private var chargedCurrency: CurrencyCode? {
+        guard let account, let currency else { return nil }
+        if type != .transfer, let chargeChoice, account.currencies.contains(chargeChoice) { return chargeChoice }
+        return account.currencies.contains(currency) ? currency : account.currency
+    }
+
+    /// 扣的不是这笔的币种：可以填实际扣了多少
     private var settlementCurrency: CurrencyCode? {
-        guard let account, let currency, !account.currencies.contains(currency) else { return nil }
-        return account.currency
+        guard let currency, let chargedCurrency, chargedCurrency != currency else { return nil }
+        return chargedCurrency
     }
 
     var body: some View {
@@ -176,6 +189,17 @@ struct RecordEditor: View {
                                 time: timeChanged ? time : detail.row.record.effectiveAt, receiving: transferDirection == .outflow,
                                 currency: $peerCurrency, amountText: $peerAmountText
                             )
+                        }
+                    }
+                    if let account, account.isMultiCurrency, type != .transfer, let chargedCurrency {
+                        Picker(settlementTitle == "实际入账" ? "入账币种" : "扣款币种", selection: Binding(
+                            get: { chargedCurrency },
+                            set: { code in
+                                chargeChoice = code
+                                settlementText = ""
+                            }
+                        )) {
+                            ForEach(account.currencies, id: \.self) { Text($0.chineseName).tag($0) }
                         }
                     }
                     if let settlementCurrency {
@@ -228,7 +252,8 @@ struct RecordEditor: View {
             .onChange(of: accountID) {
                 // 换了账户：只有一个币种的账户不能转给自己；币种不变（新账户没有这个币种就按它的主币种扣款），原来填的实际扣款是旧账户的币种，清掉
                 if peer == .account(accountID), !peerOptions.contains(where: { $0.id == accountID }) { peer = .untracked }
-                if settlementCurrency != detail.row.record.settlement?.currency { settlementText = "" }
+                chargeChoice = accountID == detail.row.record.accountID ? detail.row.record.chargeCurrency : nil
+                if settlementCurrency != detail.row.record.chargeCurrency { settlementText = "" }
             }
             .onChange(of: peer) {
                 // 换了另一边：币种回到默认，金额清空
@@ -310,7 +335,8 @@ struct RecordEditor: View {
         let edit = RecordEdit(
             accountID: accountID, amountMinor: amount, currency: currency, direction: fields.direction, kind: fields.kind,
             counterparty: trimmed.isEmpty ? nil : trimmed, time: timeChanged ? time : nil, note: note,
-            settlementMinor: settlement, categoryID: type == .transfer ? nil : categoryID, keepsCategory: false, transferParty: fields.party,
+            chargeCurrency: chargedCurrency, settlementMinor: settlement,
+            categoryID: type == .transfer ? nil : categoryID, keepsCategory: false, transferParty: fields.party,
             peer: peerChange, peerAmountMinor: peerAmount, peerCurrency: peerAmount == nil ? nil : peerCurrency
         )
         saving = true

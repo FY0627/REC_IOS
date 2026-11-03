@@ -19,11 +19,11 @@ final class RecordEditTests: XCTestCase {
     @discardableResult
     func addAccount(
         _ backend: LedgerBackend, bank: String = "cmb", bankName: String = "招商银行", last4: String, type: CardType = .debit,
-        currency: CurrencyCode = .cny, extras: [CurrencyCode] = [], opening: Int64? = nil
+        currency: CurrencyCode = .cny, extras: [CurrencyCode] = [], opening: Int64? = nil, extraOpenings: [CurrencyCode: Int64] = [:]
     ) async throws -> Account {
         try await backend.addAccount(AccountDraft(
             name: "", bankID: bank, bankName: bankName, last4: last4, cardType: type, currency: currency, paletteID: "ocean",
-            openingBalanceMinor: opening, extraCurrencies: extras
+            openingBalanceMinor: opening, extraCurrencies: extras, extraOpeningBalances: extraOpenings
         ))
     }
 
@@ -48,7 +48,7 @@ final class RecordEditTests: XCTestCase {
 
         let row = try await firstRow(backend, accountID: account.id)
         XCTAssertEqual(row.record.currency, .cny)
-        XCTAssertTrue(row.isForeignCurrency)
+        XCTAssertTrue(row.isConverted)
         XCTAssertEqual(row.charge?.currency, .hkd)
         XCTAssertEqual(row.charge?.amountMinor, 78_00, "72 人民币 ÷ 7.2 × 7.8 = 78 港币")
         XCTAssertEqual(row.charge?.rateDay, "2026-10-24", "用交易当天的汇率")
@@ -69,15 +69,24 @@ final class RecordEditTests: XCTestCase {
         let byCharge = try await backend.records(filter: RecordFilter(text: "79.1"))
         XCTAssertEqual(byCharge.map(\.id), [row.id], "按实际扣了多少港币也能找到")
 
-        // 卡里加上人民币以后，这笔记在人民币里，不再扣港币
+        // 再来一笔，不填实际扣款
+        _ = try await backend.ingest(IngestRequest(text: "您尾号0104的账户于10月24日15:30消费人民币36.00元【恒生银行】", source: .sms, receivedAt: now.addingTimeInterval(120)))
+        balance = try await backend.balanceSummaries()[account.id]?.primary
+        XCTAssertEqual(balance?.ledgerDerivedMinor, 1_000_00 - 79_10 - 39_00)
+
+        // 卡里加上人民币以后：按汇率估算的那笔记在人民币里，不再扣港币；填过实际扣款的仍从港币扣（那时银行扣的就是港币）
         try await backend.updateAccount(id: account.id, AccountEdit(
             name: "", cardType: .debit, currency: .hkd, extraCurrencies: [.cny], cardNumber: nil, accountNumber: nil
         ))
-        let held = try await firstRow(backend, accountID: account.id)
-        XCTAssertFalse(held.isForeignCurrency)
-        XCTAssertNil(held.charge)
+        let rows = try await backend.records(accountID: account.id)
+        let estimated = try XCTUnwrap(rows.first { $0.record.amountMinor == 36_00 })
+        XCTAssertFalse(estimated.isConverted)
+        XCTAssertNil(estimated.charge)
+        let actual = try XCTUnwrap(rows.first { $0.id == row.id })
+        XCTAssertTrue(actual.isConverted)
+        XCTAssertEqual(actual.charge?.amountMinor, 79_10)
         balance = try await backend.balanceSummaries()[account.id]?.primary
-        XCTAssertEqual(balance?.ledgerDerivedMinor, 1_000_00)
+        XCTAssertEqual(balance?.ledgerDerivedMinor, 1_000_00 - 79_10)
     }
 
     func testRateDayFallsBackToRecordedDayThenNearest() async throws {
@@ -216,7 +225,7 @@ final class RecordEditTests: XCTestCase {
 
     func testFilterByCurrencyTextDirectionAndPeriod() async throws {
         let backend = try makeBackend()
-        let account = try await addAccount(backend, bank: "x", bankName: "恒生银行", last4: "0105", currency: .hkd, extras: [.usd])
+        let account = try await addAccount(backend, bank: "x", bankName: "恒生银行", last4: "0105", currency: .hkd, extras: [.usd], extraOpenings: [.usd: 100_00])
         _ = try await backend.ingest(IngestRequest(text: "您尾号0105的账户于10月24日14:30消费美元12.50元【恒生银行】", source: .sms, receivedAt: now.addingTimeInterval(60)))
         _ = try await backend.ingest(IngestRequest(text: "您尾号0105的账户于10月24日15:30消费港币100.00元【恒生银行】", source: .sms, receivedAt: now.addingTimeInterval(120)))
         _ = try await backend.ingest(IngestRequest(text: "您尾号0105的账户于10月24日16:30消费人民币30.00元【恒生银行】", source: .sms, receivedAt: now.addingTimeInterval(180)))

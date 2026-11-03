@@ -10,6 +10,8 @@ import BKModel
 struct WalletCardView: View {
     let account: Account
     let balanceText: String
+    /// 卡片详情里多币种的卡正在看的币种：右下角写它，代替「HKD +2」
+    var currency: CurrencyCode? = nil
     /// 编辑卡面时用：拖动金额要知道它现在多大
     var amountSize: Binding<CGSize>? = nil
 
@@ -121,7 +123,7 @@ struct WalletCardView: View {
                     Image(systemName: account.cardType.symbolName).font(.system(size: 17 * s, weight: .semibold)).opacity(0.85)
                 }
                 Spacer()
-                Text(Self.currencyLabel(account)).font(.system(size: 12 * s, weight: .bold)).italic().opacity(0.8)
+                Text(currency?.rawValue ?? Self.currencyLabel(account)).font(.system(size: 12 * s, weight: .bold)).italic().opacity(0.8)
             }
         }
     }
@@ -216,6 +218,25 @@ private struct CardRasterization: ViewModifier {
 extension AccountBalances {
     /// 卡面上显示一个币种的余额：主币种有余额就用主币种，否则用第一个有余额的币种。
     var cardText: String { display?.cardText ?? "余额未知" }
+
+    /// 卡包里的卡面（ADR 0018）：多币种账户把各币种的余额按最新汇率换算成「我的」主要币种后相加，换算过就写「≈」。
+    /// 没有汇率、有余额的币种缺汇率时显示账户主币种的余额，不显示少算了一部分的合计；余额未知的币种不计入。单币种账户显示原币种
+    func stackText(rates: ExchangeRates?, primary: CurrencyCode) -> String {
+        guard items.count > 1, let rates else { return cardText }
+        var total: Int64 = 0
+        var known = false
+        var converted = false
+        for item in items {
+            guard let amount = item.ledgerDerivedMinor else { continue }
+            known = true
+            guard amount != 0 else { continue }
+            guard let value = rates.convert(amount, from: item.currency, to: primary) else { return cardText }
+            total += value
+            if item.currency != primary { converted = true }
+        }
+        guard known else { return cardText }
+        return (converted ? "≈ " : "") + Fmt.money(total, primary)
+    }
 }
 
 extension AccountBalanceSummary {

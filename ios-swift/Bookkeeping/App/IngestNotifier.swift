@@ -183,6 +183,12 @@ enum IngestNotifier {
             parts.append(action)
         }
         if let amount = amountText(item) { parts.append(amount) }
+        // 换成账户的另一个币种扣（ADR 0018）：「人民币余额不足，按港币扣约 HK$86.67」
+        if let charge = item.charge, let currency = item.currency {
+            let reason = item.insufficientBalance ? "\(currency.chineseName)余额不足，" : ""
+            let amount = charge.amountMinor.map { (charge.isActual ? " " : "约 ") + Fmt.money($0, charge.currency) } ?? "（还没有汇率）"
+            parts.append(reason + "按\(charge.currency.chineseName)扣" + amount)
+        }
         parts.append(outcome)
         return parts.joined(separator: "，")
     }

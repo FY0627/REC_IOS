@@ -208,8 +208,12 @@ public struct LedgerRecord: Identifiable, Hashable, Sendable, Codable {
     public var relatedRecordID: String?
     /// 没配对到自己另一张卡的转账，用户确认的对方；nil 表示还没确认（按转给别人统计）
     public var transferParty: TransferParty?
-    /// 账户不持有这个币种时，用户填写的实际扣款（账户主币种）；nil 时按交易当天的汇率估算（见 `RecordCharge`）
-    public var settlement: Money?
+    /// 从账户的哪个币种扣款（入账），和 `currency` 不同时才有：账户没有这个币种时填了实际金额，
+    /// 或者多币种账户这个币种的余额不够、整笔换成主币种扣（ADR 0018）。
+    /// nil：账户有这个币种就记在这个币种，没有就按主币种（`chargedCurrency(in:)`）
+    public var chargeCurrency: CurrencyCode?
+    /// 实际扣款（入账）多少，`chargeCurrency` 的最小单位；nil 时按交易当天的汇率估算（见 `RecordCharge`）
+    public var settlementMinor: Int64?
     /// 用户的分类（支出、收入才有）；nil 是「待分类」。转帐的分类按交易性质推出，不保存
     public var categoryID: String?
     /// 一单用了几张卡：同一单的几笔共用这个标识
@@ -222,7 +226,8 @@ public struct LedgerRecord: Identifiable, Hashable, Sendable, Codable {
         kind: TransactionKind, status: SettlementStatus, counterparty: String?, transactionTime: WallClock?,
         receivedAt: Date?, processedAt: Date, source: SourceKind, ingestID: String, partIndex: Int,
         bankReference: String?, balanceAfterMinor: Int64?, includedFeeMinor: Int64?, note: String,
-        transferGroupID: String?, relatedRecordID: String?, transferParty: TransferParty? = nil, settlement: Money? = nil,
+        transferGroupID: String?, relatedRecordID: String?, transferParty: TransferParty? = nil,
+        chargeCurrency: CurrencyCode? = nil, settlementMinor: Int64? = nil,
         categoryID: String? = nil, orderGroupID: String? = nil, categoryAuto: Bool = false
     ) {
         self.id = id
@@ -246,7 +251,8 @@ public struct LedgerRecord: Identifiable, Hashable, Sendable, Codable {
         self.transferGroupID = transferGroupID
         self.relatedRecordID = relatedRecordID
         self.transferParty = transferParty
-        self.settlement = settlement
+        self.chargeCurrency = chargeCurrency
+        self.settlementMinor = settlementMinor
         self.categoryID = categoryID
         self.orderGroupID = orderGroupID
         self.categoryAuto = categoryAuto
@@ -254,6 +260,29 @@ public struct LedgerRecord: Identifiable, Hashable, Sendable, Codable {
 
     /// 排序和按日分组使用的系统时间。
     public var effectiveAt: Date { receivedAt ?? processedAt }
+
+    /// 这笔从账户的哪个币种扣款（入账）。`currencies` 是账户持有的币种，主币种在前：
+    /// 记下的扣款币种（账户还有它时）> 这笔自己的币种（账户有时）> 主币种
+    public func chargedCurrency(in currencies: [CurrencyCode]) -> CurrencyCode? {
+        if let chosen = chargeCurrency, currencies.contains(chosen) { return chosen }
+        if currencies.contains(currency) { return currency }
+        return currencies.first
+    }
+
+    /// 记下从账户的哪个币种扣款（入账）、实际多少。`chosen` 为 nil 或不是账户的币种时用默认的：账户有这个币种就是它，没有就是主币种。
+    /// 和默认的一样、又没填实际金额时不记，这样账户以后加上这个币种，这笔就算在那个币种里
+    public mutating func setCharge(_ chosen: CurrencyCode?, actualMinor: Int64?, account: Account) {
+        let fallback = account.currencies.contains(currency) ? currency : account.currency
+        let charged = chosen.flatMap { account.currencies.contains($0) ? $0 : nil } ?? fallback
+        let actual = actualMinor.flatMap { $0 > 0 ? $0 : nil }
+        if charged == currency || (charged == fallback && actual == nil) {
+            chargeCurrency = nil
+            settlementMinor = nil
+        } else {
+            chargeCurrency = charged
+            settlementMinor = actual
+        }
+    }
     /// 自己账户之间的转账：两边都是 App 里的卡并已配对，或用户确认对方是自己的账户
     public var isInternalTransfer: Bool { transferGroupID != nil || transferParty == .own }
     /// 转账没有配对到自己另一张卡，也还没确认对方是谁
@@ -340,7 +369,7 @@ public struct RecordRow: Identifiable, Hashable, Sendable {
     public var paletteID: String
     /// 账户持有的币种，主币种在前
     public var accountCurrencies: [CurrencyCode]
-    /// 账户不持有这笔流水的币种时，按主币种扣款的金额；持有时为 nil
+    /// 扣的不是这笔自己的币种时（`isConverted`），从哪个币种扣了多少；否则为 nil
     public var charge: RecordCharge?
     public var cardType: CardType
     /// 这笔流水的账户已删除
@@ -382,8 +411,10 @@ public struct RecordRow: Identifiable, Hashable, Sendable {
     }
 
     public var id: String { record.id }
-    /// 账户不持有这笔流水的币种（银行按主币种结汇扣款）
-    public var isForeignCurrency: Bool { !accountCurrencies.isEmpty && !accountCurrencies.contains(record.currency) }
+    /// 这笔从账户的哪个币种扣款（入账）
+    public var chargedCurrency: CurrencyCode? { record.chargedCurrency(in: accountCurrencies) }
+    /// 扣的不是这笔自己的币种：账户没有这个币种（银行按主币种结汇），或者多币种账户这个币种不够、换成了别的币种
+    public var isConverted: Bool { chargedCurrency.map { $0 != record.currency } ?? false }
     public var account: AccountLabel { AccountLabel(name: accountName, bankName: bankName, last4: last4, cardType: cardType, deleted: accountDeleted) }
     /// 合成一单时整单的金额（同一币种）；不是合单时是这一笔的金额
     public var orderTotalMinor: Int64 {
@@ -391,14 +422,15 @@ public struct RecordRow: Identifiable, Hashable, Sendable {
     }
 }
 
-/// 账户不持有的币种的交易：银行大概率按账户主币种结汇扣款。
-/// 用户填写了实际扣款就用它；否则按交易当天的汇率估算，那天没有汇率就用记录当天的，都没有就用日期最近的一天。
+/// 从账户的另一个币种扣款（入账）的一笔：账户没有这个币种时银行按主币种结汇；多币种账户这个币种的余额不够时，
+/// 整笔换成主币种扣（ADR 0018），用户也可以改成账户的其他币种。
+/// 通知写明或用户填写了实际金额就用它；否则按交易当天的汇率估算，那天没有汇率就用记录当天的，都没有就用日期最近的一天。
 public struct RecordCharge: Hashable, Sendable {
-    /// 账户主币种
+    /// 扣款（入账）的币种
     public var currency: CurrencyCode
     /// 扣款金额（最小单位，正数）；还没有任何汇率时为 nil
     public var amountMinor: Int64?
-    /// 用户填写的实际扣款；false 表示按汇率估算
+    /// 通知写明或用户填写的实际金额；false 表示按汇率估算
     public var isActual: Bool
     /// 估算用的汇率日期（`YYYY-MM-DD`）
     public var rateDay: String?
@@ -434,7 +466,9 @@ public struct RecordEdit: Hashable, Sendable {
     /// 交易时间；nil 表示不修改
     public var time: Date?
     public var note: String
-    /// 实际扣款（账户主币种的最小单位）；nil 表示按汇率估算。只在账户不持有 `currency` 时保存
+    /// 从账户的哪个币种扣款（入账）；nil 用默认的：账户有 `currency` 就是它，没有就是主币种（`LedgerRecord.setCharge`）
+    public var chargeCurrency: CurrencyCode?
+    /// 实际扣款（`chargeCurrency` 的最小单位）；nil 表示按汇率估算。扣的就是 `currency` 时不保存
     public var settlementMinor: Int64?
     /// 分类；nil 时保持原来的分类（`keepsCategory`）或改成待分类
     public var categoryID: String?
@@ -450,7 +484,7 @@ public struct RecordEdit: Hashable, Sendable {
 
     public init(
         accountID: String, amountMinor: Int64, currency: CurrencyCode, direction: FlowDirection, kind: TransactionKind,
-        counterparty: String?, time: Date?, note: String, settlementMinor: Int64? = nil,
+        counterparty: String?, time: Date?, note: String, chargeCurrency: CurrencyCode? = nil, settlementMinor: Int64? = nil,
         categoryID: String? = nil, keepsCategory: Bool = true, transferParty: TransferParty? = nil, peer: TransferPeerChange = .keep,
         peerAmountMinor: Int64? = nil, peerCurrency: CurrencyCode? = nil
     ) {
@@ -462,6 +496,7 @@ public struct RecordEdit: Hashable, Sendable {
         self.counterparty = counterparty
         self.time = time
         self.note = note
+        self.chargeCurrency = chargeCurrency
         self.settlementMinor = settlementMinor
         self.categoryID = categoryID
         self.keepsCategory = keepsCategory
@@ -518,14 +553,16 @@ public struct ManualEntry: Hashable, Sendable {
     public var counterparty: String?
     public var note: String
     public var time: Date
-    /// 账户（转帐时是转出的账户）没有这个币种时，实际扣款或入账多少账户主币种；nil 按交易当天的汇率估算
+    /// 从账户（转帐时是转出的账户）的哪个币种扣款或入账；nil 用默认的：账户有这个币种就是它，没有就是主币种
+    public var chargeCurrency: CurrencyCode?
+    /// 扣的不是这个币种时，实际扣款或入账多少（`chargeCurrency` 的最小单位）；nil 按交易当天的汇率估算
     public var settlementMinor: Int64?
 
     public init(
         type: EntryType, accountID: String, toAccountID: String? = nil, amountMinor: Int64, currency: CurrencyCode,
         toAmountMinor: Int64? = nil, toCurrency: CurrencyCode? = nil,
         categoryID: String? = nil, isRefund: Bool = false, counterparty: String? = nil, note: String = "", time: Date,
-        settlementMinor: Int64? = nil
+        chargeCurrency: CurrencyCode? = nil, settlementMinor: Int64? = nil
     ) {
         self.type = type
         self.accountID = accountID
@@ -539,6 +576,7 @@ public struct ManualEntry: Hashable, Sendable {
         self.counterparty = counterparty
         self.note = note
         self.time = time
+        self.chargeCurrency = chargeCurrency
         self.settlementMinor = settlementMinor
     }
 }
@@ -546,7 +584,7 @@ public struct ManualEntry: Hashable, Sendable {
 /// 查流水的条件。都不填时是全部流水。
 public struct RecordFilter: Hashable, Sendable {
     public var accountID: String?
-    /// 只看影响这个币种余额的流水（同时指定 `accountID`）：主币种还包括这张卡不持有的币种的交易（按主币种扣款）
+    /// 只看影响这个币种余额的流水（同时指定 `accountID`）：从这个币种扣款（入账）的，包括别的币种换成它扣的（`chargedCurrency(in:)`）
     public var currency: CurrencyCode?
     public var direction: FlowDirection?
     /// 时间范围（按 `effectiveAt`）：含 `from`，不含 `to`

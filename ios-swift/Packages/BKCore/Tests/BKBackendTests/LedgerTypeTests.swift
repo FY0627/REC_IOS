@@ -574,7 +574,8 @@ final class LedgerTypeTests: XCTestCase {
         try await backend.addRecord(ManualEntry(type: .expense, accountID: cny.id, amountMinor: 1_000, currency: .jpy, time: now))
         var rows = try await backend.records(accountID: cny.id)
         XCTAssertEqual(rows.first?.record.currency, .jpy)
-        XCTAssertNil(rows.first?.record.settlement)
+        XCTAssertNil(rows.first?.record.chargeCurrency, "没填实际扣款不记扣款币种：以后账户加上日元，这笔就算在日元里")
+        XCTAssertNil(rows.first?.record.settlementMinor)
         XCTAssertEqual(rows.first?.charge?.amountMinor, 48_00)
         XCTAssertEqual(rows.first?.charge?.isActual, false)
 
@@ -583,7 +584,8 @@ final class LedgerTypeTests: XCTestCase {
             type: .expense, accountID: cny.id, amountMinor: 2_000, currency: .jpy, time: now.addingTimeInterval(60), settlementMinor: 95_10
         ))
         rows = try await backend.records(accountID: cny.id)
-        XCTAssertEqual(rows.first?.record.settlement, Money(minorUnits: 95_10, currency: .cny))
+        XCTAssertEqual(rows.first?.record.chargeCurrency, .cny)
+        XCTAssertEqual(rows.first?.record.settlementMinor, 95_10)
         XCTAssertEqual(rows.first?.charge?.isActual, true)
 
         // 转帐：转出的账户没有日元就按主币种扣款，到账写实际到了多少港币
@@ -593,10 +595,12 @@ final class LedgerTypeTests: XCTestCase {
         ))
         XCTAssertEqual(ids.count, 2)
         let out = try await backend.records(accountID: cny.id).first { $0.record.amountMinor == 10_000 }
-        XCTAssertEqual(out?.record.settlement, Money(minorUnits: 480_00, currency: .cny))
+        XCTAssertEqual(out?.record.chargeCurrency, .cny)
+        XCTAssertEqual(out?.record.settlementMinor, 480_00)
         let into = try await backend.records(accountID: hkd.id).first
         XCTAssertEqual(into?.record.money, Money(minorUnits: 520_00, currency: .hkd))
-        XCTAssertNil(into?.record.settlement)
+        XCTAssertNil(into?.record.chargeCurrency)
+        XCTAssertNil(into?.record.settlementMinor)
         XCTAssertEqual(into?.record.direction, .inflow)
 
         // 账户有这个币种：不存实际扣款
@@ -604,7 +608,52 @@ final class LedgerTypeTests: XCTestCase {
             type: .expense, accountID: hkd.id, amountMinor: 50_00, currency: .hkd, time: now.addingTimeInterval(180), settlementMinor: 1
         ))
         let plain = try await backend.records(accountID: hkd.id).first { $0.record.amountMinor == 50_00 }
-        XCTAssertNil(plain?.record.settlement)
+        XCTAssertNil(plain?.record.chargeCurrency)
+        XCTAssertNil(plain?.record.settlementMinor)
+    }
+
+    /// 多币种账户：记一笔时可以选从哪个币种扣（例如人民币不够，银行扣了港币），编辑时可以改回来
+    func testManualEntryCanChargeAnotherHeldCurrency() async throws {
+        let backend = try makeBackend()
+        let account = try await backend.addAccount(AccountDraft(
+            name: "", bankID: nil, bankName: "恒生银行", last4: "0105", cardType: .debit, currency: .hkd, paletteID: "ocean",
+            openingBalanceMinor: 1_000_00, extraCurrencies: [.cny], extraOpeningBalances: [.cny: 10_00]
+        ))
+        let ids = try await backend.addRecord(ManualEntry(
+            type: .expense, accountID: account.id, amountMinor: 80_00, currency: .cny, time: now.addingTimeInterval(60),
+            chargeCurrency: .hkd, settlementMinor: 87_00
+        ))
+        var rows = try await backend.records(accountID: account.id)
+        var row = try XCTUnwrap(rows.first)
+        XCTAssertEqual(row.record.chargeCurrency, .hkd)
+        XCTAssertEqual(row.record.settlementMinor, 87_00)
+        XCTAssertEqual(row.charge, RecordCharge(currency: .hkd, amountMinor: 87_00, isActual: true, rateDay: nil))
+        var summaries = try await backend.balanceSummaries()
+        var balances = try XCTUnwrap(summaries[account.id])
+        XCTAssertEqual(balances.item(.hkd)?.ledgerDerivedMinor, 1_000_00 - 87_00)
+        XCTAssertEqual(balances.item(.cny)?.ledgerDerivedMinor, 10_00)
+
+        // 改回人民币扣：不再记扣款币种，填的港币金额也不留
+        try await backend.updateRecord(id: ids[0], RecordEdit(
+            accountID: account.id, amountMinor: 80_00, currency: .cny, direction: .outflow, kind: .purchase,
+            counterparty: nil, time: nil, note: "", chargeCurrency: .cny, settlementMinor: 87_00
+        ))
+        rows = try await backend.records(accountID: account.id)
+        row = try XCTUnwrap(rows.first)
+        XCTAssertNil(row.record.chargeCurrency)
+        XCTAssertNil(row.record.settlementMinor)
+        XCTAssertNil(row.charge)
+        summaries = try await backend.balanceSummaries()
+        balances = try XCTUnwrap(summaries[account.id])
+        XCTAssertEqual(balances.item(.cny)?.ledgerDerivedMinor, 10_00 - 80_00)
+
+        // 选的不是账户的币种：按默认的，记在人民币
+        try await backend.addRecord(ManualEntry(
+            type: .expense, accountID: account.id, amountMinor: 1_00, currency: .cny, time: now.addingTimeInterval(120), chargeCurrency: .usd
+        ))
+        rows = try await backend.records(accountID: account.id)
+        row = try XCTUnwrap(rows.first)
+        XCTAssertNil(row.record.chargeCurrency)
     }
 
     func testStatsForAPeriodCoverEveryMonthInIt() async throws {

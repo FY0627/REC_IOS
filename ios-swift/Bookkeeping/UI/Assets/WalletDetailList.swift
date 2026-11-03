@@ -56,6 +56,8 @@ final class WalletDetailList: NSObject, UITableViewDelegate {
     var onOpenPending: () -> Void = {}
     /// 读屏激活顶部的卡片：返回卡包
     var onActivateCard: () -> Void = {}
+    /// 多币种的卡换了一个币种看：卡面换成这个币种的余额
+    var onCurrencyChange: () -> Void = {}
 
     private let store: LedgerStore
     private let model: WalletDetailModel
@@ -353,6 +355,7 @@ final class WalletDetailList: NSObject, UITableViewDelegate {
             } else if model.currency.map({ !account.currencies.contains($0) }) ?? true {
                 model.currency = account.currency
             }
+            onCurrencyChange()
             reload()
         }
         applySnapshot(reconfigure: true)
@@ -368,6 +371,7 @@ final class WalletDetailList: NSObject, UITableViewDelegate {
     func setCurrency(_ currency: CurrencyCode) {
         guard model.currency != currency else { return }
         model.currency = currency
+        onCurrencyChange()
         reload()
     }
 
@@ -475,7 +479,7 @@ final class WalletDetailList: NSObject, UITableViewDelegate {
 
     private var cardLabel: String? {
         guard let account else { return nil }
-        let balance = store.balances[account.id]?.cardText ?? "余额未知"
+        let balance = store.balances[account.id]?.item(model.currency ?? account.currency)?.cardText ?? "余额未知"
         return "\(account.spokenTitle)，\(balance)"
     }
 

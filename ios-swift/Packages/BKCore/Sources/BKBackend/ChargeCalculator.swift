@@ -2,9 +2,10 @@ import Foundation
 import BKModel
 import BKDatabase
 
-/// 账户不持有的币种的交易：银行大概率按账户主币种结汇扣款。
+/// 换成账户另一个币种扣款（入账）的交易扣了多少：账户没有这个币种时银行按主币种结汇；
+/// 多币种账户这个币种不够时整笔换成主币种（ADR 0018）。统计换算成「我的」主要币种时也用它。
 ///
-/// 用户填写了实际扣款就用它；否则按汇率估算。汇率取交易当天的；那天没有就取记录当天（App 处理通知那天）的；
+/// 通知写明或用户填写了实际金额（正好是要的币种）就用它；否则按汇率估算。汇率取交易当天的；那天没有就取记录当天（App 处理通知那天）的；
 /// 都没有就取日期最近的一天（一样近取更早的）。汇率按天保存在 `RateDAO`，每天一份完整的汇率表。
 /// 只在一次数据库读取里使用：缓存读过的日期和汇率表。
 final class ChargeCalculator {
@@ -18,11 +19,12 @@ final class ChargeCalculator {
         self.calendar = calendar
     }
 
-    func charge(_ record: LedgerRecord, primary: CurrencyCode) throws -> RecordCharge {
-        if let settlement = record.settlement, settlement.currency == primary {
-            return RecordCharge(currency: primary, amountMinor: settlement.minorUnits, isActual: true, rateDay: nil)
+    /// 这笔折合多少 `target`
+    func charge(_ record: LedgerRecord, to target: CurrencyCode) throws -> RecordCharge {
+        if let actual = record.settlementMinor, record.chargeCurrency == target {
+            return RecordCharge(currency: target, amountMinor: actual, isActual: true, rateDay: nil)
         }
-        return try convert(record.amountMinor, record.currency, day: try rateDay(for: record), primary: primary)
+        return try convert(record.amountMinor, record.currency, day: try rateDay(for: record), primary: target)
     }
 
     /// 还没记下的一笔（手动记一笔时提示）：用 `date` 当天的汇率，那天没有就用日期最近的一天
