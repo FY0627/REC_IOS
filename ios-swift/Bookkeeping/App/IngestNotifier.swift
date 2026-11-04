@@ -9,9 +9,11 @@ import BKModel
 /// 在「我的 › 通知 › 记账结果」里选择全部通知、只通知失败或关闭；第一次打开时请求通知权限。
 /// 同一笔交易的另一来源（短信 + 邮件）合并、重复输入、验证码和营销短信不发通知。
 ///
-/// 选「全部」时，还没分类、或者自动归类的流水带几个大类按钮：点了不打开 App，在后台保存（`handle`），锁屏时也能写
-/// （账本的保护等级是 `completeUntilFirstUserAuthentication`，和自动化入账一样）。有小类的大类再发一条通知选小类。
-/// 想要的分类不在候选里时，点「更多分类」或点通知本身，打开 App 里这一笔的选分类面板（`CategorizeRequest`）。
+/// 选「全部」时，还没分类、或者自动归类的流水可以长按选分类（ADR 0020）：通知类别固定是 `categoryID`，
+/// 通知扩展（`NotificationContent`）按 userInfo 里的 `NotificationPicker` 换按钮——先是大类，翻页，点大类就地换成小类——
+/// 点到一个分类把「pick.分类」交回这里，不打开 App，在后台保存（`handle`），锁屏时也能写
+/// （账本的保护等级是 `completeUntilFirstUserAuthentication`，和自动化入账一样）。
+/// 点「打开 App」或点通知本身，打开 App 里这一笔的选分类面板（`CategorizeRequest`）。
 enum IngestNotifier {
     enum Mode: String, CaseIterable, Identifiable {
         case all
@@ -56,11 +58,10 @@ enum IngestNotifier {
             content.threadIdentifier = "ingest"
             // 银行短信本身已经响过，这条通知不再出声
             content.sound = nil
-            if let recordID = item.recordID, !suggestions.topCategories.isEmpty {
-                let category = notificationCategory(suggestions.topCategories)
-                await register(category)
-                content.categoryIdentifier = category.identifier
-                content.userInfo = [recordIDKey: recordID]
+            if let recordID = item.recordID, !suggestions.groups.isEmpty {
+                await registerCategory()
+                content.categoryIdentifier = categoryID
+                content.userInfo = [recordIDKey: recordID, NotificationPicker.userInfoKey: suggestions.picker.json]
                 // 系统不让按钮露在收起的通知上，只能写一句告诉用户
                 content.body += suggestions.autoCategory == nil ? "，长按选分类" : "，长按可改"
             }
@@ -72,8 +73,8 @@ enum IngestNotifier {
     // MARK: 通知上选分类
 
     private static let recordIDKey = "recordID"
-    private static let pickPrefix = "pick."
-    private static let moreAction = "more"
+    /// 通知扩展认的类别（`Config/NotificationContent-Info.plist` 的 `UNNotificationExtensionCategory`）
+    static let categoryID = "ingest.pick"
 
     /// 只有选「全部」时才有成功的通知，才带按钮
     private static func categorySuggestions(for item: IngestItem, backend: LedgerBackend) async -> CategorySuggestions {
@@ -81,76 +82,41 @@ enum IngestNotifier {
         return (try? await backend.categorySuggestions(recordID: recordID)) ?? CategorySuggestions()
     }
 
-    /// 按钮写在通知类别上。候选不设 `.foreground` 就不打开 App，不设 `.authenticationRequired` 就不用解锁；「更多分类」要打开 App。
-    /// 同一组候选共用一个类别；分类改了名称或图标要换一个，系统不会更新已经注册的按钮
-    private static func notificationCategory(_ categories: [LedgerCategory]) -> UNNotificationCategory {
-        let picks = categories.map { category in
-            UNNotificationAction(
-                identifier: pickPrefix + category.id, title: category.name, options: [],
-                icon: UNNotificationActionIcon(systemImageName: category.symbol)
-            )
-        }
-        let more = UNNotificationAction(
-            identifier: moreAction, title: "更多分类", options: [.foreground],
-            icon: UNNotificationActionIcon(systemImageName: "ellipsis.circle")
-        )
-        let identifier = "ingest|" + categories.map { "\($0.id)=\($0.name)=\($0.symbol)" }.joined(separator: "|")
-        return UNNotificationCategory(identifier: identifier, actions: picks + [more], intentIdentifiers: [], options: [])
-    }
-
-    /// 候选每笔不同，所以发通知前才注册这一组，不在启动时注册（ADR 0017）。
-    /// 注册是替换全部，所以留下还在通知中心的通知用到的类别。注册没有完成回调，读回来看到了才发；
-    /// 一直看不到时照发，这条通知只是没有按钮，这笔还在待分类
-    private static func register(_ category: UNNotificationCategory) async {
+    /// 固定的一个类别，按钮由通知扩展按每条通知换（ADR 0020）。这里只放一个「打开 App」，扩展没起来时还能打开面板。
+    /// 注册没有完成回调：读回来看到了才发，一直看不到时照发，这条通知只是没有按钮，这笔还在待分类
+    static func registerCategory() async {
         let center = UNUserNotificationCenter.current()
-        let delivered = await center.deliveredNotifications().map(\.request.content.categoryIdentifier)
-        let kept = await center.notificationCategories().filter { delivered.contains($0.identifier) }
-        center.setNotificationCategories(kept.union([category]))
+        let app = UNNotificationAction(
+            identifier: NotificationPicker.appIdentifier, title: NotificationPicker.Button.app.title, options: [.foreground],
+            icon: UNNotificationActionIcon(systemImageName: NotificationPicker.Button.app.symbol)
+        )
+        let category = UNNotificationCategory(identifier: categoryID, actions: [app], intentIdentifiers: [], options: [])
         for _ in 0..<5 {
-            let registered = await center.notificationCategories()
-            if registered.contains(where: { $0.identifier == category.identifier }) { return }
+            if await center.notificationCategories().contains(where: { $0.identifier == categoryID }) { return }
+            center.setNotificationCategories([category])
             try? await Task.sleep(for: .milliseconds(50))
-            // 另一笔同时注册时可能盖掉了这一组，补上
-            center.setNotificationCategories(registered.union([category]))
         }
     }
 
-    /// 点了通知上的分类按钮：系统在后台拉起 App 调到这里，写完才返回。
+    /// 通知扩展交回来的点击：系统在后台拉起 App 调到这里，写完才返回。
     /// 写不进去（开机后还没解锁过、流水或分类已经删了）时这笔留在原处，下次打开 App 再选。
-    /// 点「更多分类」或通知本身：系统打开 App，这里只记下要打开哪一笔
+    /// 点「打开 App」或通知本身：系统打开 App，这里只记下要打开哪一笔
     static func handle(_ response: UNNotificationResponse) async {
         guard let recordID = response.notification.request.content.userInfo[recordIDKey] as? String else { return }
-        if response.actionIdentifier == moreAction || response.actionIdentifier == UNNotificationDefaultActionIdentifier {
+        if response.actionIdentifier == NotificationPicker.appIdentifier || response.actionIdentifier == UNNotificationDefaultActionIdentifier {
             await MainActor.run { CategorizeRequest.shared.recordID = recordID }
             return
         }
-        guard response.actionIdentifier.hasPrefix(pickPrefix) else { return }
-        let categoryID = String(response.actionIdentifier.dropFirst(pickPrefix.count))
+        guard response.actionIdentifier.hasPrefix(NotificationPicker.pickPrefix) else { return }
+        let categoryID = String(response.actionIdentifier.dropFirst(NotificationPicker.pickPrefix.count))
         do {
             // App 可能是被这个按钮拉起来的：打开账本（含迁移）放在后台线程
             let backend = try await Task.detached(priority: .userInitiated) { try AppServices.shared.backend() }.value
             try await backend.setCategory(recordID: recordID, categoryID: categoryID)
             await MainActor.run { NotificationCenter.default.post(name: .ledgerDidChange, object: nil) }
-            await postSubcategories(recordID: recordID, backend: backend)
         } catch {
             AppServices.logger.error("pick category failed: \(String(describing: type(of: error)), privacy: .public)")
         }
-    }
-
-    /// 选了有小类的大类：这笔先记在大类上，再发一条通知选小类，不选就留在大类上。
-    /// 按钮点完不能在原来的通知上换一组，只能再发一条
-    private static func postSubcategories(recordID: String, backend: LedgerBackend) async {
-        guard mode == .all, let candidates = try? await backend.subcategorySuggestions(recordID: recordID), !candidates.isEmpty,
-              let row = try? await backend.recordDetail(id: recordID).row else { return }
-        let category = notificationCategory(candidates)
-        await register(category)
-        let content = UNMutableNotificationContent()
-        content.body = "\(Fmt.money(row.record.amountMinor, row.record.currency))，已归到「\(row.categoryText)」，长按选小类"
-        content.threadIdentifier = "ingest"
-        content.sound = nil
-        content.categoryIdentifier = category.identifier
-        content.userInfo = [recordIDKey: recordID]
-        try? await UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: "ingest-sub-\(recordID)", content: content, trigger: nil))
     }
 
     /// 尾号 1234 卡，消费，¥128.00，记账成功

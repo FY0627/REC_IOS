@@ -521,14 +521,6 @@ public final class LedgerBackend: Sendable {
         }
     }
 
-    /// 这一笔选了大类之后的小类候选（记账结果通知的第二步）
-    public func subcategorySuggestions(recordID: String) async throws -> [LedgerCategory] {
-        try await database.read { db in
-            guard let record = try RecordDAO.find(db, id: recordID) else { throw BackendError.notFound }
-            return try CategoryLearner(db: db).subcategories(for: record, tree: CategoryTree(try CategoryDAO.all(db)))
-        }
-    }
-
     /// 分类建议体检：已经选好分类的流水重新推荐一遍，看建议准不准（`CategoryCheckupReplay`）。只读，不改账本
     public func categoryCheckup() async throws -> CategoryCheckup {
         let now = clock()

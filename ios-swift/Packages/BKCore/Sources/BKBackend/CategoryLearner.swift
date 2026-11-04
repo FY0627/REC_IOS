@@ -10,8 +10,6 @@ struct CategoryLearner {
     static let autoStreak = 3
     /// 待分类面板的候选最多几个
     static let suggestionLimit = 4
-    /// 通知上的候选最多几个，后面还有一个「更多分类」
-    static let notificationLimit = 3
     /// 这些性质的分类是通知写明的，或者跟着原交易，不是用户的选择
     static let ruleKinds: Set<TransactionKind> = [.fee, .interestCharge, .salary, .interestIncome, .refund, .reversal]
 
@@ -45,40 +43,34 @@ struct CategoryLearner {
     }
 
     /// 这笔的候选：这个商户选过的分类（最近选的在前），不够用常用分类补齐，再不够按分类的顺序。
-    /// 不用选的（转帐、已经有分类的）没有候选；自动归的可以改，候选里去掉现在这个分类，大类去掉它所在的大类
+    /// 不用选的（转帐、已经有分类的）没有候选；自动归的可以改，面板的候选里去掉现在这个分类。
+    /// 通知上的大类（`groups`，ADR 0020）用同一个顺序：全部能选的大类都在，选过、常用的在前；每个大类的小类也是选过、常用的在前，其余按分类顺序
     func suggestions(for record: LedgerRecord, tree: CategoryTree) throws -> CategorySuggestions {
         let type = CategoryType(record.entryType)
         guard record.status == .posted, type != .transfer, record.categoryID == nil || record.categoryAuto else { return CategorySuggestions() }
         let learned = try learnedCategories(for: record)
         let ordered = learned + (try RecordDAO.frequentCategories(db, type: type)) + tree.nodes(type).map(\.id)
-        let currentTop = tree.topLevel(record.categoryID)
         var categories: [LedgerCategory] = []
-        var topCategories: [LedgerCategory] = []
+        var parents: [LedgerCategory] = []
         for id in ordered {
             guard let category = usable(id, type: type, tree: tree), !category.locked else { continue }
             if categories.count < Self.suggestionLimit, id != record.categoryID, !categories.contains(category) {
                 categories.append(category)
             }
-            if topCategories.count < Self.notificationLimit, let top = tree.topLevel(id), top != currentTop, !top.locked, !topCategories.contains(top) {
-                topCategories.append(top)
-            }
+            if let top = tree.topLevel(id), !top.locked, !parents.contains(top) { parents.append(top) }
+        }
+        // 小类：在上面的顺序里出现得早的在前，没出现的按分类顺序
+        let rank = Dictionary(ordered.enumerated().map { ($1, $0) }, uniquingKeysWith: min)
+        let nodes = tree.nodes(type)
+        let groups = parents.map { parent in
+            let children = (nodes.first { $0.id == parent.id }?.children ?? []).enumerated()
+                .sorted { (rank[$0.element.id] ?? Int.max, $0.offset) < (rank[$1.element.id] ?? Int.max, $1.offset) }
+                .map(\.element)
+            return CategoryGroup(parent: parent, children: children)
         }
         let first = categories.first?.id
         let preferred = record.categoryID == nil && !record.needsTransferConfirmation && learned.contains { $0 == first } ? first : nil
-        return CategorySuggestions(categories: categories, topCategories: topCategories, preferredID: preferred, autoCategory: tree.category(record.categoryID))
-    }
-
-    /// 选了大类之后的小类候选：排法和 `suggestions` 一样。现在的分类不是有小类的大类时没有候选
-    func subcategories(for record: LedgerRecord, tree: CategoryTree) throws -> [LedgerCategory] {
-        let type = CategoryType(record.entryType)
-        guard let children = tree.nodes(type).first(where: { $0.id == record.categoryID })?.children else { return [] }
-        let ordered = try learnedCategories(for: record) + (try RecordDAO.frequentCategories(db, type: type)) + children.map(\.id)
-        var result: [LedgerCategory] = []
-        for id in ordered where result.count < Self.notificationLimit {
-            guard let child = children.first(where: { $0.id == id }), !child.locked, !result.contains(child) else { continue }
-            result.append(child)
-        }
-        return result
+        return CategorySuggestions(categories: categories, groups: groups, preferredID: preferred, autoCategory: tree.category(record.categoryID))
     }
 
     /// 这个商户选过的分类，最近选的在前

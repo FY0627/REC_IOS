@@ -9,17 +9,50 @@
 /* Begin PBXBuildFile section */
 		B0C0DE000000000000000009 /* BKBackend in Frameworks */ = {isa = PBXBuildFile; productRef = B0C0DE000000000000000007 /* BKBackend */; };
 		B0C0DE00000000000000000A /* BKModel in Frameworks */ = {isa = PBXBuildFile; productRef = B0C0DE000000000000000008 /* BKModel */; };
+		B0C0DE000000000000000021 /* NotificationContent.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = B0C0DE000000000000000018 /* NotificationContent.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		B0C0DE000000000000000025 /* BKModel in Frameworks */ = {isa = PBXBuildFile; productRef = B0C0DE000000000000000026 /* BKModel */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		B0C0DE000000000000000023 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = B0C0DE000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = B0C0DE000000000000000019;
+			remoteInfo = NotificationContent;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		B0C0DE000000000000000020 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				B0C0DE000000000000000021 /* NotificationContent.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		B0C0DE000000000000000005 /* Bookkeeping.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Bookkeeping.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		B0C0DE000000000000000016 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		B0C0DE000000000000000018 /* NotificationContent.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = NotificationContent.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		B0C0DE000000000000000024 /* NotificationContent-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "NotificationContent-Info.plist"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		B0C0DE000000000000000004 /* Bookkeeping */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = Bookkeeping;
+			sourceTree = "<group>";
+		};
+		B0C0DE000000000000000017 /* NotificationContent */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = NotificationContent;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -34,6 +67,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		B0C0DE00000000000000001B /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B0C0DE000000000000000025 /* BKModel in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -41,6 +82,7 @@
 			isa = PBXGroup;
 			children = (
 				B0C0DE000000000000000004 /* Bookkeeping */,
+				B0C0DE000000000000000017 /* NotificationContent */,
 				B0C0DE000000000000000015 /* Config */,
 				B0C0DE000000000000000003 /* Products */,
 			);
@@ -50,6 +92,7 @@
 			isa = PBXGroup;
 			children = (
 				B0C0DE000000000000000005 /* Bookkeeping.app */,
+				B0C0DE000000000000000018 /* NotificationContent.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -58,6 +101,7 @@
 			isa = PBXGroup;
 			children = (
 				B0C0DE000000000000000016 /* Info.plist */,
+				B0C0DE000000000000000024 /* NotificationContent-Info.plist */,
 			);
 			path = Config;
 			sourceTree = "<group>";
@@ -72,10 +116,12 @@
 				B0C0DE00000000000000000C /* Sources */,
 				B0C0DE00000000000000000D /* Frameworks */,
 				B0C0DE00000000000000000E /* Resources */,
+				B0C0DE000000000000000020 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				B0C0DE000000000000000022 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				B0C0DE000000000000000004 /* Bookkeeping */,
@@ -89,6 +135,29 @@
 			productReference = B0C0DE000000000000000005 /* Bookkeeping.app */;
 			productType = "com.apple.product-type.application";
 		};
+		B0C0DE000000000000000019 /* NotificationContent */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B0C0DE00000000000000001D /* Build configuration list for PBXNativeTarget "NotificationContent" */;
+			buildPhases = (
+				B0C0DE00000000000000001A /* Sources */,
+				B0C0DE00000000000000001B /* Frameworks */,
+				B0C0DE00000000000000001C /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				B0C0DE000000000000000017 /* NotificationContent */,
+			);
+			name = NotificationContent;
+			packageProductDependencies = (
+				B0C0DE000000000000000026 /* BKModel */,
+			);
+			productName = NotificationContent;
+			productReference = B0C0DE000000000000000018 /* NotificationContent.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -100,6 +169,9 @@
 				LastUpgradeCheck = 2600;
 				TargetAttributes = {
 					B0C0DE00000000000000000B = {
+						CreatedOnToolsVersion = 26.0;
+					};
+					B0C0DE000000000000000019 = {
 						CreatedOnToolsVersion = 26.0;
 					};
 				};
@@ -123,12 +195,20 @@
 			projectRoot = "";
 			targets = (
 				B0C0DE00000000000000000B /* Bookkeeping */,
+				B0C0DE000000000000000019 /* NotificationContent */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		B0C0DE00000000000000000E /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B0C0DE00000000000000001C /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -145,7 +225,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		B0C0DE00000000000000001A /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		B0C0DE000000000000000022 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = B0C0DE000000000000000019 /* NotificationContent */;
+			targetProxy = B0C0DE000000000000000023 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		B0C0DE000000000000000013 /* Debug */ = {
@@ -265,6 +360,58 @@
 			};
 			name = Release;
 		};
+		B0C0DE00000000000000001E /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "Config/NotificationContent-Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.bookkeepingApp.swift.NotificationContent;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		B0C0DE00000000000000001F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "Config/NotificationContent-Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.bookkeepingApp.swift.NotificationContent;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -273,6 +420,15 @@
 			buildConfigurations = (
 				B0C0DE000000000000000010 /* Debug */,
 				B0C0DE000000000000000011 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		B0C0DE00000000000000001D /* Build configuration list for PBXNativeTarget "NotificationContent" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B0C0DE00000000000000001E /* Debug */,
+				B0C0DE00000000000000001F /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
@@ -302,6 +458,11 @@
 			productName = BKBackend;
 		};
 		B0C0DE000000000000000008 /* BKModel */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B0C0DE000000000000000006 /* XCLocalSwiftPackageReference "Packages/BKCore" */;
+			productName = BKModel;
+		};
+		B0C0DE000000000000000026 /* BKModel */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = B0C0DE000000000000000006 /* XCLocalSwiftPackageReference "Packages/BKCore" */;
 			productName = BKModel;

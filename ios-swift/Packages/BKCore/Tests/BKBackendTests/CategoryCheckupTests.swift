@@ -61,11 +61,11 @@ final class CategoryCheckupTests: XCTestCase {
         XCTAssertEqual(checkup.all.count, 4)
         XCTAssertEqual(checkup.automatic, 4)
 
-        // 第 1 笔没有可参考的；第 2、3 笔这个商户选过午餐，排第一
-        XCTAssertEqual(checkup.withMerchant, CategoryCheckup.Score(count: 3, first: 2, panel: 2, notification: 3, taps: 12))
-        // 没有商户：常用分类是午餐，饮料零食不在建议里；大类「饮食」在通知上，第二条通知的小类候选里没有它，点开面板选
-        XCTAssertEqual(checkup.withoutMerchant, CategoryCheckup.Score(count: 1, first: 0, panel: 0, notification: 1, taps: 5))
-        XCTAssertEqual(checkup.all.taps, 17)
+        // 第 1 笔没有可参考的：长按、点「饮食」、点「午餐」，3 下；第 2、3 笔这个商户选过午餐，排在第一个：长按、点「午餐」，2 下
+        XCTAssertEqual(checkup.withMerchant, CategoryCheckup.Score(count: 3, first: 2, panel: 2, notification: 3, taps: 7))
+        // 没有商户：常用的午餐排第一，饮料零食不在建议里；「饮食」在第一页，点开后饮料零食在小类的第二页：长按、饮食、更多、饮料零食，4 下
+        XCTAssertEqual(checkup.withoutMerchant, CategoryCheckup.Score(count: 1, first: 0, panel: 0, notification: 1, taps: 4))
+        XCTAssertEqual(checkup.all.taps, 11)
         // 连续 3 次：打分的 3 笔之前最多连续 2 次，一笔也不会自动归；连续 2 次：第 3 笔会自动归，归对了
         XCTAssertEqual(checkup.autoFiling, [
             CategoryCheckup.AutoFiling(streak: 3, filed: 0, wrong: 0),

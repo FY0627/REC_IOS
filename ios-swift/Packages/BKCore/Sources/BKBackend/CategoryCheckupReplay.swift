@@ -8,7 +8,7 @@ import BKDatabase
 ///
 /// 只给用户自己选的分类打分：自动归的、通知写明的（手续费、扣息、工资、利息）、退款和现在隐藏的分类不算，
 /// 但这些流水照样放进临时数据库，「常用分类」和用户的账本里一样。
-/// 看不到用户当时一步步怎么点的，只按最后的分类学；在通知上先选大类、再选小类时，第二步的候选是估算的
+/// 看不到用户当时一步步怎么点的，只按最后的分类学
 enum CategoryCheckupReplay {
     /// 看连续选几次就自动归类会怎样：现在是 3 次，另外算 2 次
     static let streaks = [CategoryLearner.autoStreak, 2]
@@ -67,13 +67,13 @@ enum CategoryCheckupReplay {
         if !blank.needsTransferConfirmation {
             for streak in streaks { auto[streak] = try learner.autoCategory(for: blank, tree: tree, streak: streak) }
         }
-        let tapCount = auto[CategoryLearner.autoStreak] == chosen
-            ? 0 : try taps(chosen, blank: blank, suggestions: suggestions, learner: learner, tree: tree)
+        let picker = suggestions.picker
+        let tapCount = auto[CategoryLearner.autoStreak] == chosen ? 0 : taps(chosen, picker: picker)
 
         var score = CategoryCheckup.Score(count: 1, taps: tapCount)
         if suggestions.categories.first == chosen { score.first = 1 }
         if suggestions.categories.contains(chosen) { score.panel = 1 }
-        if let top = tree.topLevel(chosen.id), suggestions.topCategories.contains(top) { score.notification = 1 }
+        if picker.onFirstPage(chosen.id) { score.notification = 1 }
 
         add(score, to: &result.all)
         if learner.merchant(of: blank) != nil {
@@ -97,21 +97,8 @@ enum CategoryCheckupReplay {
         total.taps += score.taps
     }
 
-    /// 在记账结果通知上把这笔选成 `chosen` 要点几下（估算）：长按通知、点一个按钮各算一下。
-    /// - 大类按钮里有它的大类：点大类 2 下；它是小类时再长按第二条通知点小类，共 4 下；第二条的候选里没有，点开第二条在面板里选，共 5 下；
-    /// - 没有：长按点「更多分类」打开面板 2 下，再在面板里选：预先选好的直接点「确定」1 下，在「建议」里 2 下，
-    ///   在下面的分类格子里大类 2 下、小类 3 下（先点大类展开）
-    static func taps(
-        _ chosen: LedgerCategory, blank: LedgerRecord, suggestions: CategorySuggestions, learner: CategoryLearner, tree: CategoryTree
-    ) throws -> Int {
-        if let top = tree.topLevel(chosen.id), suggestions.topCategories.contains(top) {
-            guard chosen.parentID != nil else { return 2 }
-            var picked = blank
-            picked.categoryID = top.id
-            return try learner.subcategories(for: picked, tree: tree).contains(chosen) ? 4 : 5
-        }
-        if suggestions.preferredID == chosen.id { return 3 }
-        if suggestions.categories.contains(chosen) { return 4 }
-        return chosen.parentID == nil ? 4 : 5
+    /// 在记账结果通知上把这笔选成 `chosen` 要点几下：长按通知算一下，再加上翻页、点大类、点小类（`NotificationPicker.taps`，ADR 0020）
+    static func taps(_ chosen: LedgerCategory, picker: NotificationPicker) -> Int {
+        1 + (picker.taps(to: chosen.id) ?? 0)
     }
 }

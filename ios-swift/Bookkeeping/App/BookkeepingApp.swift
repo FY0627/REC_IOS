@@ -56,6 +56,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         // 系统要求启动完成之前设好：点通知上的分类按钮时 App 可能正是被它拉起来的
         UNUserNotificationCenter.current().delegate = NotificationPresenter.shared
+        Task { await IngestNotifier.registerCategory() }
         return true
     }
 }

@@ -4,7 +4,7 @@ import BKBackend
 
 /// 界面和 App Intent 共用同一个数据库与业务服务。
 ///
-/// App Intent 在 App 自己的进程里运行（单 target，无扩展、无 App Group），
+/// App Intent 在 App 自己的进程里运行（无 App Group；唯一的扩展是通知上选分类的 `NotificationContent`，它不读写账本），
 /// 因此两者拿到的是同一个 `LedgerBackend` 实例、同一个 SQLite 文件。
 final class AppServices: Sendable {
     static let shared = AppServices()

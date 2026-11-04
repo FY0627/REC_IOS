@@ -143,22 +143,41 @@ public struct CategoryTree: Hashable, Sendable {
     }
 }
 
+/// 一个大类和它的小类，常选的在前（记账结果通知上选分类，ADR 0020）
+public struct CategoryGroup: Hashable, Sendable {
+    public var parent: LedgerCategory
+    public var children: [LedgerCategory]
+
+    public init(parent: LedgerCategory, children: [LedgerCategory]) {
+        self.parent = parent
+        self.children = children
+    }
+}
+
 /// 给一笔流水推荐的分类，最可能的排在前面（待分类面板、记账结果通知的按钮）。
 public struct CategorySuggestions: Hashable, Sendable {
     /// 待分类面板的「建议」，可能是小类
     public var categories: [LedgerCategory]
-    /// 通知上的按钮，都是大类：只看小类的名字认不出是哪一类，选完大类再选小类
-    public var topCategories: [LedgerCategory]
+    /// 通知上的大类：全部能选的大类，常选的在前，没用过的按分类顺序在后；小类也是常选的在前（`NotificationPicker`）
+    public var groups: [CategoryGroup]
     /// 打开待分类面板时预先选好的：这个商户选过的分类。看不出商户、没选过、没确认对方的转账都是 nil
     public var preferredID: String?
     /// 这笔已经自动归到的分类（不在 `categories` 里）；nil 表示还没分类
     public var autoCategory: LedgerCategory?
 
-    public init(categories: [LedgerCategory] = [], topCategories: [LedgerCategory] = [], preferredID: String? = nil, autoCategory: LedgerCategory? = nil) {
+    public init(categories: [LedgerCategory] = [], groups: [CategoryGroup] = [], preferredID: String? = nil, autoCategory: LedgerCategory? = nil) {
         self.categories = categories
-        self.topCategories = topCategories
+        self.groups = groups
         self.preferredID = preferredID
         self.autoCategory = autoCategory
+    }
+
+    /// 通知上的选分类：这个商户选过的放在第一个，点了直接记；后面是全部大类
+    public var picker: NotificationPicker {
+        NotificationPicker(
+            first: preferredID.flatMap { id in categories.first { $0.id == id } }.map(NotificationPicker.Option.init),
+            groups: groups.map { NotificationPicker.Group(option: .init($0.parent), children: $0.children.map(NotificationPicker.Option.init)) }
+        )
     }
 }
 
@@ -171,9 +190,9 @@ public struct CategoryCheckup: Hashable, Sendable {
         public var first: Int
         /// 待分类面板的「建议」里有选的分类
         public var panel: Int
-        /// 记账结果通知的大类按钮里有选的分类所在的大类
+        /// 长按记账结果通知，第一页就有选的分类或它所在的大类（`NotificationPicker.onFirstPage`）
         public var notification: Int
-        /// 在通知上选完一共要点几下（估算）
+        /// 在通知上选完一共要点几下（`NotificationPicker.taps` 加上长按）
         public var taps: Int
 
         public init(count: Int = 0, first: Int = 0, panel: Int = 0, notification: Int = 0, taps: Int = 0) {

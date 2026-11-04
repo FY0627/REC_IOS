@@ -239,9 +239,9 @@ final class CategoryLearningTests: XCTestCase {
         XCTAssertNil(row.category)
     }
 
-    // MARK: 先选大类，再选小类
+    // MARK: 通知上选分类（ADR 0020）
 
-    func testNotificationOffersTopLevelCategories() async throws {
+    func testNotificationListsEveryTopLevelWithLearnedFirst() async throws {
         let backend = try await makeBackend()
         let lunch = try await category(backend, "午餐")
         let dinner = try await category(backend, "晚餐")
@@ -251,54 +251,33 @@ final class CategoryLearningTests: XCTestCase {
         let next = try await spend(backend, at: "测试小馆")
         let suggestions = try await backend.categorySuggestions(recordID: try XCTUnwrap(next.recordID))
         XCTAssertEqual(suggestions.categories.first, lunch, "面板的建议可以是小类")
-        XCTAssertEqual(suggestions.topCategories.first, food)
-        XCTAssertEqual(suggestions.topCategories.count, CategoryLearner.notificationLimit)
-        XCTAssertTrue(suggestions.topCategories.allSatisfy(\.isTopLevel))
-        XCTAssertEqual(Set(suggestions.topCategories.map(\.id)).count, suggestions.topCategories.count, "两个小类同属一个大类，大类只出现一次")
+        XCTAssertEqual(suggestions.groups.first?.parent, food)
+        XCTAssertEqual(suggestions.groups.first?.children.prefix(2).map(\.id), [lunch.id, dinner.id], "这个商户最近选的小类在前")
+        let all = try await backend.categories()
+        let tops = all.filter { $0.type == .expense && $0.isTopLevel && !$0.hidden && !$0.locked }
+        XCTAssertEqual(Set(suggestions.groups.map(\.parent.id)), Set(tops.map(\.id)), "全部能选的大类都在，手续费、扣息不在")
+        XCTAssertEqual(suggestions.picker.first?.id, lunch.id, "这个商户选过的放在第一个，点了直接记")
     }
 
-    func testAutoCategorizedRecordOffersOtherTopLevelCategories() async throws {
+    func testWithoutHistoryTopLevelsFollowCategoryOrder() async throws {
+        let backend = try await makeBackend()
+        let next = try await spend(backend, at: "测试小馆")
+        let suggestions = try await backend.categorySuggestions(recordID: try XCTUnwrap(next.recordID))
+        let all = try await backend.categories()
+        let order = CategoryTree(all).nodes(.expense).map(\.category).filter { !$0.locked }
+        XCTAssertEqual(suggestions.groups.map(\.parent), order, "刚开始没有记录：按分类页的顺序全部列出")
+        XCTAssertNil(suggestions.picker.first)
+    }
+
+    func testAutoCategorizedRecordHasNoFirstPick() async throws {
         let backend = try await makeBackend()
         let lunch = try await category(backend, "午餐")
-        let food = try await category(backend, "饮食")
         for _ in 0..<3 { try await spendAndPick(backend, at: "测试小馆", lunch.id) }
         let next = try await spend(backend, at: "测试小馆")
         let suggestions = try await backend.categorySuggestions(recordID: try XCTUnwrap(next.recordID))
         XCTAssertEqual(suggestions.autoCategory, lunch)
-        XCTAssertFalse(suggestions.topCategories.isEmpty)
-        XCTAssertFalse(suggestions.topCategories.contains(food), "点所在的大类只会把小类改回大类")
-    }
-
-    func testSubcategoriesPutLearnedFirst() async throws {
-        let backend = try await makeBackend()
-        let dinner = try await category(backend, "晚餐")
-        let food = try await category(backend, "饮食")
-        try await spendAndPick(backend, at: "测试小馆", dinner.id)
-        let next = try await spend(backend, at: "测试小馆")
-        let id = try XCTUnwrap(next.recordID)
-        let beforePick = try await backend.subcategorySuggestions(recordID: id)
-        XCTAssertTrue(beforePick.isEmpty, "还没选大类")
-        try await backend.setCategory(recordID: id, categoryID: food.id)
-        let candidates = try await backend.subcategorySuggestions(recordID: id)
-        XCTAssertEqual(candidates.first, dinner)
-        XCTAssertEqual(candidates.count, CategoryLearner.notificationLimit)
-        XCTAssertTrue(candidates.allSatisfy { $0.parentID == food.id })
-    }
-
-    func testNoSubcategoriesWhenThereIsNothingToRefine() async throws {
-        let backend = try await makeBackend()
-        let lunch = try await category(backend, "午餐")
-        let daily = try await category(backend, "日用品")
-        let first = try await spend(backend, at: "测试超市")
-        let firstID = try XCTUnwrap(first.recordID)
-        try await backend.setCategory(recordID: firstID, categoryID: daily.id)
-        let noChildren = try await backend.subcategorySuggestions(recordID: firstID)
-        XCTAssertTrue(noChildren.isEmpty, "这个大类没有小类")
-        let second = try await spend(backend, at: "测试小馆")
-        let secondID = try XCTUnwrap(second.recordID)
-        try await backend.setCategory(recordID: secondID, categoryID: lunch.id)
-        let alreadySmall = try await backend.subcategorySuggestions(recordID: secondID)
-        XCTAssertTrue(alreadySmall.isEmpty, "已经是小类")
+        XCTAssertNil(suggestions.picker.first, "已经归到午餐，按钮是改成别的")
+        XCTAssertFalse(suggestions.groups.isEmpty)
     }
 
     func testTwoStepPickCountsOnce() async throws {
@@ -356,7 +335,7 @@ final class CategoryLearningTests: XCTestCase {
         XCTAssertNil(row.record.categoryID, "改掉之后重新学")
         let suggestions = try await backend.categorySuggestions(recordID: row.id)
         XCTAssertEqual(suggestions.categories.first, book)
-        XCTAssertEqual(suggestions.topCategories.first, study)
+        XCTAssertEqual(suggestions.groups.first?.parent, study)
     }
 
     // MARK: 现有规则不变

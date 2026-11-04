@@ -9,7 +9,8 @@ App 不联网；净资产换算用的汇率由快捷指令下载后导入（[ADR
 ```
 ios-swift/
 ├── Bookkeeping.xcodeproj/         手写工程（objectVersion 77），含共享 scheme「Bookkeeping」
-├── Config/Info.plist
+├── Config/                        Info.plist（App）、NotificationContent-Info.plist（通知扩展）
+├── NotificationContent/           通知内容扩展：长按记账结果通知时换按钮选分类（ADR 0020，文件夹同步，只链接 BKModel）
 ├── Bookkeeping/                   App target（文件夹同步，新增 .swift 文件无需改工程）
 │   ├── App/                       入口、共享服务 AppServices、界面状态 LedgerStore
 │   ├── Intents/                   App Intent「记录银行动账通知」、AccountEntity、AppShortcuts
@@ -34,7 +35,7 @@ ios-swift/
 1. 打印并校验工具链（Xcode、Swift、iOS SDK、部署目标 ≤ iOS 27.0.1）；
 2. `swift test`（macOS 主机）+ `xcodebuild test`（iOS 模拟器）运行 BKCore 测试。模拟器按目标设备选择：优先 iPhone 16 Pro，其次其他 iPhone Pro，不使用双屏机型（[`ci/pick-simulator.sh`](ci/pick-simulator.sh)）；
 3. 构建 Release / iphoneos / arm64、不签名的 `Bookkeeping.app`；
-4. 校验可执行文件、Mach-O 平台、Info.plist、依赖、资源与 App Intents 元数据，打包为 `Payload/Bookkeeping.app` 的 IPA；
+4. 校验可执行文件、Mach-O 平台、Info.plist、依赖、资源、App Intents 元数据和通知扩展 `PlugIns/NotificationContent.appex`，打包为 `Payload/Bookkeeping.app` 的 IPA；
 5. 上传 IPA（含 SHA-256 与 build-info）和诊断产物；
 6. 检查 App 图标和两个备用图标编进了 App，用 Xcode 自带的 `ictool` 按默认、深色、着色渲染预览（[`ci/icon-preview.sh`](ci/icon-preview.sh)，
    预览图在诊断产物里，32×32 缩略图在运行页面的注释里），不影响打包。

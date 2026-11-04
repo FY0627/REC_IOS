@@ -47,7 +47,7 @@ struct CategoryCheckupView: View {
         Section("\(title)（\(score.count) 笔）") {
             LabeledContent("第 1 个建议就对", value: ratio(score.first, of: score.count))
             LabeledContent("面板的建议里有", value: ratio(score.panel, of: score.count))
-            LabeledContent("通知的大类按钮里有", value: ratio(score.notification, of: score.count))
+            LabeledContent("通知第一页就有", value: ratio(score.notification, of: score.count))
             LabeledContent("在通知上平均点几下", value: score.averageTaps.map { String(format: "%.1f 下", $0) } ?? "—")
         }
     }

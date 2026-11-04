@@ -85,6 +85,19 @@ for action_id, action in (data.get("actions") or {}).items():
     print(f"action: {action_id} modes={action.get('supportedModes') or action.get('openAppWhenRun')} params={[p.get('name') for p in action.get('parameters', [])]}")
 PY
 
+# 通知扩展（ADR 0020）：长按记账结果通知选分类
+APPEX="$APP/PlugIns/NotificationContent.appex"
+[[ -d "$APPEX" ]] || fail "缺少通知扩展 PlugIns/NotificationContent.appex"
+read_appex() { /usr/libexec/PlistBuddy -c "Print :$1" "$APPEX/Info.plist" 2>/dev/null || true; }
+APPEX_ID=$(read_appex CFBundleIdentifier)
+[[ "$APPEX_ID" == "$EXPECTED_BUNDLE_ID.NotificationContent" ]] || fail "通知扩展的 Bundle ID 是 ${APPEX_ID}，期望 $EXPECTED_BUNDLE_ID.NotificationContent"
+[[ "$(read_appex NSExtension:NSExtensionPointIdentifier)" == "com.apple.usernotifications.content-extension" ]] || fail "通知扩展的类型不对"
+[[ "$(read_appex NSExtension:NSExtensionAttributes:UNNotificationExtensionCategory)" == "ingest.pick" ]] || fail "通知扩展的类别不是 ingest.pick"
+[[ "$(read_appex CFBundleVersion)" == "$BUILD" ]] || fail "通知扩展的构建号 $(read_appex CFBundleVersion) 和 App 的 $BUILD 不一样"
+APPEX_EXEC=$(read_appex CFBundleExecutable)
+[[ "$(lipo -archs "$APPEX/$APPEX_EXEC")" == "arm64" ]] || fail "通知扩展的架构不是 arm64"
+ok "通知扩展 PlugIns/NotificationContent.appex（$APPEX_ID）"
+
 [[ ! -d "$APP/_CodeSignature" ]] && ok "未签名（CI 不使用任何证书，由 iLoader 签名）" || ok "存在 _CodeSignature（将被 iLoader 替换）"
 [[ ! -f "$APP/embedded.mobileprovision" ]] || fail "不应包含描述文件"
 
@@ -105,6 +118,7 @@ unzip -l "$OUT/ipa/$NAME.ipa" > "$OUT/ipa-contents.txt"
 grep -q " Payload/Bookkeeping.app/$EXECUTABLE$" "$OUT/ipa-contents.txt" || fail "IPA 结构不对：缺少 Payload/Bookkeeping.app/$EXECUTABLE"
 grep -q " Payload/Bookkeeping.app/Info.plist$" "$OUT/ipa-contents.txt" || fail "IPA 结构不对：缺少 Info.plist"
 grep -q " Payload/Bookkeeping.app/Metadata.appintents/" "$OUT/ipa-contents.txt" || fail "IPA 里缺少 App Intents 元数据"
+grep -q " Payload/Bookkeeping.app/PlugIns/NotificationContent.appex/$APPEX_EXEC$" "$OUT/ipa-contents.txt" || fail "IPA 里缺少通知扩展"
 ok "IPA 结构 Payload/Bookkeeping.app"
 
 SHA256=$(shasum -a 256 "$OUT/ipa/$NAME.ipa" | awk '{print $1}')

@@ -1,6 +1,7 @@
 # 0017 iOS Swift 版：在本机学习分类，记账结果通知上选分类
 
-- 状态：已采纳（`ios-swift/`）；取代 [ADR 0014](0014-ios-swift-entry-types-and-categories.md) 修订里的「不猜分类」
+- 状态：已采纳（`ios-swift/`）；取代 [ADR 0014](0014-ios-swift-entry-types-and-categories.md) 修订里的「不猜分类」。
+  记账结果通知上的按钮和「通知类别在发通知前注册」已被 [ADR 0020](0020-ios-swift-notification-category-picker.md) 取代（通知扩展，大类、小类在一处选完）
 - 日期：2026-11-02
 
 ## 背景
