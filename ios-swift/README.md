@@ -33,7 +33,9 @@ ios-swift/
 工作流 [`.github/workflows/ios-swift-build.yml`](../.github/workflows/ios-swift-build.yml) 在 `xcode-27` runner 上：
 
 1. 打印并校验工具链（Xcode、Swift、iOS SDK、部署目标 ≤ iOS 27.0.1）；
-2. `swift test`（macOS 主机）+ `xcodebuild test`（iOS 模拟器）运行 BKCore 测试。模拟器按目标设备选择：优先 iPhone 16 Pro，其次其他 iPhone Pro，不使用双屏机型（[`ci/pick-simulator.sh`](ci/pick-simulator.sh)）；
+2. `swift test`（macOS 主机）运行 BKCore 测试；这次推送没改 BKCore、测试脚本和工作流（只改 App 界面）时跳过（[`ci/changes.sh`](ci/changes.sh)）。
+   iOS 模拟器上那一遍（`xcodebuild test`）最慢，只有手动触发时勾选「simulator_tests」才跑。模拟器按目标设备选择：优先 iPhone 16 Pro，其次其他 iPhone Pro，不使用双屏机型（[`ci/pick-simulator.sh`](ci/pick-simulator.sh)）；
+   App 图标没改时不渲染图标预览（第 6 步）。不加缓存：没有第三方依赖可缓存，Xcode 和 SwiftPM 按文件修改时间判断要不要重编，每次检出的文件都是新的，缓存了也会全部重编；
 3. 构建 Release / iphoneos / arm64、不签名的 `Bookkeeping.app`；
 4. 校验可执行文件、Mach-O 平台、Info.plist、依赖、资源、App Intents 元数据和通知扩展 `PlugIns/NotificationContent.appex`，打包为 `Payload/Bookkeeping.app` 的 IPA；
 5. 上传 IPA（含 SHA-256 与 build-info）和诊断产物；

@@ -8,6 +8,11 @@ on:
         description: "可选：指定 Xcode 路径（例如 /Applications/Xcode_27.0.app）；留空使用 runner 默认 Xcode"
         required: false
         default: ""
+      simulator_tests:
+        description: "另外在 iOS 模拟器上跑一遍核心业务测试（慢，平时不用）"
+        type: boolean
+        required: false
+        default: false
   push:
     branches: [ios-swift]
     paths:
@@ -37,11 +42,23 @@ jobs:
       XCODE_APP: ${{ inputs.xcode_app }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          # 要和上一次推送比较，看这次改了什么
+          fetch-depth: 0
+
+      # 只改 App 界面时不跑核心业务测试，图标没改不渲染预览（ci/changes.sh）
+      - name: What changed
+        id: changes
+        run: bash ios-swift/ci/changes.sh "${{ github.event_name == 'push' && github.event.before || '' }}" "$GITHUB_SHA"
 
       - name: Toolchain
         run: bash ios-swift/ci/toolchain.sh "$OUT"
 
-      - name: Core business tests (macOS host + iOS Simulator)
+      # macOS 主机上跑一遍；iOS 模拟器那一遍只有手动触发时勾选才跑
+      - name: Core business tests
+        env:
+          CORE_TESTS: ${{ steps.changes.outputs.core == 'true' && '1' || '0' }}
+          SIMULATOR_TESTS: ${{ inputs.simulator_tests && '1' || '0' }}
         run: bash ios-swift/ci/test.sh "$OUT"
 
       # 这个仓库的运行次数从 1 开始，之前的版本是在旧仓库构建的：加 100，构建号不会变小
@@ -56,7 +73,7 @@ jobs:
           bash ios-swift/ci/package-ipa.sh "$OUT" 2>&1 | tee "$OUT/logs/package-ipa.log"
 
       - name: App icon check and preview
-        if: success()
+        if: success() && steps.changes.outputs.icons == 'true'
         run: bash ios-swift/ci/icon-preview.sh "$OUT"
 
       - name: Report errors as annotations
