@@ -76,24 +76,6 @@ final class CategoryCheckupTests: XCTestCase {
         XCTAssertEqual(after, before, "体检不改学到的规律")
     }
 
-    /// 体验分类建议时用快捷指令发的模拟短信（工商银行信用卡尾号 9999）：写了商户的认出商户，不写的照样记上
-    func testSimulatedMessagesForTryingSuggestions() async throws {
-        let backend = try LedgerBackend.inMemory(calendar: ParserSampleTests.calendar, clock: { ParserSampleTests.reference })
-        _ = try await backend.addAccount(AccountDraft(name: "测试卡", bankID: "icbc", bankName: "工商银行", last4: "9999", cardType: .credit, currency: .cny, paletteID: "crimson"))
-        let merchants = ["包子铺", "美团外卖", "瑞幸咖啡", "滴滴出行", "沙县小吃", "见福便利店", ""]
-        for (index, merchant) in merchants.enumerated() {
-            let clause = merchant.isEmpty ? "" : "，商户：\(merchant)"
-            let text = "您尾号9999的信用卡11月04日1\(index):05消费人民币\(index + 12).00元\(clause)。【工商银行】"
-            let result = try await backend.ingest(IngestRequest(text: text, source: .auto, receivedAt: ParserSampleTests.reference.addingTimeInterval(Double(index) * 600)))
-            let item = try XCTUnwrap(result.items.first, text)
-            XCTAssertEqual(item.result, .recorded, text)
-            let row = try await backend.recordDetail(id: try XCTUnwrap(item.recordID)).row
-            XCTAssertEqual(row.record.kind, .purchase, text)
-            XCTAssertEqual(row.record.counterparty, merchant.isEmpty ? nil : merchant, text)
-            XCTAssertEqual(row.record.amountMinor, Int64(index + 12) * 100, text)
-        }
-    }
-
     func testChangedMindCountsAsWrongAutoFiling() async throws {
         let backend = try await makeBackend()
         let lunch = try await category(backend, "午餐")

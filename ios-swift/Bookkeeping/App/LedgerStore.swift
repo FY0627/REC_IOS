@@ -374,6 +374,29 @@ final class LedgerStore {
         return try await backend.categoryCheckup()
     }
 
+    // MARK: 模拟消费
+
+    /// 模拟一笔消费，和快捷指令收到短信一样发记账结果通知。金额在这个场景的范围里随机
+    func simulateSpend(_ spend: SimulatedSpend) async throws -> IngestResult {
+        guard let backend else { throw BackendError.notFound }
+        let amount = Int64.random(in: Int64(spend.yuan.lowerBound) * 100...Int64(spend.yuan.upperBound) * 100)
+        let result = try await backend.simulateSpend(spend, amountMinor: amount)
+        await refresh()
+        await IngestNotifier.post(result, backend: backend)
+        return result
+    }
+
+    func simulatedRecordCount() async -> Int {
+        (try? await backend?.simulatedRecordCount()) ?? 0
+    }
+
+    func clearSimulation() async throws -> Int {
+        guard let backend else { throw BackendError.notFound }
+        let removed = try await backend.clearSimulation()
+        await refresh()
+        return removed
+    }
+
     // MARK: 导出、导入（ADR 0019）
 
     /// 导出全部数据：一个 zip 写在临时目录，给分享菜单用。上一次导出的先删掉，临时目录系统也会自己清理

@@ -23,7 +23,7 @@ struct ProfileView: View {
 
 /// 「我的」推进去的二级页面
 enum ProfileRoute: Hashable {
-    case primaryCurrency, exchangeRates, categories, autoSetup, automationStatus, categoryCheckup, templates, help, dataExport, dataImport, performance
+    case primaryCurrency, exchangeRates, categories, autoSetup, automationStatus, categoryCheckup, templates, help, dataExport, dataImport, simulation, performance
 }
 
 /// 「我的」的列表和导航栈。顶部一行和首页、资产页一样高、一样的位置；列表滚到它下面时垫一层磨砂背景（和首页一样）。
@@ -151,6 +151,9 @@ private struct ProfileList: View {
                 }
 
                 Section("开发与调试") {
+                    NavigationLink(value: ProfileRoute.simulation) {
+                        Label("模拟消费", systemImage: "cart.badge.plus")
+                    }
                     NavigationLink(value: ProfileRoute.performance) {
                         Label("性能开关与调试指标", systemImage: "speedometer")
                     }
@@ -219,6 +222,7 @@ private struct ProfileList: View {
         case .help: HelpView()
         case .dataExport: DataExportView()
         case .dataImport: DataImportView()
+        case .simulation: SimulationView()
         case .performance: PerformanceSettingsView()
         }
     }
