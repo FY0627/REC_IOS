@@ -280,6 +280,16 @@ public final class LedgerBackend: Sendable {
         try await database.read { try RecordDAO.count($0, filter: filter) }
     }
 
+    /// 把全部流水导出成 CSV（`RecordCSV`）写到 `url`，返回导出了几笔。在数据库队列上生成和写文件，不占主线程
+    public func exportRecords(to url: URL) async throws -> Int {
+        let calendar = calendar
+        return try await database.read { db in
+            let rows = try Self.decorate(try RecordDAO.allRows(db), db: db, calendar: calendar)
+            try Data(RecordCSV.make(rows, calendar: calendar).utf8).write(to: url, options: .atomic)
+            return rows.count
+        }
+    }
+
     static func withCharges(_ rows: [RecordRow], db: SQLiteConnection, calendar: Calendar) throws -> [RecordRow] {
         guard rows.contains(where: \.isConverted) else { return rows }
         let calculator = ChargeCalculator(db: db, calendar: calendar)
@@ -475,6 +485,12 @@ public final class LedgerBackend: Sendable {
             guard let record = try RecordDAO.find(db, id: recordID) else { throw BackendError.notFound }
             return try CategoryLearner(db: db).subcategories(for: record, tree: CategoryTree(try CategoryDAO.all(db)))
         }
+    }
+
+    /// 分类建议体检：已经选好分类的流水重新推荐一遍，看建议准不准（`CategoryCheckupReplay`）。只读，不改账本
+    public func categoryCheckup() async throws -> CategoryCheckup {
+        let now = clock()
+        return try await database.read { db in try CategoryCheckupReplay.run(db, now: now) }
     }
 
     static let learningSeededKey = "category.learning_seeded"

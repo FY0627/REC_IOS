@@ -23,7 +23,7 @@ struct ProfileView: View {
 
 /// 「我的」推进去的二级页面
 enum ProfileRoute: Hashable {
-    case primaryCurrency, exchangeRates, categories, autoSetup, automationStatus, templates, help, performance
+    case primaryCurrency, exchangeRates, categories, autoSetup, automationStatus, categoryCheckup, templates, help, dataExport, performance
 }
 
 /// 「我的」的列表和导航栈。顶部一行和首页、资产页一样高、一样的位置；列表滚到它下面时垫一层磨砂背景（和首页一样）。
@@ -142,6 +142,9 @@ private struct ProfileList: View {
                         Label("原始通知保留", systemImage: "clock.arrow.circlepath")
                     }
                     .id("retention-\(themeColor)")
+                    NavigationLink(value: ProfileRoute.dataExport) {
+                        Label("导出数据", systemImage: "square.and.arrow.up")
+                    }
                 }
 
                 Section("开发与调试") {
@@ -208,8 +211,10 @@ private struct ProfileList: View {
         case .categories: CategoryManagerView()
         case .autoSetup: AutoSetupGuideView()
         case .automationStatus: AutomationStatusView()
+        case .categoryCheckup: CategoryCheckupView()
         case .templates: TemplateListView()
         case .help: HelpView()
+        case .dataExport: DataExportView()
         case .performance: PerformanceSettingsView()
         }
     }
@@ -294,6 +299,13 @@ struct AutomationStatusView: View {
                         }
                     }
                 }
+            }
+            Section {
+                NavigationLink(value: ProfileRoute.categoryCheckup) {
+                    Label("分类建议体检", systemImage: "stethoscope")
+                }
+            } footer: {
+                Text("拿已经选好分类的流水重新推荐一遍，看分类建议准不准。")
             }
             Section {
                 if log.isEmpty { Text("还没有收到任何输入").foregroundStyle(.secondary) }

@@ -307,12 +307,20 @@ public enum RecordDAO {
         )
     }
 
-    /// 已经选了分类的流水，从早到晚（回放给学习用）。自动归的不算，那不是用户选的
-    public static func categorized(_ db: SQLiteConnection) throws -> [LedgerRecord] {
+    /// 已经有分类的流水，从早到晚（回放给学习、分类建议体检用）。`includingAuto` 为 false 时不含自动归的，那不是用户选的
+    public static func categorized(_ db: SQLiteConnection, includingAuto: Bool = false) throws -> [LedgerRecord] {
         try db.query(
-            "SELECT \(columns) FROM records r WHERE r.status = 'posted' AND r.category_id IS NOT NULL AND r.category_auto = 0 ORDER BY r.effective_at, r.id",
+            """
+            SELECT \(columns) FROM records r WHERE r.status = 'posted' AND r.category_id IS NOT NULL\(includingAuto ? "" : " AND r.category_auto = 0") \
+            ORDER BY r.effective_at, r.id
+            """,
             [], map
         )
+    }
+
+    /// 全部流水，从早到晚（导出用）
+    public static func allRows(_ db: SQLiteConnection) throws -> [RecordRow] {
+        try db.query("SELECT \(rowColumns) \(rowFrom) ORDER BY r.effective_at, r.id", [], mapRow)
     }
 
     /// 最近 `recent` 笔里用得最多的分类，多的在前。通知写明的（手续费、扣息、工资、利息）和退款不算，那不是用户选的

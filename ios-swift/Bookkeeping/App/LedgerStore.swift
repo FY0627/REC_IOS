@@ -368,6 +368,20 @@ final class LedgerStore {
         (try? await backend?.ingestLog(limit: 100)) ?? []
     }
 
+    /// 分类建议体检：已经选好分类的流水重新推荐一遍，只读
+    func categoryCheckup() async throws -> CategoryCheckup {
+        guard let backend else { throw BackendError.notFound }
+        return try await backend.categoryCheckup()
+    }
+
+    /// 把全部流水导出成 CSV，放在临时目录里给分享菜单用（系统会自己清理）。返回文件和笔数
+    func exportRecords() async throws -> (url: URL, count: Int) {
+        guard let backend else { throw BackendError.notFound }
+        let day = Date().formatted(Date.ISO8601FormatStyle(timeZone: .current).year().month().day())
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("REC 流水 \(day).csv")
+        return (url, try await backend.exportRecords(to: url))
+    }
+
     /// 统计页：一段时间的统计，nil 表示不限。`converted` 时另外把所有币种换算成主要币种合计（统计页的总览）
     /// `accountID`：只算这个账户
     func stats(from: Date?, to: Date?, converted: Bool = false, accountID: String? = nil) async -> MonthStats? {

@@ -18,7 +18,7 @@ struct CategoryLearner {
     let db: SQLiteConnection
 
     /// 「类型|商户」：同一个对方的支出和收入分开学
-    private func merchant(of record: LedgerRecord) -> String? {
+    func merchant(of record: LedgerRecord) -> String? {
         MerchantName.key(record.counterparty).map { "\(CategoryType(record.entryType).rawValue)|\($0)" }
     }
 
@@ -37,10 +37,10 @@ struct CategoryLearner {
         try MerchantCategoryDAO.addPick(db, merchant: merchant, categoryID: categoryID, at: time)
     }
 
-    /// 连续选够次数时可以自动归的分类
-    func autoCategory(for record: LedgerRecord, tree: CategoryTree) throws -> LedgerCategory? {
+    /// 连续选够次数时可以自动归的分类。`streak` 只有体检时改，看换个次数会怎样
+    func autoCategory(for record: LedgerRecord, tree: CategoryTree, streak: Int = Self.autoStreak) throws -> LedgerCategory? {
         guard let merchant = merchant(of: record), let latest = try MerchantCategoryDAO.picks(db, merchant: merchant).first,
-              latest.streak >= Self.autoStreak else { return nil }
+              latest.streak >= streak else { return nil }
         return usable(latest.categoryID, type: CategoryType(record.entryType), tree: tree)
     }
 

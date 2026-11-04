@@ -162,6 +162,64 @@ public struct CategorySuggestions: Hashable, Sendable {
     }
 }
 
+/// 分类建议体检：拿已经选好分类的流水，按时间从早到晚一笔笔重新推荐，每笔只用它之前的记录，看建议准不准（ADR 0017）。
+public struct CategoryCheckup: Hashable, Sendable {
+    /// 一组流水里，建议对上了几笔
+    public struct Score: Hashable, Sendable {
+        public var count: Int
+        /// 第 1 个建议就是选的分类
+        public var first: Int
+        /// 待分类面板的「建议」里有选的分类
+        public var panel: Int
+        /// 记账结果通知的大类按钮里有选的分类所在的大类
+        public var notification: Int
+        /// 在通知上选完一共要点几下（估算）
+        public var taps: Int
+
+        public init(count: Int = 0, first: Int = 0, panel: Int = 0, notification: Int = 0, taps: Int = 0) {
+            self.count = count
+            self.first = first
+            self.panel = panel
+            self.notification = notification
+            self.taps = taps
+        }
+
+        /// 平均每笔点几下；一笔都没有时是 nil
+        public var averageTaps: Double? { count == 0 ? nil : Double(taps) / Double(count) }
+    }
+
+    /// 同一个商户连续选 `streak` 次同一个分类就自动归类时：会自动归几笔，其中几笔和选的不一样
+    public struct AutoFiling: Hashable, Sendable {
+        public var streak: Int
+        public var filed: Int
+        public var wrong: Int
+
+        public init(streak: Int, filed: Int = 0, wrong: Int = 0) {
+            self.streak = streak
+            self.filed = filed
+            self.wrong = wrong
+        }
+    }
+
+    public var all: Score
+    /// 认得出商户的
+    public var withMerchant: Score
+    /// 看不出商户的（中行这样不写商户的通知、收款码、手动记的没填交易对方）
+    public var withoutMerchant: Score
+    /// 自动记账记的笔数，其余是手动记的
+    public var automatic: Int
+    /// 第一个是现在用的次数，后面是换个次数会怎样
+    public var autoFiling: [AutoFiling]
+
+    public init(all: Score = Score(), withMerchant: Score = Score(), withoutMerchant: Score = Score(), automatic: Int = 0, autoFiling: [AutoFiling] = []) {
+        self.all = all
+        self.withMerchant = withMerchant
+        self.withoutMerchant = withoutMerchant
+        self.automatic = automatic
+        self.autoFiling = autoFiling
+    }
+}
+
 /// 新增分类时由界面填写的内容。
 public struct CategoryDraft: Hashable, Sendable {
     public var type: CategoryType
