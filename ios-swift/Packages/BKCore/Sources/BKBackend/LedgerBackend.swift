@@ -280,14 +280,10 @@ public final class LedgerBackend: Sendable {
         try await database.read { try RecordDAO.count($0, filter: filter) }
     }
 
-    /// 把全部流水导出成 CSV（`RecordCSV`）写到 `url`，返回导出了几笔。在数据库队列上生成和写文件，不占主线程
-    public func exportRecords(to url: URL) async throws -> Int {
+    /// 把全部数据导出成一组 CSV（`DataExport`），写进 `folder`（没有就新建）。在数据库队列上生成和写文件，不占主线程
+    public func exportData(to folder: URL) async throws -> DataExportSummary {
         let calendar = calendar
-        return try await database.read { db in
-            let rows = try Self.decorate(try RecordDAO.allRows(db), db: db, calendar: calendar)
-            try Data(RecordCSV.make(rows, calendar: calendar).utf8).write(to: url, options: .atomic)
-            return rows.count
-        }
+        return try await database.read { db in try DataExport.write(db, to: folder, calendar: calendar) }
     }
 
     static func withCharges(_ rows: [RecordRow], db: SQLiteConnection, calendar: Calendar) throws -> [RecordRow] {

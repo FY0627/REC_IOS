@@ -374,12 +374,17 @@ final class LedgerStore {
         return try await backend.categoryCheckup()
     }
 
-    /// 把全部流水导出成 CSV，放在临时目录里给分享菜单用（系统会自己清理）。返回文件和笔数
-    func exportRecords() async throws -> (url: URL, count: Int) {
+    /// 导出全部数据：一组 CSV 写进临时目录的文件夹，再打成一个 zip 给分享菜单用。上一次导出的先删掉，临时目录系统也会自己清理
+    func exportData() async throws -> (url: URL, summary: DataExportSummary) {
         guard let backend else { throw BackendError.notFound }
         let day = Date().formatted(Date.ISO8601FormatStyle(timeZone: .current).year().month().day())
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent("REC 流水 \(day).csv")
-        return (url, try await backend.exportRecords(to: url))
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("export", isDirectory: true)
+        let folder = root.appendingPathComponent("REC 数据 \(day)", isDirectory: true)
+        let zip = root.appendingPathComponent("REC 数据 \(day).zip")
+        try? FileManager.default.removeItem(at: root)
+        let summary = try await backend.exportData(to: folder)
+        try await Task.detached(priority: .userInitiated) { try ZipFolder.make(folder, at: zip) }.value
+        return (zip, summary)
     }
 
     /// 统计页：一段时间的统计，nil 表示不限。`converted` 时另外把所有币种换算成主要币种合计（统计页的总览）

@@ -726,6 +726,15 @@ public enum RecordDAO {
         }
     }
 
+    /// 每笔流水的全部来源通知（同一笔的短信、邮件合并后都在这里），按加上的先后（导出用）
+    public static func allEvidence(_ db: SQLiteConnection) throws -> [String: [String]] {
+        var result: [String: [String]] = [:]
+        for (record, ingest) in try db.query("SELECT record_id, ingest_id FROM record_evidence ORDER BY added_at, rowid", [], { ($0.string(0), $0.string(1)) }) {
+            result[record, default: []].append(ingest)
+        }
+        return result
+    }
+
     /// 统计用：时间段内全部记录（只取聚合需要的列由调用方处理）。
     public static func inRange(_ db: SQLiteConnection, from: Date, to: Date) throws -> [LedgerRecord] {
         try db.query("SELECT \(columns) FROM records r WHERE r.effective_at >= ? AND r.effective_at < ?", [from, to], map)
@@ -772,17 +781,23 @@ public enum IngestDAO {
         )
     }
 
+    static let logColumns = "id, source, sender, subject, received_at, processed_at, classification, outcome, detail, raw_text, bound_account_id"
+
+    static func mapLog(_ row: SQLiteConnection.Row) -> IngestLogEntry {
+        IngestLogEntry(
+            id: row.string(0), source: SourceKind(rawValue: row.string(1)) ?? .other, sender: row.optionalString(2), subject: row.optionalString(3),
+            receivedAt: row.optionalDate(4), processedAt: row.date(5), classification: MessageClassification(rawValue: row.string(6)) ?? .unrecognized,
+            outcome: IngestOutcome(rawValue: row.string(7)) ?? .filtered, detail: row.string(8), rawText: row.optionalString(9), boundAccountID: row.optionalString(10)
+        )
+    }
+
     public static func recent(_ db: SQLiteConnection, limit: Int) throws -> [IngestLogEntry] {
-        try db.query(
-            "SELECT id, source, sender, subject, received_at, processed_at, classification, outcome, detail, raw_text, bound_account_id FROM ingests WHERE source <> 'manual' ORDER BY processed_at DESC LIMIT ?",
-            [limit]
-        ) { row in
-            IngestLogEntry(
-                id: row.string(0), source: SourceKind(rawValue: row.string(1)) ?? .other, sender: row.optionalString(2), subject: row.optionalString(3),
-                receivedAt: row.optionalDate(4), processedAt: row.date(5), classification: MessageClassification(rawValue: row.string(6)) ?? .unrecognized,
-                outcome: IngestOutcome(rawValue: row.string(7)) ?? .filtered, detail: row.string(8), rawText: row.optionalString(9), boundAccountID: row.optionalString(10)
-            )
-        }
+        try db.query("SELECT \(logColumns) FROM ingests WHERE source <> 'manual' ORDER BY processed_at DESC LIMIT ?", [limit], mapLog)
+    }
+
+    /// 收到过的全部通知，从早到晚（导出用）。手动记的一笔也有一条输入，但没有内容，不算
+    public static func all(_ db: SQLiteConnection) throws -> [IngestLogEntry] {
+        try db.query("SELECT \(logColumns) FROM ingests WHERE source <> 'manual' ORDER BY processed_at, id", [], mapLog)
     }
 
     public static func meta(_ db: SQLiteConnection, id: String) throws -> (source: SourceKind, sender: String?, receivedAt: Date?, processedAt: Date, rawText: String?)? {
@@ -834,6 +849,11 @@ public enum PendingDAO {
         try db.query(select + " WHERE p.status = 'open' ORDER BY p.created_at DESC", [], map)
     }
 
+    /// 全部待处理，包括已经记入、忽略的，从早到晚（导出用）
+    public static func all(_ db: SQLiteConnection) throws -> [PendingItem] {
+        try db.query(select + " ORDER BY p.created_at, p.id", [], map)
+    }
+
     public static func find(_ db: SQLiteConnection, id: String) throws -> PendingItem? {
         try db.queryOne(select + " WHERE p.id = ?", [id], map)
     }
@@ -881,17 +901,26 @@ public enum BalanceDAO {
         )
     }
 
+    static let columns = "account_id, amount_minor, currency, order_key, txn_time, observed_at, record_id"
+
+    static func map(_ row: SQLiteConnection.Row) -> BalanceObservation {
+        BalanceObservation(
+            accountID: row.string(0), amountMinor: row.int(1), currency: CurrencyCode(row.string(2)), orderKey: row.string(3),
+            transactionTime: row.optionalString(4).flatMap { WallClockCodec.decode($0, yearInferred: false) }, observedAt: row.date(5), recordID: row.optionalString(6)
+        )
+    }
+
     /// 某币种最新的银行余额：按通知内时间（order_key）排序，而不是按到达顺序，避免旧消息覆盖新余额。
     public static func latest(_ db: SQLiteConnection, accountID: String, currency: CurrencyCode) throws -> BalanceObservation? {
         try db.queryOne(
-            "SELECT account_id, amount_minor, currency, order_key, txn_time, observed_at, record_id FROM balance_observations WHERE account_id = ? AND currency = ? ORDER BY order_key DESC, observed_at DESC LIMIT 1",
-            [accountID, currency.rawValue]
-        ) { row in
-            BalanceObservation(
-                accountID: row.string(0), amountMinor: row.int(1), currency: CurrencyCode(row.string(2)), orderKey: row.string(3),
-                transactionTime: row.optionalString(4).flatMap { WallClockCodec.decode($0, yearInferred: false) }, observedAt: row.date(5), recordID: row.optionalString(6)
-            )
-        }
+            "SELECT \(columns) FROM balance_observations WHERE account_id = ? AND currency = ? ORDER BY order_key DESC, observed_at DESC LIMIT 1",
+            [accountID, currency.rawValue], map
+        )
+    }
+
+    /// 银行通知里写过的全部余额，按账户、时间（导出用）
+    public static func all(_ db: SQLiteConnection) throws -> [BalanceObservation] {
+        try db.query("SELECT \(columns) FROM balance_observations ORDER BY account_id, order_key, observed_at", [], map)
     }
 
     /// 这张卡收到过银行余额的币种
@@ -957,6 +986,11 @@ public enum RateDAO {
     /// 有汇率的日期，从早到晚
     public static func days(_ db: SQLiteConnection) throws -> [String] {
         try db.query("SELECT day FROM exchange_rate_days ORDER BY day", []) { $0.string(0) }
+    }
+
+    /// 每天汇率表的基准币种和数据源的更新时间，从早到晚（导出用）
+    public static func dayInfo(_ db: SQLiteConnection) throws -> [(day: String, base: String, updatedAt: Date)] {
+        try db.query("SELECT day, base, updated_at FROM exchange_rate_days ORDER BY day", []) { (day: $0.string(0), base: $0.string(1), updatedAt: $0.date(2)) }
     }
 
     /// 某天全部币种的汇率（1 个基准可兑换的数量）
@@ -1035,6 +1069,24 @@ public enum MerchantCategoryDAO {
         public var categoryID: String
         public var picks: Int
         public var streak: Int
+    }
+
+    /// 学到的一条：某个商户选过某个分类
+    public struct Entry: Hashable, Sendable {
+        /// 「类型|归一化的商户」
+        public var merchant: String
+        public var categoryID: String
+        public var picks: Int
+        public var streak: Int
+        public var lastPickedAt: Date
+    }
+
+    /// 学到的全部，按商户、最近选的在前（导出用）
+    public static func all(_ db: SQLiteConnection) throws -> [Entry] {
+        try db.query(
+            "SELECT merchant, category_id, picks, streak, last_picked_at FROM merchant_categories ORDER BY merchant, streak DESC, last_picked_at DESC, category_id",
+            []
+        ) { Entry(merchant: $0.string(0), categoryID: $0.string(1), picks: Int($0.int(2)), streak: Int($0.int(3)), lastPickedAt: $0.date(4)) }
     }
 
     /// 这个商户选过的分类，最近选的在前

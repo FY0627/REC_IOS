@@ -123,9 +123,8 @@ struct AddRecordView: View {
                         }
                     }
                 } footer: {
-                    if let chargeNote {
-                        Text(chargeNote)
-                    } else if type == .transfer, toAccountID != nil {
+                    // 扣款币种不写说明（余额不够、从哪个币种扣、按哪天的汇率）：选择行和「约 …」已经看得出来
+                    if type == .transfer, toAccountID != nil {
                         Text(TransferSideFields.note)
                     }
                 }
@@ -222,22 +221,6 @@ struct AddRecordView: View {
                 .multilineTextAlignment(.trailing)
                 .font(.body.monospacedDigit())
         }
-    }
-
-    private var chargeNote: String? {
-        guard let currency, let charge = chargeCurrency(accountID), let account = accounts.first(where: { $0.id == accountID }) else { return nil }
-        let head: String
-        if !account.currencies.contains(currency) {
-            head = charge == account.currency ? "账户里没有\(currency.chineseName)，按账户的主币种记。" : "账户里没有\(currency.chineseName)，从\(charge.chineseName)扣。"
-        } else if chargeChoice == nil, let available = shortOf(account, currency) {
-            head = "\(currency.chineseName)可用的只有 \(Fmt.money(available, currency))，不够这笔，整笔从\(charge.chineseName)扣。"
-        } else {
-            head = "从\(charge.chineseName)扣。"
-        }
-        guard let day = estimate?.rateDay else {
-            return head + "还没有汇率：可以直接填银行实际扣了多少，不填就等导入汇率后估算。"
-        }
-        return head + "不填按 \(Fmt.rateDay(day)) 的汇率估算；银行实际扣了多少可以直接填。"
     }
 
     /// 金额、币种、账户、日期变了就重新估算
