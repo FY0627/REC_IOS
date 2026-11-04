@@ -15,10 +15,7 @@ struct CategoryCheckupView: View {
             } else if let errorText {
                 Text(errorText).foregroundStyle(.red)
             } else {
-                HStack(spacing: 8) {
-                    ProgressView()
-                    Text("正在算…").foregroundStyle(.secondary)
-                }
+                ProgressView()
             }
         }
         .navigationTitle("分类建议体检")
@@ -33,35 +30,25 @@ struct CategoryCheckupView: View {
             LabeledContent("算了几笔", value: "\(checkup.all.count) 笔")
             LabeledContent("自动记账记的", value: "\(checkup.automatic) 笔")
             LabeledContent("认得出商户的", value: ratio(checkup.withMerchant.count, of: checkup.all.count))
-        } footer: {
-            Text("拿你已经选好分类的流水，按时间从早到晚一笔笔重新推荐，每笔只用它之前的记录。自动归类的，和手续费、利息、工资、退款这些通知写明的不算。")
         }
         if checkup.all.count > 0 {
-            score("全部", checkup.all, footer: "长按通知、点一个按钮各算一下；先选大类再选小类、打开 App 选的，按实际要点的步骤算；自动归对的算 0 下。")
+            score("全部", checkup.all)
             score("认得出商户的", checkup.withMerchant)
             score("看不出商户的", checkup.withoutMerchant)
-            Section {
+            Section("自动归类") {
                 ForEach(Array(checkup.autoFiling.enumerated()), id: \.element.streak) { index, item in
                     LabeledContent("连续 \(item.streak) 次" + (index == 0 ? "（现在）" : ""), value: "归 \(item.filed) 笔，错 \(item.wrong) 笔")
                 }
-            } header: {
-                Text("同一个商户连续选几次就自动归类")
-            } footer: {
-                Text("只有认得出商户的才会自动归类。「错」是会自动归到的分类和你选的不一样。")
             }
         }
     }
 
-    private func score(_ title: String, _ score: CategoryCheckup.Score, footer: String? = nil) -> some View {
-        Section {
+    private func score(_ title: String, _ score: CategoryCheckup.Score) -> some View {
+        Section("\(title)（\(score.count) 笔）") {
             LabeledContent("第 1 个建议就对", value: ratio(score.first, of: score.count))
             LabeledContent("面板的建议里有", value: ratio(score.panel, of: score.count))
             LabeledContent("通知的大类按钮里有", value: ratio(score.notification, of: score.count))
             LabeledContent("在通知上平均点几下", value: score.averageTaps.map { String(format: "%.1f 下", $0) } ?? "—")
-        } header: {
-            Text("\(title)（\(score.count) 笔）")
-        } footer: {
-            if let footer { Text(footer) }
         }
     }
 

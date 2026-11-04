@@ -21,13 +21,8 @@ struct DataExportView: View {
                 } else if let errorText {
                     Text(errorText).foregroundStyle(.red)
                 } else {
-                    HStack(spacing: 8) {
-                        ProgressView()
-                        Text("正在生成…").foregroundStyle(.secondary)
-                    }
+                    ProgressView()
                 }
-            } footer: {
-                Text("一个 zip 压缩包：每种数据一个 CSV 文件（\(summary.map { $0.files.map { $0.replacingOccurrences(of: ".csv", with: "") }.joined(separator: "、") } ?? "流水、账户、余额、分类等")），可以用 Numbers 或 Excel 打开；还有一份数据库副本，在「导入数据」里选这个 zip 就能导回来。卡面图片不导出。\n\n里面有完整卡号（填过的话）和收到的通知原文，分享前想清楚发给谁。")
             }
         }
         .navigationTitle("导出数据")

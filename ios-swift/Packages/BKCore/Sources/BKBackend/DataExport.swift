@@ -27,18 +27,9 @@ enum DataExport {
     /// zip 里的数据库副本
     static let backupName = "备份（导入用）.sqlite"
 
-    static let readme = """
-    REC 导出的全部数据（卡面图片除外）。
-
-    「\(backupName)」是完整的数据库副本：在 REC「我的 › 隐私与数据 › 导入数据」里选这个 zip 就能导回来，可以选增量或覆盖。
-    其余每种数据一个 CSV 文件，用 Numbers 或 Excel 打开就能看；改了 CSV 不会影响导入，导入只读数据库副本。
-
-    里面有完整卡号（填过的话）和收到的通知原文，分享前想清楚发给谁。
-    """
-
-    /// 打成 zip：`folderName` 是 zip 里那个文件夹的名字
+    /// 打成 zip：`folderName` 是 zip 里那个文件夹的名字。不放说明文件
     static func archive(_ db: SQLiteConnection, folderName: String, calendar: Calendar, now: Date) throws -> (data: Data, summary: DataExportSummary) {
-        var entries = [ZipStore.Entry(name: "\(folderName)/说明.txt", data: Data(readme.utf8))]
+        var entries: [ZipStore.Entry] = []
         let summary = try tables(db, calendar: calendar) { name, text in
             entries.append(ZipStore.Entry(name: "\(folderName)/\(name)", data: Data(text.utf8)))
         }

@@ -312,8 +312,6 @@ struct AutomationStatusView: View {
                 NavigationLink(value: ProfileRoute.categoryCheckup) {
                     Label("分类建议体检", systemImage: "stethoscope")
                 }
-            } footer: {
-                Text("拿已经选好分类的流水重新推荐一遍，看分类建议准不准。")
             }
             Section {
                 if log.isEmpty { Text("还没有收到任何输入").foregroundStyle(.secondary) }

@@ -47,7 +47,7 @@ final class DataExportTests: XCTestCase {
         XCTAssertEqual(summary.files, ["流水.csv", "账户.csv", "余额.csv", "分类.csv", "学到的分类.csv", "识别模板.csv", "汇率.csv", "待处理.csv", "原始通知.csv", "通知里的余额.csv"])
 
         let entries = try ZipStore.entries(try Data(contentsOf: url))
-        XCTAssertEqual(entries.map(\.name), (["说明.txt"] + summary.files + [DataExport.backupName]).map { "REC 数据 2026-10-20/\($0)" })
+        XCTAssertEqual(entries.map(\.name), (summary.files + [DataExport.backupName]).map { "REC 数据 2026-10-20/\($0)" })
         func read(_ name: String) throws -> [String] {
             let data = try XCTUnwrap(entries.first { $0.name.hasSuffix("/" + name) }?.data)
             XCTAssertEqual(Array(data.prefix(3)), [0xEF, 0xBB, 0xBF], "\(name) 带 BOM，Excel 才认得出中文")

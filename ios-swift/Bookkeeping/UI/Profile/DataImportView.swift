@@ -20,10 +20,8 @@ struct DataImportView: View {
         Form {
             Section {
                 Button { picking = true } label: {
-                    Label(archive == nil ? "选择导出的 zip 文件" : "换一个文件", systemImage: "doc.zipper")
+                    Label(archive == nil ? "选择文件" : "换一个文件", systemImage: "doc.zipper")
                 }
-            } footer: {
-                Text("选 REC「导出数据」得到的 zip。别的软件重新压缩过的读不了。")
             }
             if let info, archive != nil, result == nil {
                 Section("「\(fileName)」里有") {
@@ -44,8 +42,6 @@ struct DataImportView: View {
                     } label: {
                         Label("覆盖导入", systemImage: "arrow.triangle.2.circlepath")
                     }
-                } footer: {
-                    Text("增量：现在的数据一条不动，只加这里没有的。同一张卡（同一家银行、同一个尾号）、同一条通知记的流水不会重复。\n覆盖：现在的数据全部删掉，换成导入的。\n\n导入前会自动把现在的数据存一份，导入后可以撤销。卡面图片不在导出的文件里，这台手机上没有的卡面换成颜色。")
                 }
             }
             if let result {
@@ -75,15 +71,10 @@ struct DataImportView: View {
                     } label: {
                         Label("撤销上次导入", systemImage: "arrow.uturn.backward")
                     }
-                } footer: {
-                    Text("导入之后新记的流水也会没有。")
                 }
             }
             if busy {
-                HStack(spacing: 8) {
-                    ProgressView()
-                    Text("正在处理…").foregroundStyle(.secondary)
-                }
+                ProgressView()
             }
             if let errorText {
                 Section { Text(errorText).foregroundStyle(.red) }
@@ -152,9 +143,9 @@ struct DataImportView: View {
 
     private func message(_ error: Error) -> String {
         switch error as? BackendError {
-        case .backupUnreadable?: "读不了这个文件：要选 REC「导出数据」得到的 zip，别的软件重新压缩过的也读不了。"
-        case .backupTooNew?: "这个文件来自更新版本的 REC，先把 App 更新到最新再导入。"
-        default: "导入失败，现在的数据没有变：\(error.localizedDescription)"
+        case .backupUnreadable?: "读不了这个文件"
+        case .backupTooNew?: "这个文件来自更新版本的 REC，先更新 App"
+        default: "导入失败：\(error.localizedDescription)"
         }
     }
 }
