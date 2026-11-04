@@ -20,6 +20,10 @@ public enum BackendError: Error, Equatable, Sendable {
     case invalidCategory
     /// 转帐和系统分类不能删除、合并
     case categoryLocked
+    /// 导入的不是 REC 导出的 zip，或者被别的软件改过（重新压缩了）
+    case backupUnreadable
+    /// 备份来自更新版本的 App：先更新 App 再导入
+    case backupTooNew
     /// 转帐缺少一边，或者转出、转入是同一个账户的同一个币种
     case invalidTransfer
     /// 合成一单至少要两笔，而且都是已入账的同一币种的支出（或收入）
@@ -280,10 +284,52 @@ public final class LedgerBackend: Sendable {
         try await database.read { try RecordDAO.count($0, filter: filter) }
     }
 
-    /// 把全部数据导出成一组 CSV（`DataExport`），写进 `folder`（没有就新建）。在数据库队列上生成和写文件，不占主线程
-    public func exportData(to folder: URL) async throws -> DataExportSummary {
+    // MARK: 导出、导入（ADR 0019）
+
+    /// 把全部数据导出成一个 zip（`DataExport`）写到 `url`；zip 里的文件夹和文件同名（去掉 .zip）。在数据库队列上生成和写文件，不占主线程
+    public func exportData(to url: URL) async throws -> DataExportSummary {
         let calendar = calendar
-        return try await database.read { db in try DataExport.write(db, to: folder, calendar: calendar) }
+        let now = clock()
+        return try await database.read { db in
+            let folder = url.deletingPathExtension().lastPathComponent
+            let result = try DataExport.archive(db, folderName: folder, calendar: calendar, now: now)
+            try result.data.write(to: url, options: .atomic)
+            return result.summary
+        }
+    }
+
+    /// 选了导出的 zip、还没导入：里面有什么
+    public func backupInfo(archive: Data) async throws -> BackupInfo {
+        try await database.read { _ in
+            let work = Self.workFile()
+            defer { try? FileManager.default.removeItem(at: work) }
+            return try BackupImport.info(try BackupImport.open(archive: archive, work: work))
+        }
+    }
+
+    /// 导入导出的 zip。`keepFaceImage`：卡面图片在这台手机上（不在就清掉图片标识）。整个导入是一个写事务，出错整体回滚
+    public func importBackup(archive: Data, mode: ImportMode, keepFaceImage: @escaping @Sendable (String) -> Bool) async throws -> ImportSummary {
+        try await database.write { db in
+            let work = Self.workFile()
+            defer { try? FileManager.default.removeItem(at: work) }
+            return try BackupImport.run(db, from: try BackupImport.open(archive: archive, work: work), mode: mode, keepFaceImage: keepFaceImage)
+        }
+    }
+
+    /// 导入一个数据库副本（导入前自动存的那份：撤销导入）
+    public func importDatabase(at url: URL, mode: ImportMode, keepFaceImage: @escaping @Sendable (String) -> Bool) async throws -> ImportSummary {
+        try await database.write { db in
+            try BackupImport.run(db, from: try BackupImport.open(database: url), mode: mode, keepFaceImage: keepFaceImage)
+        }
+    }
+
+    /// 把现在的数据存一份完整的副本（导入前自动存，撤销用）
+    public func saveDatabaseCopy(to url: URL) async throws {
+        try await database.read { db in try DataExport.saveCopy(db, to: url) }
+    }
+
+    private static func workFile() -> URL {
+        FileManager.default.temporaryDirectory.appendingPathComponent("rec-import-\(UUID().uuidString).sqlite")
     }
 
     static func withCharges(_ rows: [RecordRow], db: SQLiteConnection, calendar: Calendar) throws -> [RecordRow] {

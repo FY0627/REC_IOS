@@ -374,17 +374,51 @@ final class LedgerStore {
         return try await backend.categoryCheckup()
     }
 
-    /// 导出全部数据：一组 CSV 写进临时目录的文件夹，再打成一个 zip 给分享菜单用。上一次导出的先删掉，临时目录系统也会自己清理
+    // MARK: 导出、导入（ADR 0019）
+
+    /// 导出全部数据：一个 zip 写在临时目录，给分享菜单用。上一次导出的先删掉，临时目录系统也会自己清理
     func exportData() async throws -> (url: URL, summary: DataExportSummary) {
         guard let backend else { throw BackendError.notFound }
         let day = Date().formatted(Date.ISO8601FormatStyle(timeZone: .current).year().month().day())
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("export", isDirectory: true)
-        let folder = root.appendingPathComponent("REC 数据 \(day)", isDirectory: true)
-        let zip = root.appendingPathComponent("REC 数据 \(day).zip")
         try? FileManager.default.removeItem(at: root)
-        let summary = try await backend.exportData(to: folder)
-        try await Task.detached(priority: .userInitiated) { try ZipFolder.make(folder, at: zip) }.value
-        return (zip, summary)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let url = root.appendingPathComponent("REC 数据 \(day).zip")
+        return (url, try await backend.exportData(to: url))
+    }
+
+    /// 导入前自动存的现在的数据（撤销导入用）；每次导入换成新的一份，撤销后删掉
+    nonisolated static var undoCopyURL: URL {
+        AppServices.databaseURL.deletingLastPathComponent().appendingPathComponent("导入前的数据.sqlite")
+    }
+
+    var canUndoImport: Bool { FileManager.default.fileExists(atPath: Self.undoCopyURL.path) }
+
+    /// 卡面图片在这台手机上：导入的账户图片不在就换成颜色
+    nonisolated static let faceImageExists: @Sendable (String) -> Bool = { id in
+        FileManager.default.fileExists(atPath: CardFaceImages.fileURL(id).path)
+    }
+
+    func backupInfo(archive: Data) async throws -> BackupInfo {
+        guard let backend else { throw BackendError.notFound }
+        return try await backend.backupInfo(archive: archive)
+    }
+
+    /// 先把现在的数据存一份（撤销用），再导入
+    func importBackup(archive: Data, mode: ImportMode) async throws -> ImportSummary {
+        guard let backend else { throw BackendError.notFound }
+        try await backend.saveDatabaseCopy(to: Self.undoCopyURL)
+        let summary = try await backend.importBackup(archive: archive, mode: mode, keepFaceImage: Self.faceImageExists)
+        await refresh()
+        return summary
+    }
+
+    /// 撤销上次导入：换回导入前存的那份
+    func undoImport() async throws {
+        guard let backend else { throw BackendError.notFound }
+        _ = try await backend.importDatabase(at: Self.undoCopyURL, mode: .replace, keepFaceImage: Self.faceImageExists)
+        try? FileManager.default.removeItem(at: Self.undoCopyURL)
+        await refresh()
     }
 
     /// 统计页：一段时间的统计，nil 表示不限。`converted` 时另外把所有币种换算成主要币种合计（统计页的总览）

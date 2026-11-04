@@ -31,6 +31,8 @@ public protocol SQLBindable {
     var sqlValue: SQLValue { get }
 }
 
+extension SQLValue: SQLBindable { public var sqlValue: SQLValue { self } }
+
 extension Int64: SQLBindable { public var sqlValue: SQLValue { .int(self) } }
 extension Int: SQLBindable { public var sqlValue: SQLValue { .int(Int64(self)) } }
 extension String: SQLBindable { public var sqlValue: SQLValue { .text(self) } }
@@ -178,5 +180,17 @@ public final class SQLiteConnection: @unchecked Sendable {
         public func date(_ index: Int32) -> Date { Date(timeIntervalSince1970: double(index)) }
         public func optionalDate(_ index: Int32) -> Date? { isNull(index) ? nil : date(index) }
         public func bool(_ index: Int32) -> Bool { int(index) != 0 }
+
+        /// 不知道列的类型时（整张表原样复制）
+        public var columnCount: Int32 { sqlite3_column_count(statement) }
+        public func columnName(_ index: Int32) -> String { sqlite3_column_name(statement, index).map { String(cString: $0) } ?? "" }
+        public func value(_ index: Int32) -> SQLValue {
+            switch sqlite3_column_type(statement, index) {
+            case SQLITE_INTEGER: .int(int(index))
+            case SQLITE_FLOAT: .real(double(index))
+            case SQLITE_NULL: .null
+            default: .text(string(index))
+            }
+        }
     }
 }

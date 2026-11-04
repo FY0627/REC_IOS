@@ -15,15 +15,52 @@ public struct DataExportSummary: Hashable, Sendable {
     }
 }
 
-/// 导出全部数据：每种数据一个 CSV 文件，放在一个文件夹里（App 再打成 zip 分享），Numbers、Excel 都能打开。
+/// 导出全部数据：一个 zip（`ZipStore`），里面一个文件夹，放每种数据一个 CSV（Numbers、Excel 都能打开），
+/// 和一份完整的数据库副本（`backupName`，「导入数据」读的就是它，见 `BackupImport`）。ADR 0019。
 ///
-/// - 卡面图片不导出（太大），跟着图片走的文字颜色、金额位置也不导出；
-/// - 开头带 BOM，Excel 才认得出是 UTF-8 的中文；换行用 CRLF；
+/// - 卡面图片不导出（太大）；数据库副本里还留着图片的标识，导入时图片不在这台手机上就清掉；
+/// - CSV 开头带 BOM，Excel 才认得出是 UTF-8 的中文；换行用 CRLF；
 /// - 金额按币种的小数位、不加千位分隔，表格里能直接加减；流水的金额流入为正、流出为负；
 /// - 时间是手机所在时区的「年-月-日 时:分:秒」；
 /// - 编号是 App 里的标识，几个文件之间靠它对上（流水的「原始通知」对「原始通知.csv」的编号）。
 enum DataExport {
-    static func write(_ db: SQLiteConnection, to folder: URL, calendar: Calendar) throws -> DataExportSummary {
+    /// zip 里的数据库副本
+    static let backupName = "备份（导入用）.sqlite"
+
+    static let readme = """
+    REC 导出的全部数据（卡面图片除外）。
+
+    「\(backupName)」是完整的数据库副本：在 REC「我的 › 隐私与数据 › 导入数据」里选这个 zip 就能导回来，可以选增量或覆盖。
+    其余每种数据一个 CSV 文件，用 Numbers 或 Excel 打开就能看；改了 CSV 不会影响导入，导入只读数据库副本。
+
+    里面有完整卡号（填过的话）和收到的通知原文，分享前想清楚发给谁。
+    """
+
+    /// 打成 zip：`folderName` 是 zip 里那个文件夹的名字
+    static func archive(_ db: SQLiteConnection, folderName: String, calendar: Calendar, now: Date) throws -> (data: Data, summary: DataExportSummary) {
+        var entries = [ZipStore.Entry(name: "\(folderName)/说明.txt", data: Data(readme.utf8))]
+        let summary = try tables(db, calendar: calendar) { name, text in
+            entries.append(ZipStore.Entry(name: "\(folderName)/\(name)", data: Data(text.utf8)))
+        }
+        entries.append(ZipStore.Entry(name: "\(folderName)/\(backupName)", data: try databaseCopy(db)))
+        return (ZipStore.archive(entries, modified: now, calendar: calendar), summary)
+    }
+
+    /// 完整的数据库副本（`VACUUM INTO`：一致的快照，不用停下自动记账）。不能在事务里调用
+    static func databaseCopy(_ db: SQLiteConnection) throws -> Data {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("rec-copy-\(UUID().uuidString).sqlite")
+        defer { try? FileManager.default.removeItem(at: url) }
+        try saveCopy(db, to: url)
+        return try Data(contentsOf: url)
+    }
+
+    static func saveCopy(_ db: SQLiteConnection, to url: URL) throws {
+        try? FileManager.default.removeItem(at: url)
+        try db.execute("VACUUM INTO '\(url.path.replacingOccurrences(of: "'", with: "''"))'")
+    }
+
+    /// 每种数据一个 CSV，交给 `write` 写出去
+    static func tables(_ db: SQLiteConnection, calendar: Calendar, write: (String, String) throws -> Void) throws -> DataExportSummary {
         let time = DateFormatter()
         time.calendar = calendar
         time.timeZone = calendar.timeZone
@@ -48,10 +85,7 @@ enum DataExport {
             ("原始通知.csv", ingestHeader, try IngestDAO.all(db).map { ingestRow($0, date: date) }),
             ("通知里的余额.csv", observationHeader, try BalanceDAO.all(db).map { observationRow($0, accounts: accountNames, date: date) }),
         ]
-        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        for table in tables {
-            try Data(document(table.header, table.rows).utf8).write(to: folder.appendingPathComponent(table.name), options: .atomic)
-        }
+        for table in tables { try write(table.name, document(table.header, table.rows)) }
         return DataExportSummary(records: records.count, accounts: accounts.count, files: tables.map(\.name))
     }
 
