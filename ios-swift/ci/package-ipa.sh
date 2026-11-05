@@ -96,7 +96,8 @@ APPEX_ID=$(read_appex CFBundleIdentifier)
 [[ "$(read_appex CFBundleVersion)" == "$BUILD" ]] || fail "通知扩展的构建号 $(read_appex CFBundleVersion) 和 App 的 $BUILD 不一样"
 APPEX_EXEC=$(read_appex CFBundleExecutable)
 [[ "$(lipo -archs "$APPEX/$APPEX_EXEC")" == "arm64" ]] || fail "通知扩展的架构不是 arm64"
-ok "通知扩展 PlugIns/NotificationContent.appex（$APPEX_ID）"
+# 变量后面紧跟中文时要加花括号：macOS 的 bash 会把全角字符当成变量名的一部分
+ok "通知扩展 PlugIns/NotificationContent.appex（${APPEX_ID}）"
 
 [[ ! -d "$APP/_CodeSignature" ]] && ok "未签名（CI 不使用任何证书，由 iLoader 签名）" || ok "存在 _CodeSignature（将被 iLoader 替换）"
 [[ ! -f "$APP/embedded.mobileprovision" ]] || fail "不应包含描述文件"

@@ -22,7 +22,7 @@ for alt in AppIconLight AppIconDark; do
   if /usr/libexec/PlistBuddy -c "Print :CFBundleIcons:CFBundleAlternateIcons:$alt" "$APP/Info.plist" > /dev/null 2>&1; then
     echo "OK: Info.plist CFBundleAlternateIcons 有 $alt"
   else
-    echo "::warning title=AppIcon::Info.plist 里没有 CFBundleIcons › CFBundleAlternateIcons › $alt，「我的 › 图标」换不了桌面图标"
+    echo "::warning title=AppIcon::Info.plist 里没有 CFBundleIcons › CFBundleAlternateIcons › ${alt}，「我的 › 图标」换不了桌面图标"
   fi
 done
 if [[ -e "$APP/icon.json" ]] || compgen -G "$APP/*.icon" > /dev/null; then
