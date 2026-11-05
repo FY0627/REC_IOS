@@ -10,7 +10,7 @@ REC 是一款 iPhone 记账 App。你付完款，银行短信一到，它就在�
 
 <table>
   <tr>
-    <td align="center"><img src="docs/assets/demo/auto-bookkeeping.gif" width="260" alt="付款后银行 App 发来通知，REC 在后台记好这笔账，长按通知可以选分类"></td>
+    <td align="center"><img src="docs/assets/demo/auto-bookkeeping.gif" width="260" alt="付款后银行短信到达，App 在后台自动记好这笔账"></td>
     <td align="center"><img src="docs/assets/demo/wallet.gif" width="260" alt="资产页的银行卡像钱包一样叠放，点开可以看详情"></td>
   </tr>
   <tr>
@@ -28,8 +28,8 @@ REC 是一款 iPhone 记账 App。你付完款，银行短信一到，它就在�
 
 <p align="center">
   <img src="docs/assets/demo/home.jpg" width="23%" alt="首页：本月支出和流水">
+  <img src="docs/assets/demo/assets.jpg" width="23%" alt="资产：净资产和叠放的银行卡">
   <img src="docs/assets/demo/stats.jpg" width="23%" alt="统计：按分类查看收支">
-  <img src="docs/assets/demo/pending.jpg" width="23%" alt="待处理：等你确认的流水，验证码不保存内容">
   <img src="docs/assets/demo/profile.jpg" width="23%" alt="我的：外观、币种和自动记账设置">
 </p>
 
