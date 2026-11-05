@@ -245,6 +245,11 @@ struct RecordDetailView: View {
                 } header: {
                     Text("同一单")
                 }
+            } else if detail.mergedTransfer {
+                // 一笔支出和一笔收入手动合成的转帐：拆开回到原来的两笔
+                Section {
+                    Button { Task { await splitTransfer() } } label: { ActionLabel(title: "拆开") }
+                }
             } else if row.entryType != .transfer, r.status == .posted {
                 Section {
                     Button { merging = true } label: { ActionLabel(title: "合并") }
@@ -328,6 +333,16 @@ struct RecordDetailView: View {
             saveError = nil
         } catch {
             saveError = "备注保存失败：\(error.localizedDescription)"
+        }
+    }
+
+    private func splitTransfer() async {
+        do {
+            try await store.splitTransfer(recordID: recordID)
+            await reload()
+            saveError = nil
+        } catch {
+            saveError = "拆开失败：\(error.localizedDescription)"
         }
     }
 
@@ -445,28 +460,46 @@ struct OrderSplitView: View {
     }
 }
 
-/// 一单用了几张卡：选同一单的其他几笔，合成一单。离得近、别的卡付的标上「可能是同一单」，只是提示，不自动合并
+/// 合并：
+/// - 一单用了几张卡：选同一单的其他几笔，合成一单。离得近、别的卡付的标上「可能是同一单」，只是提示，不自动合并；
+/// - 合成转帐：这一笔支出（收入）和别的账户的一笔收入（支出）合成一笔转帐，例如微信提现到银行卡，只选一笔。
+///   支出、收入（不是退款）才能选，在上面的分段控件里换
 struct OrderMergeView: View {
     let row: RecordRow
     @Environment(LedgerStore.self) private var store
     @Environment(\.dismiss) private var dismiss
+    @State private var mode = Mode.order
     @State private var candidates: [RecordRow] = []
     @State private var chosen: Set<String> = []
     @State private var loaded = false
     @State private var errorText: String?
 
+    enum Mode: Hashable {
+        case order
+        case transfer
+    }
+
     var body: some View {
         NavigationStack {
             List {
+                if row.record.canMergeIntoTransfer {
+                    Section {
+                        Picker("合并成", selection: $mode) {
+                            Text("一单").tag(Mode.order)
+                            Text("转帐").tag(Mode.transfer)
+                        }
+                        .pickerStyle(.segmented)
+                    }
+                }
                 Section("这一笔") { RecordRowView(row: row) }
-                Section("同一单的其他几笔") {
+                Section(mode == .order ? "同一单的其他几笔" : "转帐的另一边") {
                     if loaded, candidates.isEmpty {
-                        Text("前后一天里没有可以合并的记录").foregroundStyle(.secondary)
+                        Text(mode == .order ? "前后一天里没有可以合并的记录" : "前后三天里没有可以合成转帐的记录").foregroundStyle(.secondary)
                     }
                     ForEach(candidates) { candidate in
                         OrderPickRow(
                             row: candidate, chosen: chosen.contains(candidate.id),
-                            hint: LedgerBackend.likelySameOrder(row.record, candidate.record) ? "可能是同一单" : nil
+                            hint: mode == .order && LedgerBackend.likelySameOrder(row.record, candidate.record) ? "可能是同一单" : nil
                         ) { toggle(candidate.id) }
                     }
                 }
@@ -474,7 +507,7 @@ struct OrderMergeView: View {
                     Section { Text(errorText).foregroundStyle(.red) }
                 }
             }
-            .navigationTitle("合成一单")
+            .navigationTitle(mode == .order ? "合成一单" : "合成转帐")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("取消", systemImage: "xmark") { dismiss() } }
@@ -483,20 +516,40 @@ struct OrderMergeView: View {
                         .disabled(chosen.isEmpty)
                 }
             }
-            .task {
-                candidates = await store.orderCandidates(recordID: row.id)
+            .task(id: mode) {
+                loaded = false
+                chosen = []
+                errorText = nil
+                if mode == .order {
+                    candidates = await store.orderCandidates(recordID: row.id)
+                } else {
+                    candidates = await store.transferMergeCandidates(recordID: row.id)
+                }
                 loaded = true
             }
         }
     }
 
+    /// 合成一单可以选几笔；转帐的另一边只有一笔，选了别的就换成它
     private func toggle(_ id: String) {
-        if chosen.contains(id) { chosen.remove(id) } else { chosen.insert(id) }
+        if chosen.contains(id) {
+            chosen.remove(id)
+        } else if mode == .transfer {
+            chosen = [id]
+        } else {
+            chosen.insert(id)
+        }
     }
 
     private func merge() async {
         do {
-            try await store.mergeOrder(recordIDs: [row.id] + candidates.map(\.id).filter(chosen.contains))
+            switch mode {
+            case .order:
+                try await store.mergeOrder(recordIDs: [row.id] + candidates.map(\.id).filter(chosen.contains))
+            case .transfer:
+                guard let other = chosen.first else { return }
+                try await store.mergeTransfer(recordID: row.id, with: other)
+            }
             dismiss()
         } catch {
             errorText = "合并失败：\(error.localizedDescription)"

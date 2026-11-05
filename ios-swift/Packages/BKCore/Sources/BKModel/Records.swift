@@ -303,6 +303,11 @@ public struct LedgerRecord: Identifiable, Hashable, Sendable, Codable {
     /// 退款、流入的冲正：从支出里减掉，不算收入
     public var isRefund: Bool { entryType == .expense && direction == .inflow }
 
+    /// 可以和另一个账户方向相反的一笔合成转帐：已入账、不在合成的一单里的支出（流出，不是退款）或收入
+    public var canMergeIntoTransfer: Bool {
+        status == .posted && orderGroupID == nil && entryType == (direction == .outflow ? .expense : .income)
+    }
+
     /// 不论方向都算转帐的交易性质
     public static let transferKinds: Set<TransactionKind> = [.repayment, .deposit, .withdrawal]
 }
@@ -662,10 +667,12 @@ public struct RecordDetail: Hashable, Sendable {
     public var fee: RecordRow?
     /// 同一单的其他几笔
     public var orderMembers: [RecordRow]
+    /// 一笔支出和另一个账户的一笔收入手动合成的转帐：可以拆开回到原来的两笔
+    public var mergedTransfer: Bool
 
     public init(
         row: RecordRow, evidence: [RecordEvidence], transferPeer: RecordRow?, related: RecordRow?,
-        refunds: [RecordRow] = [], fee: RecordRow? = nil, orderMembers: [RecordRow] = []
+        refunds: [RecordRow] = [], fee: RecordRow? = nil, orderMembers: [RecordRow] = [], mergedTransfer: Bool = false
     ) {
         self.row = row
         self.evidence = evidence
@@ -674,5 +681,6 @@ public struct RecordDetail: Hashable, Sendable {
         self.refunds = refunds
         self.fee = fee
         self.orderMembers = orderMembers
+        self.mergedTransfer = mergedTransfer
     }
 }

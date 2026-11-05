@@ -294,6 +294,47 @@ final class DatabaseTests: XCTestCase {
         XCTAssertEqual(picks.map(\.picks), [1, 2], "选过几次留着")
     }
 
+    func testMigrationFromVersion11AddsTransferMergeAndKeepsRecords() throws {
+        let path = tempPath()
+        do {
+            let old = try SQLiteConnection(path: path)
+            for step in Migrations.steps where step.version <= 11 { try old.execute(step.sql) }
+            try old.setUserVersion(11)
+            try old.execute("""
+            INSERT INTO accounts (id, name, bank_name, last4, card_type, currency, palette_id, sort_order, created_at) VALUES ('w', '微信零钱', '微信', '0000', 'wallet', 'CNY', 'jade', 0, 0);
+            INSERT INTO accounts (id, name, bank_name, last4, card_type, currency, palette_id, sort_order, created_at) VALUES ('b', '卡', '中国银行', '0001', 'debit', 'CNY', 'ocean', 1, 0);
+            INSERT INTO ingests (id, fingerprint, source, processed_at, classification, outcome, parser_version) VALUES ('i', 'f', 'sms', 0, 'transaction', 'recorded', 1);
+            INSERT INTO records (id, account_id, amount_minor, currency, direction, kind, status, processed_at, effective_at, source, ingest_id, part_index, dedupe_key, created_at, category_id, category_auto)
+                VALUES ('out', 'w', 1010, 'CNY', 'outflow', 'purchase', 'posted', 0, 0, 'manual', 'i', 0, 'k1', 0, 'ex.other', 1);
+            INSERT INTO records (id, account_id, amount_minor, currency, direction, kind, status, processed_at, effective_at, source, ingest_id, part_index, dedupe_key, created_at, transfer_party)
+                VALUES ('in', 'b', 1000, 'CNY', 'inflow', 'transferIn', 'posted', 0, 1, 'sms', 'i', 2, 'k2', 0, 'other');
+            """)
+        }
+        let db = try Database(path: path)
+        XCTAssertEqual(try db.readSync { $0.userVersion }, Migrations.latestVersion)
+        var rows = try db.readSync { try RecordDAO.page($0, filter: RecordFilter(), before: nil, limit: 10) }
+        XCTAssertEqual(rows.map(\.id), ["in", "out"])
+        XCTAssertEqual(rows.last?.category?.name, "其他", "列表行的列顺序没错开")
+        XCTAssertFalse(try db.readSync { try RecordDAO.isMergedTransfer($0, id: "out") })
+
+        try db.writeSync { try RecordDAO.mergeIntoTransfer($0, outflowID: "out", outKind: .transferOut, inflowID: "in", inKind: .transferIn, group: "g") }
+        rows = try db.readSync { try RecordDAO.page($0, filter: RecordFilter(), before: nil, limit: 10) }
+        XCTAssertTrue(rows.allSatisfy { $0.record.entryType == .transfer && $0.record.categoryID == nil && $0.record.transferParty == nil })
+        XCTAssertTrue(try db.readSync { try RecordDAO.isMergedTransfer($0, id: "in") })
+
+        try db.writeSync { try RecordDAO.dissolveTransferGroup($0, group: "g") }
+        let out = try XCTUnwrap(try db.readSync { try RecordDAO.find($0, id: "out") })
+        XCTAssertEqual(out.kind, .purchase)
+        XCTAssertEqual(out.categoryID, "ex.other")
+        XCTAssertTrue(out.categoryAuto)
+        XCTAssertNil(out.transferGroupID)
+        let into = try XCTUnwrap(try db.readSync { try RecordDAO.find($0, id: "in") })
+        XCTAssertEqual(into.kind, .transferIn)
+        XCTAssertEqual(into.transferParty, .other, "拆开回到原来确认的对方")
+        XCTAssertEqual(into.entryType, .income)
+        XCTAssertFalse(try db.readSync { try RecordDAO.isMergedTransfer($0, id: "in") })
+    }
+
     func testAmountKeywordsMatchEachMinorUnit() {
         XCTAssertEqual(RecordDAO.amountMinors("38").map(\.minor), [38, 3800, 38000])
         XCTAssertEqual(RecordDAO.amountMinors("38.5").map(\.exponent), [2, 3])

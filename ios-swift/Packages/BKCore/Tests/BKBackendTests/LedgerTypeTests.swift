@@ -280,6 +280,195 @@ final class LedgerTypeTests: XCTestCase {
         XCTAssertTrue(feed.allSatisfy { $0.record.orderGroupID == nil })
     }
 
+    // MARK: 一笔支出和另一个账户的一笔收入合成转帐
+
+    /// 微信提现 10 元到中行卡：微信那边手动记了支出 10.10（含手续费），中行短信记成了收入 10.00
+    struct Withdrawal {
+        let wechat: Account
+        let boc: Account
+        let spendID: String
+        let incomeID: String
+    }
+
+    func withdrawal(_ backend: LedgerBackend) async throws -> Withdrawal {
+        let wechat = try await backend.addAccount(.pocket(name: "微信零钱", type: .wallet, currency: .cny, paletteID: "jade", openingBalanceMinor: 100_00))
+        let boc = try await addAccount(backend, bank: "boc", bankName: "中国银行", last4: "0001", opening: 100_00)
+        let other = try await category(backend, "其他")
+        let spendID = try await backend.addRecord(ManualEntry(
+            type: .expense, accountID: wechat.id, amountMinor: 10_10, currency: .cny, categoryID: other.id, time: now.addingTimeInterval(-300)
+        ))[0]
+        try await ingest(backend, "您的借记卡账户0001，于10月24日网上支付收入人民币10.00元,交易后余额110.00【中国银行】", at: now)
+        let income = try await backend.records(accountID: boc.id)
+        return Withdrawal(wechat: wechat, boc: boc, spendID: spendID, incomeID: try XCTUnwrap(income.first).id)
+    }
+
+    func testExpenseAndIncomeOfTwoAccountsMergeIntoTransferAndSplitBack() async throws {
+        let backend = try makeBackend()
+        let w = try await withdrawal(backend)
+        let other = try await category(backend, "其他")
+        var stats = try await backend.monthStats(year: 2026, month: 10)
+        XCTAssertEqual(stats.currencies.first?.expenseMinor, 10_10)
+        XCTAssertEqual(stats.currencies.first?.incomeMinor, 10_00)
+        let balancesBefore = try await backend.balanceSummaries()
+
+        let candidates = try await backend.transferMergeCandidates(recordID: w.spendID)
+        XCTAssertEqual(candidates.map(\.id), [w.incomeID], "别的账户、方向相反的那一笔")
+        let back = try await backend.transferMergeCandidates(recordID: w.incomeID)
+        XCTAssertEqual(back.map(\.id), [w.spendID])
+
+        try await backend.mergeTransfer(recordID: w.spendID, with: w.incomeID)
+        stats = try await backend.monthStats(year: 2026, month: 10)
+        let cny = try XCTUnwrap(stats.currencies.first)
+        XCTAssertEqual(cny.expenseMinor, 0, "不再算支出")
+        XCTAssertEqual(cny.incomeMinor, 0, "不再算收入")
+        XCTAssertEqual(cny.transferMinor, 10_10, "转帐只算转出那边")
+        let balancesAfter = try await backend.balanceSummaries()
+        XCTAssertEqual(balancesAfter[w.wechat.id]?.primary?.ledgerDerivedMinor, balancesBefore[w.wechat.id]?.primary?.ledgerDerivedMinor)
+        XCTAssertEqual(balancesAfter[w.boc.id]?.primary?.ledgerDerivedMinor, balancesBefore[w.boc.id]?.primary?.ledgerDerivedMinor)
+
+        let feed = try await backend.records(filter: RecordFilter(feed: true))
+        XCTAssertEqual(feed.map(\.id), [w.spendID], "首页合成一行，只留转出那边")
+        XCTAssertEqual(feed[0].record.entryType, .transfer)
+        XCTAssertEqual(feed[0].peer?.text, "中国银行 ·0001")
+        XCTAssertEqual(feed[0].peerMoney, Money(minorUnits: 10_00, currency: .cny), "到账金额不变，差额是手续费")
+        XCTAssertEqual(feed[0].category?.name, "转帐")
+        let waiting = try await backend.uncategorized()
+        XCTAssertTrue(waiting.isEmpty, "转帐不用分类")
+        let detail = try await backend.recordDetail(id: w.incomeID)
+        XCTAssertTrue(detail.mergedTransfer)
+        XCTAssertEqual(detail.transferPeer?.id, w.spendID)
+        XCTAssertEqual(detail.evidence.map(\.source), [.sms], "银行短信留着")
+        let none = try await backend.transferMergeCandidates(recordID: w.spendID)
+        XCTAssertTrue(none.isEmpty, "已经是转帐了")
+
+        try await backend.splitTransfer(recordID: w.incomeID)
+        let spend = try await backend.recordDetail(id: w.spendID)
+        XCTAssertFalse(spend.mergedTransfer)
+        XCTAssertEqual(spend.row.record.kind, .purchase)
+        XCTAssertEqual(spend.row.record.entryType, .expense)
+        XCTAssertEqual(spend.row.record.categoryID, other.id, "拆开回到原来的分类")
+        XCTAssertNil(spend.row.record.transferGroupID)
+        let income = try await backend.recordDetail(id: w.incomeID)
+        XCTAssertEqual(income.row.record.kind, .other)
+        XCTAssertEqual(income.row.record.entryType, .income)
+        XCTAssertNil(income.row.record.categoryID)
+        stats = try await backend.monthStats(year: 2026, month: 10)
+        XCTAssertEqual(stats.currencies.first?.expenseMinor, 10_10)
+        XCTAssertEqual(stats.currencies.first?.incomeMinor, 10_00)
+        let again = try await backend.uncategorized()
+        XCTAssertEqual(again.map(\.id), [w.incomeID])
+        do {
+            try await backend.splitTransfer(recordID: w.incomeID)
+            XCTFail("已经拆开了")
+        } catch BackendError.invalidTransfer {}
+    }
+
+    func testMergingIntoTransferNeedsOneExpenseAndOneIncomeOfDifferentAccounts() async throws {
+        let backend = try makeBackend()
+        let w = try await withdrawal(backend)
+        let credit = try await addAccount(backend, bank: "cmb", bankName: "招商银行", last4: "8810", type: .credit)
+        let ids = try await backend.addRecord(ManualEntry(type: .expense, accountID: w.boc.id, amountMinor: 5_00, currency: .cny, time: now))
+        let refund = try await backend.addRecord(ManualEntry(type: .expense, accountID: credit.id, amountMinor: 3_00, currency: .cny, isRefund: true, time: now))
+        let paidBack = try await backend.addRecord(ManualEntry(type: .income, accountID: credit.id, amountMinor: 200_00, currency: .cny, time: now))
+        for (a, b) in [(w.spendID, ids[0]), (w.incomeID, ids[0]), (w.spendID, refund[0])] {
+            do {
+                try await backend.mergeTransfer(recordID: a, with: b)
+                XCTFail("两笔支出、同一个账户、退款都不行")
+            } catch BackendError.invalidTransfer {}
+        }
+
+        // 转进信用卡算还款
+        try await backend.mergeTransfer(recordID: paidBack[0], with: ids[0])
+        let detail = try await backend.recordDetail(id: ids[0])
+        XCTAssertEqual(detail.row.record.kind, .repayment)
+        XCTAssertEqual(detail.row.category?.name, "还信用卡")
+        do {
+            try await backend.mergeTransfer(recordID: w.spendID, with: paidBack[0])
+            XCTFail("已经是转帐的不能再合")
+        } catch BackendError.invalidTransfer {}
+    }
+
+    func testBreakingUpAMergedTransferNeverDeletesEitherSide() async throws {
+        let backend = try makeBackend()
+        let w = try await withdrawal(backend)
+        let other = try await category(backend, "其他")
+
+        // 删掉银行那边：微信那笔回到原来的支出
+        try await backend.mergeTransfer(recordID: w.spendID, with: w.incomeID)
+        try await backend.deleteRecord(id: w.incomeID)
+        var spend = try await backend.recordDetail(id: w.spendID)
+        XCTAssertEqual(spend.row.record.entryType, .expense)
+        XCTAssertEqual(spend.row.record.categoryID, other.id)
+        XCTAssertFalse(spend.mergedTransfer)
+
+        // 银行那边改回收入：微信那笔是自己手动记的支出，不当成补记的另一边删掉，回到原来的支出
+        let backend2 = try makeBackend()
+        let second = try await withdrawal(backend2)
+        try await backend2.mergeTransfer(recordID: second.spendID, with: second.incomeID)
+        try await backend2.updateRecord(id: second.incomeID, RecordEdit(
+            accountID: second.boc.id, amountMinor: 10_00, currency: .cny, direction: .inflow, kind: .income,
+            counterparty: nil, time: nil, note: "", keepsCategory: false
+        ))
+        spend = try await backend2.recordDetail(id: second.spendID)
+        XCTAssertEqual(spend.row.record.entryType, .expense)
+        XCTAssertEqual(spend.row.record.categoryID, other.id)
+        let income = try await backend2.recordDetail(id: second.incomeID)
+        XCTAssertEqual(income.row.record.entryType, .income)
+        XCTAssertFalse(income.mergedTransfer)
+
+        // 银行那边换了另一边的账户：微信那笔回到支出，现金补记一笔
+        let backend3 = try makeBackend()
+        let third = try await withdrawal(backend3)
+        let cash = try await backend3.addAccount(.pocket(name: "现金", type: .cash, currency: .cny, paletteID: "ocean", openingBalanceMinor: 0))
+        try await backend3.mergeTransfer(recordID: third.spendID, with: third.incomeID)
+        try await backend3.updateRecord(id: third.incomeID, RecordEdit(
+            accountID: third.boc.id, amountMinor: 10_00, currency: .cny, direction: .inflow, kind: .transferIn,
+            counterparty: nil, time: nil, note: "", keepsCategory: false, transferParty: .own, peer: .account(cash.id)
+        ))
+        spend = try await backend3.recordDetail(id: third.spendID)
+        XCTAssertEqual(spend.row.record.entryType, .expense)
+        XCTAssertEqual(spend.row.record.categoryID, other.id)
+        let moved = try await backend3.recordDetail(id: third.incomeID)
+        XCTAssertEqual(moved.transferPeer?.record.accountID, cash.id)
+        XCTAssertFalse(moved.mergedTransfer, "换了另一边就是普通的转帐")
+    }
+
+    func testEditedMergedTransferStillSplitsBackWithEdits() async throws {
+        let backend = try makeBackend()
+        let w = try await withdrawal(backend)
+        let other = try await category(backend, "其他")
+        let daily = try await category(backend, "日用品")
+        try await backend.mergeTransfer(recordID: w.spendID, with: w.incomeID)
+        // 编辑页保存转帐：交易性质写成转出，另一边是银行记的，带上到账金额
+        try await backend.updateRecord(id: w.spendID, RecordEdit(
+            accountID: w.wechat.id, amountMinor: 10_10, currency: .cny, direction: .outflow, kind: .transferOut,
+            counterparty: nil, time: nil, note: "微信提现", keepsCategory: false, transferParty: .own,
+            peerAmountMinor: 10_00, peerCurrency: .cny
+        ))
+        var detail = try await backend.recordDetail(id: w.spendID)
+        XCTAssertTrue(detail.mergedTransfer, "改备注还是一对，还能拆开")
+        XCTAssertEqual(detail.transferPeer?.id, w.incomeID)
+        // 改银行那边的时间：微信那笔是自己记的，不跟着改时间
+        try await backend.updateRecord(id: w.incomeID, RecordEdit(
+            accountID: w.boc.id, amountMinor: 10_00, currency: .cny, direction: .inflow, kind: .transferIn,
+            counterparty: nil, time: now.addingTimeInterval(600), note: "", keepsCategory: false, transferParty: .own,
+            peerAmountMinor: 10_10, peerCurrency: .cny
+        ))
+        detail = try await backend.recordDetail(id: w.spendID)
+        XCTAssertTrue(detail.mergedTransfer)
+        XCTAssertEqual(detail.row.record.effectiveAt, now.addingTimeInterval(-300))
+        XCTAssertEqual(detail.row.record.amountMinor, 10_10)
+
+        // 合成期间原来的分类并进了别的分类：拆开后是并进去的那个
+        try await backend.mergeCategory(id: other.id, into: daily.id)
+        try await backend.splitTransfer(recordID: w.spendID)
+        detail = try await backend.recordDetail(id: w.spendID)
+        XCTAssertEqual(detail.row.record.kind, .purchase)
+        XCTAssertNil(detail.row.record.transferParty)
+        XCTAssertEqual(detail.row.record.categoryID, daily.id)
+        XCTAssertEqual(detail.row.record.note, "微信提现", "合成以后改的留着")
+    }
+
     // MARK: 分类管理
 
     func testCategoriesCanBeEditedAndDeletingMovesRecords() async throws {

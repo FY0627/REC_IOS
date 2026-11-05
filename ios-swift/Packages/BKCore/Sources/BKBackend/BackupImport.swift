@@ -190,6 +190,7 @@ enum BackupImport {
             row["account_id"] = remap(row["account_id"], accountMap)
             row["ingest_id"] = remap(row["ingest_id"], ingestMap)
             row["category_id"] = remap(row["category_id"], categoryMap)
+            row["merged_category_id"] = remap(row["merged_category_id"], categoryMap)
             let key = dedupeKey(row.text("dedupe_key"), accounts: accountMap, ingests: ingestMap)
             row["dedupe_key"] = .text(key)
             if let existing = try db.queryOne("SELECT id FROM records WHERE id = ? OR dedupe_key = ?", [id, key], { $0.string(0) }) {
@@ -236,10 +237,9 @@ enum BackupImport {
         try copy(source, "exchange_rates", into: db) { row in !localDays.contains(row.text("day")) }
         try copy(source, "settings", into: db) { _ in true }
 
-        // 配对、合单的另一笔这里本来就有（没有再加）时，剩下的一笔不再算配对、合单
+        // 配对、合单的另一笔这里本来就有（没有再加）时，剩下的一笔不再算配对（手动合成转帐的回到合成前）、合单
+        try RecordDAO.dissolveLoneTransferGroups(db)
         try db.execute("""
-        UPDATE records SET transfer_group = NULL WHERE transfer_group IN \
-        (SELECT transfer_group FROM records WHERE transfer_group IS NOT NULL GROUP BY transfer_group HAVING COUNT(*) < 2);
         UPDATE records SET order_group = NULL WHERE order_group IN \
         (SELECT order_group FROM records WHERE order_group IS NOT NULL GROUP BY order_group HAVING COUNT(*) < 2);
         """)

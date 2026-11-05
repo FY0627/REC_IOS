@@ -282,9 +282,9 @@ public enum RecordDAO {
         try db.run("UPDATE balance_observations SET record_id = NULL WHERE record_id = ?", [id])
         try db.run("UPDATE pending_items SET duplicate_of_record_id = NULL WHERE duplicate_of_record_id = ?", [id])
         try db.run("DELETE FROM records WHERE id = ?", [id])
-        // 配对的内部转账只剩另一边：不再算内部转账
+        // 配对的内部转账只剩另一边：不再算内部转账（手动合成的回到合成前的样子）
         if let group = record.transferGroupID, try db.scalarInt("SELECT COUNT(*) FROM records WHERE transfer_group = ?", [group]) < 2 {
-            try clearTransferGroup(db, group: group)
+            try dissolveTransferGroup(db, group: group)
         }
         if let group = record.orderGroupID { try clearOrderGroupIfAlone(db, group: group) }
         return true
@@ -297,12 +297,20 @@ public enum RecordDAO {
         for id in ids { try db.run("UPDATE records SET category_id = ?, category_auto = ? WHERE id = ?", [categoryID, auto, id]) }
     }
 
-    /// 分类删除或合并：原来记在这些分类上的流水改记到 `to`（nil 为待分类，不再算自动归类）
+    /// 分类删除或合并：原来记在这些分类上的流水改记到 `to`（nil 为待分类，不再算自动归类）。
+    /// 合成转帐的记着的合成前的分类也一起改，拆开时回到改过的分类
     public static func reassignCategory(_ db: SQLiteConnection, from ids: [String], to: String?) throws {
         guard !ids.isEmpty else { return }
         let placeholders = ids.map { _ in "?" }.joined(separator: ", ")
         try db.run(
             "UPDATE records SET category_id = ?, category_auto = category_auto AND ? IS NOT NULL WHERE category_id IN (\(placeholders))",
+            ([to, to] as [SQLBindable]) + ids.map { $0 as SQLBindable }
+        )
+        try db.run(
+            """
+            UPDATE records SET merged_category_id = ?, merged_category_auto = merged_category_auto AND ? IS NOT NULL \
+            WHERE merged_category_id IN (\(placeholders))
+            """,
             ([to, to] as [SQLBindable]) + ids.map { $0 as SQLBindable }
         )
     }
@@ -408,6 +416,53 @@ public enum RecordDAO {
 
     public static func clearTransferGroup(_ db: SQLiteConnection, group: String) throws {
         try db.run("UPDATE records SET transfer_group = NULL WHERE transfer_group = ?", [group])
+    }
+
+    // MARK: 合成转帐
+
+    /// 一笔流出和另一个账户的一笔流入手动合成转帐：两笔共用转帐组 `group`，交易性质改成 `outKind` / `inKind`，
+    /// 不再有分类和转账对方（和自动配对的转帐一样）。合成前的交易性质、对方、分类记在 `merged_*` 里，拆开时改回去
+    public static func mergeIntoTransfer(
+        _ db: SQLiteConnection, outflowID: String, outKind: TransactionKind, inflowID: String, inKind: TransactionKind, group: String
+    ) throws {
+        for (id, kind) in [(outflowID, outKind), (inflowID, inKind)] {
+            try db.run(
+                """
+                UPDATE records SET merged_kind = kind, merged_party = transfer_party, merged_category_id = category_id, \
+                merged_category_auto = category_auto, kind = ?, transfer_party = NULL, category_id = NULL, category_auto = 0, \
+                transfer_group = ? WHERE id = ?
+                """,
+                [kind.rawValue, group, id]
+            )
+        }
+    }
+
+    /// 这一笔是手动合成的转帐（拆开能回到合成前）
+    public static func isMergedTransfer(_ db: SQLiteConnection, id: String) throws -> Bool {
+        try db.scalarInt("SELECT COUNT(*) FROM records WHERE id = ? AND merged_kind IS NOT NULL", [id]) > 0
+    }
+
+    /// 转帐组拆开，不再配对。手动合成的回到合成前的交易性质、对方和分类（分类已经删掉的回到待分类）
+    public static func dissolveTransferGroup(_ db: SQLiteConnection, group: String) throws {
+        try db.run(
+            """
+            UPDATE records SET kind = merged_kind, transfer_party = merged_party, \
+            category_id = (SELECT c.id FROM categories c WHERE c.id = records.merged_category_id), \
+            category_auto = merged_category_auto AND EXISTS (SELECT 1 FROM categories c WHERE c.id = records.merged_category_id), \
+            merged_kind = NULL, merged_party = NULL, merged_category_id = NULL, merged_category_auto = 0 \
+            WHERE transfer_group = ? AND merged_kind IS NOT NULL
+            """,
+            [group]
+        )
+        try clearTransferGroup(db, group: group)
+    }
+
+    /// 只剩一笔的转帐组都拆开（导入时另一边这里本来就有、没有再加）
+    public static func dissolveLoneTransferGroups(_ db: SQLiteConnection) throws {
+        let groups = try db.query(
+            "SELECT transfer_group FROM records WHERE transfer_group IS NOT NULL GROUP BY transfer_group HAVING COUNT(*) < 2", []
+        ) { $0.string(0) }
+        for group in groups { try dissolveTransferGroup(db, group: group) }
     }
 
     public static func idForDedupeKey(_ db: SQLiteConnection, _ key: String) throws -> String? {

@@ -5,7 +5,7 @@
 /// - 每个迁移在一个事务里执行，失败整体回滚，版本号不变；
 /// - 每次修改表结构都要在 `DatabaseTests` 里补迁移测试。
 public enum Migrations {
-    public static let latestVersion = 11
+    public static let latestVersion = 12
 
     static let steps: [(version: Int, sql: String)] = [
         (1, """
@@ -239,6 +239,14 @@ public enum Migrations {
             PRIMARY KEY (merchant, category_id)
         );
         CREATE INDEX merchant_categories_category ON merchant_categories(category_id);
+        """),
+        // 一笔支出和另一个账户的一笔收入手动合成转帐（ADR 0014 修订 2026-11-05）：记下合成前的交易性质、对方、分类，
+        // 拆开时改回去。`merged_kind` 不为空就是合成的
+        (12, """
+        ALTER TABLE records ADD COLUMN merged_kind TEXT;
+        ALTER TABLE records ADD COLUMN merged_party TEXT;
+        ALTER TABLE records ADD COLUMN merged_category_id TEXT;
+        ALTER TABLE records ADD COLUMN merged_category_auto INTEGER NOT NULL DEFAULT 0;
         """),
     ]
 

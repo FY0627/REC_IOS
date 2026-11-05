@@ -345,7 +345,7 @@ public final class LedgerBackend: Sendable {
 
     /// 修改一笔流水。改了时间：交易时间和接收时间都改成它（影响排序和余额推算）；没改时间则保持原样。
     /// 配对的内部转账：另一边是手动补记的就跟着改（金额、币种、时间），仍是一对；填了到账多少（`edit.peerAmountMinor`）就用填的。
-    /// 另一边是银行通知记的：填了到账多少时改它的金额和币种，仍是一对；
+    /// 另一边是银行通知记的、或者是手动合成转帐的（用户自己记的那一笔）：填了到账多少时改它的金额和币种，仍是一对；
     /// 没填时改了账户、金额、币种、方向，或不再是转账类，就不再配对。
     /// 转帐可以换另一边的账户（`edit.peer`）。改了分类：同一单的几笔一起改，这笔不再算自动归类，这个商户重新学。转帐不保存分类
     public func updateRecord(id: String, _ edit: RecordEdit) async throws {
@@ -376,11 +376,14 @@ public final class LedgerBackend: Sendable {
             if record.kind != .transferIn, record.kind != .transferOut { record.transferParty = nil }
             if let group = original.transferGroupID {
                 let peer = try RecordDAO.inGroup(db, group: group).first { $0.id != id }
+                // 手动补记的另一边跟着这一笔改。手动合成转帐的另一边是用户自己记的支出（收入），和银行通知记的一样不跟着改时间、方向
+                var follows = false
+                if let peer, peer.source == .manual { follows = try !RecordDAO.isMergedTransfer(db, id: peer.id) }
                 let stillTransfer = record.kind.isTransferLike && record.transferParty != .other
                 let toItself = peer?.accountID == record.accountID && (edit.peerCurrency ?? peer?.currency) == record.currency
-                let confirmedBankPeer = edit.peer == .keep && edit.peerAmountMinor != nil
+                let confirmedPeer = edit.peer == .keep && edit.peerAmountMinor != nil
                     && original.accountID == record.accountID && original.direction == record.direction
-                if let peer, stillTransfer, !toItself, peer.source == .manual || confirmedBankPeer {
+                if let peer, stillTransfer, !toItself, follows || confirmedPeer {
                     // 两边原来一样多时，没填到账多少就跟着这一笔；原来不一样（手续费、换汇）时不动
                     let matched = peer.amountMinor == original.amountMinor && peer.currency == original.currency
                     var synced = peer
@@ -390,7 +393,7 @@ public final class LedgerBackend: Sendable {
                         synced.chargeCurrency = nil
                         synced.settlementMinor = nil
                     }
-                    if peer.source == .manual {
+                    if follows {
                         synced.direction = record.direction.opposite
                         synced.transactionTime = record.transactionTime
                         synced.receivedAt = record.receivedAt
@@ -398,9 +401,9 @@ public final class LedgerBackend: Sendable {
                     _ = try RecordDAO.update(db, synced)
                 } else if !stillTransfer || original.accountID != record.accountID || original.amountMinor != record.amountMinor
                             || original.currency != record.currency || original.direction != record.direction {
-                    // 不再是一对：手动补记的另一边没有意义了，删掉；银行通知记的留着
-                    if let peer, peer.source == .manual { _ = try RecordDAO.delete(db, id: peer.id) }
-                    try RecordDAO.clearTransferGroup(db, group: group)
+                    // 不再是一对：手动补记的另一边没有意义了，删掉；银行通知记的留着，手动合成转帐的另一边回到合成前的样子
+                    if let peer, follows { _ = try RecordDAO.delete(db, id: peer.id) }
+                    try RecordDAO.dissolveTransferGroup(db, group: group)
                     record.transferGroupID = nil
                 }
             }
@@ -430,7 +433,7 @@ public final class LedgerBackend: Sendable {
         }
     }
 
-    /// 编辑转帐时换了另一边的账户。先拆开现在的另一边（手动补记的删掉，银行通知记的留着、不再配对），
+    /// 编辑转帐时换了另一边的账户。先拆开现在的另一边（手动补记的删掉，银行通知记的留着、不再配对，手动合成转帐的回到合成前），
     /// 再和新账户配对：那个账户前后 3 天里有对得上（`amountMinor`、`currency` 是另一边的金额和币种）、还没配对的一笔（银行通知记的）就配成一对，
     /// 没有就在那边补记一笔。可以是同一个账户的另一个币种（换汇）。
     /// 转进信用卡算还款。`untracked`：对方是自己没添加到 App 的账户，不配对
@@ -441,8 +444,10 @@ public final class LedgerBackend: Sendable {
         let recordID = record.id
         let current = try record.transferGroupID.map { group in try RecordDAO.inGroup(db, group: group).filter { $0.id != recordID } } ?? []
         if case .account(let peerID) = change, current.count == 1, current[0].accountID == peerID { return }
-        for peer in current where peer.source == .manual { _ = try RecordDAO.delete(db, id: peer.id) }
-        if let group = record.transferGroupID { try RecordDAO.clearTransferGroup(db, group: group) }
+        for peer in current where peer.source == .manual {
+            if try !RecordDAO.isMergedTransfer(db, id: peer.id) { _ = try RecordDAO.delete(db, id: peer.id) }
+        }
+        if let group = record.transferGroupID { try RecordDAO.dissolveTransferGroup(db, group: group) }
         record.transferGroupID = nil
         guard case .account(let peerID) = change else {
             if record.kind == .transferIn || record.kind == .transferOut { record.transferParty = .own }
@@ -837,6 +842,54 @@ public final class LedgerBackend: Sendable {
         }
     }
 
+    // MARK: 一笔支出和另一个账户的一笔收入合成转帐
+
+    /// 可以和这一笔合成转帐的另一边：别的账户、方向相反的支出（不是退款）或收入，前后 3 天内，离得近的在前。
+    /// 币种、金额可以和这一笔不一样（手续费、换汇）
+    public func transferMergeCandidates(recordID: String) async throws -> [RecordRow] {
+        let calendar = calendar
+        return try await database.read { db in
+            guard let row = try RecordDAO.findRow(db, id: recordID) else { throw BackendError.notFound }
+            let r = row.record
+            guard r.canMergeIntoTransfer else { return [] }
+            let window: TimeInterval = 3 * 86_400
+            let rows = try RecordDAO.postedRows(db, from: r.effectiveAt.addingTimeInterval(-window), to: r.effectiveAt.addingTimeInterval(window), limit: 1000)
+                .filter { other in
+                    other.record.accountID != r.accountID && other.record.direction == r.direction.opposite && other.record.canMergeIntoTransfer
+                }
+                .sorted { abs($0.record.effectiveAt.timeIntervalSince(r.effectiveAt)) < abs($1.record.effectiveAt.timeIntervalSince(r.effectiveAt)) }
+            return try Self.decorate(Array(rows.prefix(30)), db: db, calendar: calendar)
+        }
+    }
+
+    /// 一个账户的一笔流出（支出）和另一个账户的一笔流入（收入）合成一笔转帐，例如微信提现到银行卡：
+    /// 两笔都留着，金额、币种、时间、来源不变，共用一个转帐组，和自动配对的内部转帐一样不算收支；转进信用卡算还款。
+    /// 金额、币种可以不一样，差额（手续费、汇损）只体现在余额上。合成前的交易性质、对方和分类记下来，拆开（`splitTransfer`）时改回去
+    public func mergeTransfer(recordID: String, with otherID: String) async throws {
+        let newID = newID
+        try await database.write { db in
+            guard let a = try RecordDAO.find(db, id: recordID), let b = try RecordDAO.find(db, id: otherID) else { throw BackendError.notFound }
+            let (out, into) = a.direction == .outflow ? (a, b) : (b, a)
+            guard out.direction == .outflow, into.direction == .inflow, out.accountID != into.accountID,
+                  out.canMergeIntoTransfer, into.canMergeIntoTransfer,
+                  let target = try AccountDAO.find(db, id: into.accountID) else { throw BackendError.invalidTransfer }
+            let repayment = target.cardType == .credit
+            try RecordDAO.mergeIntoTransfer(
+                db, outflowID: out.id, outKind: repayment ? .repayment : .transferOut,
+                inflowID: into.id, inKind: repayment ? .repayment : .transferIn, group: newID()
+            )
+        }
+    }
+
+    /// 拆开手动合成的转帐：两笔都回到合成前的支出、收入和分类；合成以后改过的金额、时间、备注留着
+    public func splitTransfer(recordID: String) async throws {
+        try await database.write { db in
+            guard let record = try RecordDAO.find(db, id: recordID) else { throw BackendError.notFound }
+            guard let group = record.transferGroupID, try RecordDAO.isMergedTransfer(db, id: recordID) else { throw BackendError.invalidTransfer }
+            try RecordDAO.dissolveTransferGroup(db, group: group)
+        }
+    }
+
     /// 删除一笔流水。收到它的那条通知仍记着，同一条通知再来不会重新记上
     public func deleteRecord(id: String) async throws {
         let deleted = try await database.write { try RecordDAO.delete($0, id: id) }
@@ -858,7 +911,8 @@ public final class LedgerBackend: Sendable {
             return RecordDetail(
                 row: row, evidence: evidence, transferPeer: peer, related: related,
                 refunds: try RecordDAO.refunds(db, of: id), fee: try RecordDAO.splitFee(db, of: row.record),
-                orderMembers: try Self.decorate(members, db: db, calendar: calendar)
+                orderMembers: try Self.decorate(members, db: db, calendar: calendar),
+                mergedTransfer: try row.record.transferGroupID != nil && RecordDAO.isMergedTransfer(db, id: id)
             )
         }
     }

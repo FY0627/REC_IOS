@@ -364,6 +364,22 @@ final class LedgerStore {
         await refresh()
     }
 
+    // MARK: 一笔支出和另一个账户的一笔收入合成转帐
+
+    func transferMergeCandidates(recordID: String) async -> [RecordRow] {
+        (try? await backend?.transferMergeCandidates(recordID: recordID)) ?? []
+    }
+
+    func mergeTransfer(recordID: String, with otherID: String) async throws {
+        try await backend?.mergeTransfer(recordID: recordID, with: otherID)
+        await refresh()
+    }
+
+    func splitTransfer(recordID: String) async throws {
+        try await backend?.splitTransfer(recordID: recordID)
+        await refresh()
+    }
+
     func ingestLog() async -> [IngestLogEntry] {
         (try? await backend?.ingestLog(limit: 100)) ?? []
     }
