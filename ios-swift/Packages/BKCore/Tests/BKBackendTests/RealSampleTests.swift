@@ -62,6 +62,9 @@ final class RealSampleTests: XCTestCase {
         // Maya：验证码里提到的交易还没发生
         Sample(text: "Never share this OTP-Maya will never ask for it. To continue your PHP 900.00 purchase at EXAMPLE using your Maya card ending in 0007, enter OTP 123456. If unauthorized, block your card in the app now. Expires in 5 minutes.", expected: "忽略"),
         Sample(text: "MAG-INGAT: You're transferring PHP 1,200.00 to account ending in 0008. If you're sure it's safe, use OTP 654321. Not you? Call 8845-7788.", expected: "忽略"),
+
+        // 兴业 App 通知：没有署名，「*1234*」是卡号倒数第五到倒数第二位，这张卡后四位是 2345
+        Sample(text: "您的借记卡*1234*于11月05日21:32支出0.01元，点击查看详情。", expected: "入账 2345 -0.01 CNY other posted"),
     ]
 
     let now = ParserSampleTests.reference
@@ -75,6 +78,7 @@ final class RealSampleTests: XCTestCase {
         let cards: [(String?, String, String, CardType, CurrencyCode)] = [
             ("boc", "中国银行", "0001", .debit, .cny), ("boc", "中国银行", "0006", .debit, .cny), ("cmb", "招商银行", "0002", .debit, .cny),
             (nil, "众安银行", "0003", .debit, .hkd), (nil, "恒生银行", "0004", .debit, .hkd), ("ccb", "建设银行", "0005", .credit, .cny),
+            ("cib", "兴业银行", "2345", .debit, .cny),
         ]
         for (bank, name, last4, type, currency) in cards {
             _ = try await backend.addAccount(AccountDraft(name: "", bankID: bank, bankName: name, last4: last4, cardType: type, currency: currency, paletteID: "ocean"))
@@ -121,6 +125,62 @@ final class RealSampleTests: XCTestCase {
         print("真实样本：\(Self.samples.count - wrong.count)/\(Self.samples.count) 正确")
         for line in wrong { print(line) }
         XCTAssertEqual(wrong, [])
+    }
+
+    /// 快捷指令把同一条中行短信连着交过来几遍（中间没有空白或换了行）：只记一笔，不算金额有歧义；
+    /// 之后再交一遍、或者交过来的遍数不同，都是重复的输入
+    func testRepeatedCopiesOfOneMessage() async throws {
+        let backend = try makeBackend()
+        try await addCards(backend)
+        let sms = "您的借记卡账户0001，于11月05日网上支付支取人民币0.01元,交易后余额13.13【中国银行】"
+        let first = try await backend.ingest(IngestRequest(text: sms + sms + sms, source: .auto))
+        XCTAssertEqual(first.recordedCount, 1)
+        XCTAssertEqual(first.pendingCount, 0)
+        for text in [sms, sms + "\n" + sms, sms + " " + sms + "\n" + sms] {
+            let again = try await backend.ingest(IngestRequest(text: text, source: .auto))
+            XCTAssertEqual(again.outcome, .duplicateInput, text)
+        }
+        let records = try await backend.records(limit: 10).map(\.record)
+        XCTAssertEqual(records.map(\.amountMinor), [1])
+        let pending = try await backend.openPendingItems()
+        XCTAssertEqual(pending.count, 0)
+        let stored = try await backend.ingestLog(limit: 10).first?.rawText
+        XCTAssertEqual(stored, sms)
+    }
+
+    /// 两条不同的中行短信连在一起：「【中国银行】」后面就是下一条，各记一笔
+    func testTwoBankOfChinaMessagesGlued() async throws {
+        let backend = try makeBackend()
+        try await addCards(backend)
+        let pay = "您的借记卡账户0001，于11月05日网上支付支取人民币0.01元,交易后余额13.13【中国银行】"
+        let income = "您的借记卡账户0001，于11月05日网上支付收入人民币0.02元,交易后余额13.15【中国银行】"
+        let result = try await backend.ingest(IngestRequest(text: pay + income, source: .auto))
+        XCTAssertEqual(result.recordedCount, 2)
+        XCTAssertEqual(result.pendingCount, 0)
+        let records = try await backend.records(limit: 10).map(\.record)
+        XCTAssertEqual(Set(records.map { "\($0.direction) \($0.amountMinor) \($0.balanceAfterMinor ?? -1)" }), ["outflow 1 1313", "inflow 2 1315"])
+    }
+
+    /// 「1234*」：最后一位不显示。只填了后四位时比较重叠的三位，填了完整卡号时倒数第五位也要对上
+    func testTailWithHiddenLastDigit() {
+        var card = Account(id: "a", name: "", bankID: "cib", bankName: "兴业银行", last4: "2345", cardType: .debit, currency: .cny, paletteID: "ocean", sortOrder: 0, createdAt: now)
+        XCTAssertTrue(card.matches(tail: "1234*"))
+        XCTAssertTrue(card.matches(tail: "2345"))
+        XCTAssertFalse(card.matches(tail: "2345*"))
+        XCTAssertFalse(card.matches(tail: "1235*"))
+        card.cardNumber = "6229000000012345"
+        XCTAssertTrue(card.matches(tail: "1234*"))
+        card.cardNumber = "6229000000092345"
+        XCTAssertFalse(card.matches(tail: "1234*"))
+    }
+
+    func testSingleCopy() {
+        let sms = "您的借记卡账户0001，于11月05日网上支付支取人民币0.01元,交易后余额13.13【中国银行】"
+        XCTAssertEqual(TextNormalizer.singleCopy(sms + sms + sms), sms)
+        XCTAssertEqual(TextNormalizer.singleCopy("\n" + sms + "\n\n" + sms + " "), sms)
+        XCTAssertEqual(TextNormalizer.singleCopy(sms), sms)
+        XCTAssertEqual(TextNormalizer.singleCopy(sms + sms + "。"), sms + sms + "。", "不是正好几遍的不动")
+        XCTAssertEqual(TextNormalizer.singleCopy("哈哈哈哈哈哈哈哈"), "哈哈哈哈哈哈哈哈", "太短的不动")
     }
 
     /// 三笔完成扣款各自了结对应的冻结，中行那笔没有完成扣款的通知，还冻结着

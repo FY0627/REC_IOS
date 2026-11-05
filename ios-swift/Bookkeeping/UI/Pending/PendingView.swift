@@ -92,7 +92,8 @@ struct PendingView: View {
 
     static func belongs(_ item: PendingItem, to account: Account) -> Bool {
         if item.candidateAccountIDs.contains(account.id) { return true }
-        return account.isCard && item.candidateAccountIDs.isEmpty && item.draft?.cardTail == account.last4
+        guard account.isCard, item.candidateAccountIDs.isEmpty, let tail = item.draft?.cardTail else { return false }
+        return account.matches(tail: tail)
     }
 
     private func reload() async {
@@ -292,7 +293,7 @@ private struct PendingItemCard: View {
 
     private var candidates: [Account] {
         if item.candidateAccountIDs.isEmpty, let tail = item.draft?.cardTail {
-            return accounts.filter { $0.last4 == tail }
+            return accounts.filter { $0.isCard && $0.matches(tail: tail) }
         }
         return accounts.filter { item.candidateAccountIDs.contains($0.id) }
     }

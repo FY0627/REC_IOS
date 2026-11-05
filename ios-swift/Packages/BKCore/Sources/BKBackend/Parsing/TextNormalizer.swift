@@ -35,6 +35,23 @@ enum TextNormalizer {
         return text.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    /// 快捷指令有时把同一条通知连着交过来几遍（「AAA」「A\nA」）：整段正好是同一段文字重复几遍时只留一遍，空白不算。
+    /// 每遍至少 10 个字，「哈哈哈哈」这样的短内容不动；其余原样返回
+    static func singleCopy(_ text: String) -> String {
+        let minimum = 10
+        let chars = Array(text)
+        let positions = chars.indices.filter { !chars[$0].isWhitespace }
+        let count = positions.count
+        guard count >= 2 * minimum else { return text }
+        let compact = positions.map { chars[$0] }
+        for period in minimum...(count / 2) where count % period == 0 {
+            if (period..<count).allSatisfy({ compact[$0] == compact[$0 - period] }) {
+                return String(chars[positions[0]...positions[period - 1]])
+            }
+        }
+        return text
+    }
+
     static func htmlToText(_ html: String) -> String {
         var text = dropBlocks.replace(html, with: " ")
         text = comments.replace(text, with: " ")

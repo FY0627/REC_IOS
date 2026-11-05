@@ -176,9 +176,17 @@ public struct Account: Identifiable, Hashable, Sendable, Codable {
     /// 银行卡（有尾号，参与自动记账匹配）
     public var isCard: Bool { cardType.isCard }
 
-    /// 通知里写的尾号是不是这张卡。邮储等只写后三位（「尾号017」）
+    /// 通知里写的尾号是不是这张卡。邮储等只写后三位（「尾号017」）。
+    /// 末尾带「*」的是最后几位不显示：兴业的「*1234*」是倒数第五到倒数第二位，记成「1234*」。
+    /// 填了完整卡号时和卡号末尾逐位比较；没填时只能比较和后四位重叠的几位（「234」），至少要 3 位
     public func matches(tail: String) -> Bool {
-        last4 == tail || (tail.count == 3 && last4.hasSuffix(tail))
+        guard tail.hasSuffix("*") else { return last4 == tail || (tail.count == 3 && last4.hasSuffix(tail)) }
+        let pattern = Array(Self.numberPattern(tail))
+        if let number = cardNumber, number.count >= pattern.count {
+            return zip(pattern, number.suffix(pattern.count)).allSatisfy { $0 == "X" || $0 == $1 }
+        }
+        let overlap = zip(pattern.suffix(4), last4.suffix(min(4, pattern.count))).filter { $0.0 != "X" }
+        return overlap.count >= 3 && overlap.allSatisfy { $0 == $1 }
     }
     public var deleted: Bool { deletedAt != nil }
 

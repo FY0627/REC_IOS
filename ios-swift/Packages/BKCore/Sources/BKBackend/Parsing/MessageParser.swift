@@ -70,6 +70,8 @@ public enum MessageParser {
         Rx(#"[*xX•]\[(\d{4})\]"#),
         Rx(#"\bcard\s*\((\d{4})\)"#),
         Rx(#"\b(?:cc|card)\s+(\d{4})(?![\d年月日元.,])"#),
+        // 兴业的 App 通知「您的借记卡*1234*于…支出」：写的是倒数第五到倒数第二位，最后一位不显示，记成「1234*」（`Account.matches(tail:)`）
+        Rx(#"(?:借记卡|储蓄卡|信用卡|贷记卡|扣账卡|账户|账号|卡号?)\s*[*xX•](\d{4}[*xX•])(?![\d*xX•])"#),
     ]
     private static let referencePattern = Rx(#"(?:交易流水号|流水号|交易参考号|参考号|凭证号|交易编号|交易序号|reference(?:\s+no\.?|\s+number)?|\bref(?:\.|\s+no\.?)?|txn id|transaction id)\s*[：:#]?\s*([A-Za-z0-9][A-Za-z0-9\-]{5,31})"#)
     private static let longDigits = Rx(#"\d{9,}"#)
@@ -144,7 +146,7 @@ public enum MessageParser {
 
     /// 解析和用户模板使用的正文：格式统一，邮件去掉引用的历史邮件。
     public static func cleaned(_ text: String, source: SourceKind) -> String {
-        var cleaned = TextNormalizer.normalize(text)
+        var cleaned = TextNormalizer.singleCopy(TextNormalizer.normalize(text))
         // 来源分不出时也按邮件处理引用历史：短信和 App 通知里不会出现「原始邮件」分隔线或「>」引用行
         if source == .email || source == .auto { cleaned = EmailCleaner.stripQuotedHistory(cleaned) }
         return cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -192,7 +194,9 @@ public enum MessageParser {
         var tails: [Mention<String>] = []
         for pattern in tailPatterns {
             for match in pattern.matches(ns) where isFree(match.range) {
-                guard let value = match.group(1, in: ns) else { continue }
+                guard let group = match.group(1, in: ns) else { continue }
+                // 不显示的位统一写成「*」
+                let value = group.replacingOccurrences(of: "[xX•]$", with: "*", options: .regularExpression)
                 tails.append(Mention(range: match.range, value: value))
                 mask(match.range)
             }
@@ -266,11 +270,12 @@ public enum MessageParser {
         for m in url.matches(ns) { mask(m.range) }
 
         // 4. 句子与分句
-        let sentences = splitRanges(ns, by: sentenceBreak)
+        let breaks = (sentenceBreak.matches(ns).map(\.range) + signatureBreaks(in: ns)).sorted { $0.location < $1.location }
+        let sentences = splitRanges(ns, at: breaks)
         func sentenceIndex(_ location: Int) -> Int {
             sentences.firstIndex { location >= $0.location && location < $0.location + $0.length } ?? max(0, sentences.count - 1)
         }
-        let clauseBoundaries = clauseBreak.matches(ns).map(\.range.location) + sentenceBreak.matches(ns).map(\.range.location)
+        let clauseBoundaries = clauseBreak.matches(ns).map(\.range.location) + breaks.map(\.location)
 
         // 5. 金额
         var units = Array(cleaned.utf16)
@@ -725,13 +730,23 @@ public enum MessageParser {
         return nil
     }
 
-    private static func splitRanges(_ ns: NSString, by rx: Rx) -> [NSRange] {
+    /// 夹在文字中间的银行【署名】：一条通知在这里结束、下一条开始。中行的短信以「【中国银行】」结尾，前面没有句号，
+    /// 几条连在一起交过来时不在这里断开，就成了同一句里的几个金额。返回每个署名的「】」
+    private static let middleSignature = Rx(#"(?<=[^\n])【([^【】\n]{2,24})】(?=\S)"#)
+    private static func signatureBreaks(in ns: NSString) -> [NSRange] {
+        middleSignature.matches(ns).compactMap { m in
+            guard let name = m.group(1, in: ns), Lexicon.bankSignature.test(name) || BankCatalog.entry(signature: name) != nil else { return nil }
+            return NSRange(location: m.range.location + m.range.length - 1, length: 1)
+        }
+    }
+
+    private static func splitRanges(_ ns: NSString, at breaks: [NSRange]) -> [NSRange] {
         var ranges: [NSRange] = []
         var start = 0
-        for m in rx.matches(ns) {
-            let end = m.range.location + m.range.length
+        for range in breaks {
+            let end = range.location + range.length
             if end > start { ranges.append(NSRange(location: start, length: end - start)) }
-            start = end
+            start = max(start, end)
         }
         if start < ns.length { ranges.append(NSRange(location: start, length: ns.length - start)) }
         return ranges

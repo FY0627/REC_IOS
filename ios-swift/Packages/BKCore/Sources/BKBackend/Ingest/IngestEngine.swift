@@ -82,6 +82,9 @@ struct IngestEngine {
     // MARK: 入口
 
     func run(_ request: IngestRequest) throws -> IngestResult {
+        // 同一条通知连着交过来几遍时只留一遍：和只交一遍的是同一条输入（指纹相同），不会认成同一句里的几个金额
+        var request = request
+        request.text = TextNormalizer.singleCopy(request.text)
         let normalized = TextNormalizer.normalize(request.text)
         let receivedPart = request.receivedAt.map { String(Int64(($0.timeIntervalSince1970 * 1000).rounded())) } ?? ""
         let fingerprint = SHA256.hex([
