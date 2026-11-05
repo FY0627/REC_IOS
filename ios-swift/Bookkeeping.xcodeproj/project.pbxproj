@@ -374,6 +374,11 @@
 					"@executable_path/../../Frameworks",
 				);
 				MARKETING_VERSION = 0.1.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-framework",
+					UserNotificationsUI,
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.example.bookkeepingApp.swift.NotificationContent;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -400,6 +405,11 @@
 					"@executable_path/../../Frameworks",
 				);
 				MARKETING_VERSION = 0.1.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-framework",
+					UserNotificationsUI,
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.example.bookkeepingApp.swift.NotificationContent;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;

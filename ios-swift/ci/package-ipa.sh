@@ -96,6 +96,8 @@ APPEX_ID=$(read_appex CFBundleIdentifier)
 [[ "$(read_appex CFBundleVersion)" == "$BUILD" ]] || fail "通知扩展的构建号 $(read_appex CFBundleVersion) 和 App 的 $BUILD 不一样"
 APPEX_EXEC=$(read_appex CFBundleExecutable)
 [[ "$(lipo -archs "$APPEX/$APPEX_EXEC")" == "arm64" ]] || fail "通知扩展的架构不是 arm64"
+# 代码里没直接用到 UserNotificationsUI 的符号时，链接器不会自动链上它；系统就找不到扩展的上下文类，扩展一启动就崩溃（b127 就是这样）
+otool -L "$APPEX/$APPEX_EXEC" | grep -q "/UserNotificationsUI.framework/" || fail "通知扩展没有链接 UserNotificationsUI，一启动就会崩溃"
 # 变量后面紧跟中文时要加花括号：macOS 的 bash 会把全角字符当成变量名的一部分
 ok "通知扩展 PlugIns/NotificationContent.appex（${APPEX_ID}）"
 

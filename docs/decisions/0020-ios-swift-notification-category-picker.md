@@ -29,6 +29,10 @@
 
 `NotificationPicker` 放在 `BKModel`（只用 Foundation），App、扩展和体检共用，在 Linux 上也能测。扩展只链接 `BKModel`。
 
+扩展要**显式链接 `UserNotificationsUI`**（`OTHER_LDFLAGS = -framework UserNotificationsUI`）：扩展代码没有直接用到它的符号（协议和方法都走 Objective-C 运行时），
+`import` 带来的自动链接不会把它链上，系统找不到通知内容扩展的上下文类，扩展一启动就在 `EXConcreteExtensionContextVendor _extensionContextClass` 崩溃（b127 真机上就是这样，长按只剩系统的按钮）。
+`package-ipa.sh` 用 `otool -L` 检查扩展链接了它。
+
 ## 没有选的
 
 - **只用 App 自己的按钮**：最多 4 个，放不下全部大类；选了大类只能再发一条通知。
