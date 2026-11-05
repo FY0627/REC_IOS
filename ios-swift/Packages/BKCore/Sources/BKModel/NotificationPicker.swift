@@ -117,12 +117,18 @@ public struct NotificationPicker: Hashable, Sendable, Codable {
     // MARK: 按钮的标识
 
     public static let pickPrefix = "pick."
+    /// 有小类的大类。扩展把它换成小类；扩展没起来、点击交到 App 时，App 就记到这个大类
+    public static let openPrefix = "open."
     public static let appIdentifier = "more"
+
+    /// 通知扩展认的一组通知类别（`Config/NotificationContent-Info.plist` 的 `UNNotificationExtensionCategory` 要和它一致）。
+    /// 每条通知轮着用一个，类别上预先写好这条通知的第一页按钮：长按时系统马上显示，不用等扩展起来
+    public static let categoryIDs = (0..<20).map { "ingest.pick.\($0)" }
 
     public static func identifier(_ button: Button) -> String {
         switch button {
         case .pick(let option, _): pickPrefix + option.id
-        case .open(let option): "open." + option.id
+        case .open(let option): openPrefix + option.id
         case .parents(let page, _): "parents.\(page)"
         case .children(let parentID, let page): "children.\(page).\(parentID)"
         case .app: appIdentifier
@@ -134,7 +140,7 @@ public struct NotificationPicker: Hashable, Sendable, Codable {
         let parts = identifier.split(separator: ".", maxSplits: 2).map(String.init)
         switch parts.first {
         case "parents": return parentButtons(page: parts.count > 1 ? Int(parts[1]) ?? 0 : 0)
-        case "open": return childButtons(of: String(identifier.dropFirst("open.".count)), page: 0)
+        case "open": return childButtons(of: String(identifier.dropFirst(Self.openPrefix.count)), page: 0)
         case "children" where parts.count == 3: return childButtons(of: parts[2], page: Int(parts[1]) ?? 0)
         default: return nil
         }

@@ -25,7 +25,29 @@
 		<key>NSExtensionAttributes</key>
 		<dict>
 			<key>UNNotificationExtensionCategory</key>
-			<string>ingest.pick</string>
+			<array>
+				<string>ingest.pick</string>
+				<string>ingest.pick.0</string>
+				<string>ingest.pick.1</string>
+				<string>ingest.pick.2</string>
+				<string>ingest.pick.3</string>
+				<string>ingest.pick.4</string>
+				<string>ingest.pick.5</string>
+				<string>ingest.pick.6</string>
+				<string>ingest.pick.7</string>
+				<string>ingest.pick.8</string>
+				<string>ingest.pick.9</string>
+				<string>ingest.pick.10</string>
+				<string>ingest.pick.11</string>
+				<string>ingest.pick.12</string>
+				<string>ingest.pick.13</string>
+				<string>ingest.pick.14</string>
+				<string>ingest.pick.15</string>
+				<string>ingest.pick.16</string>
+				<string>ingest.pick.17</string>
+				<string>ingest.pick.18</string>
+				<string>ingest.pick.19</string>
+			</array>
 			<key>UNNotificationExtensionDefaultContentHidden</key>
 			<false/>
 			<key>UNNotificationExtensionInitialContentSizeRatio</key>

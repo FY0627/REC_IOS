@@ -92,7 +92,11 @@ read_appex() { /usr/libexec/PlistBuddy -c "Print :$1" "$APPEX/Info.plist" 2>/dev
 APPEX_ID=$(read_appex CFBundleIdentifier)
 [[ "$APPEX_ID" == "$EXPECTED_BUNDLE_ID.NotificationContent" ]] || fail "通知扩展的 Bundle ID 是 ${APPEX_ID}，期望 $EXPECTED_BUNDLE_ID.NotificationContent"
 [[ "$(read_appex NSExtension:NSExtensionPointIdentifier)" == "com.apple.usernotifications.content-extension" ]] || fail "通知扩展的类型不对"
-[[ "$(read_appex NSExtension:NSExtensionAttributes:UNNotificationExtensionCategory)" == "ingest.pick" ]] || fail "通知扩展的类别不是 ingest.pick"
+# 类别池子 ingest.pick.0…19（NotificationPicker.categoryIDs）都要在
+CATEGORIES=$(read_appex NSExtension:NSExtensionAttributes:UNNotificationExtensionCategory)
+for i in $(seq 0 19); do
+  grep -qx "[[:space:]]*ingest\.pick\.${i}" <<< "$CATEGORIES" || fail "通知扩展的类别里没有 ingest.pick.${i}"
+done
 [[ "$(read_appex CFBundleVersion)" == "$BUILD" ]] || fail "通知扩展的构建号 $(read_appex CFBundleVersion) 和 App 的 $BUILD 不一样"
 APPEX_EXEC=$(read_appex CFBundleExecutable)
 [[ "$(lipo -archs "$APPEX/$APPEX_EXEC")" == "arm64" ]] || fail "通知扩展的架构不是 arm64"

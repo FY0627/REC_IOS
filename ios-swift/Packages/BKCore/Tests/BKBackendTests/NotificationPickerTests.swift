@@ -51,6 +51,12 @@ final class NotificationPickerTests: XCTestCase {
         XCTAssertEqual(titles(picker.parentButtons(page: 0)), ["衣着", "居住", "交通", "更多大类"])
     }
 
+    func testCategoryPoolMatchesTheExtension() {
+        XCTAssertEqual(NotificationPicker.categoryIDs.count, 20)
+        XCTAssertEqual(Set(NotificationPicker.categoryIDs).count, NotificationPicker.categoryIDs.count)
+        XCTAssertEqual(NotificationPicker.categoryIDs.first, "ingest.pick.0", "和 Config/NotificationContent-Info.plist 里写的一样")
+    }
+
     func testTravelsThroughUserInfoAsJSON() {
         let picker = NotificationPicker(first: food.children[0], groups: [food] + others)
         XCTAssertEqual(NotificationPicker(json: picker.json), picker)

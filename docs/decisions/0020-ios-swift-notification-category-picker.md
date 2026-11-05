@@ -17,7 +17,9 @@
 
 **加一个通知内容扩展** `NotificationContent`（`ios-swift/NotificationContent/`，Bundle ID `com.example.bookkeepingApp.swift.NotificationContent`），只管换按钮：
 
-- 记账结果通知的类别固定是 `ingest.pick`，扩展的 `Info.plist` 认这个类别（`Config/NotificationContent-Info.plist`）；App 启动时和发通知前注册它。
+- 记账结果通知的类别从一个池子里轮着用（`NotificationPicker.categoryIDs`，`ingest.pick.0`…`19`），扩展的 `Info.plist` 认这一组（`Config/NotificationContent-Info.plist`，另外认旧版发出的 `ingest.pick`）。
+  发通知前把轮到的类别的按钮写成这条通知的第一页：长按时系统马上显示，不用等扩展进程起来（真机上先看到一个「打开 App」、过一会儿才换成大类，用户觉得慢）；
+  扩展起来后设的还是这几个按钮，看不出变化，之后翻页、点大类换小类由扩展换。20 条以前的通知用的类别会被后来的换掉，扩展起来后会改回它自己的第一页。
 - App 发通知时把要显示的大类、小类和顺序写进 userInfo（`BKModel/NotificationPicker.swift`，JSON）。扩展不读账本，不需要 App Group，数据库不用挪。
 - 按钮（一页 3 个选项，第 4 个翻页、返回或打开 App）：
   - 第一层：这个商户选过的分类（有的话，点了直接记），再是全部大类，常选的在前（这个商户选过的、最近 200 笔里用得多的），没用过的按分类顺序；「更多大类」翻页，最后一页是「打开 App」；
@@ -43,5 +45,7 @@
 ## 影响
 
 - IPA 里多一个 `PlugIns/NotificationContent.appex`。iLoader 签名时要多签它，免费账号每周 10 个 App ID 的额度里多用一个。CI 的 `package-ipa.sh` 检查扩展在不在、Bundle ID、类别、构建号和架构。
-- 扩展没起来时（没签上、被系统停用），通知只有「打开 App」，点了照样打开选分类面板。
+- 扩展没起来时（没签上、被系统停用），长按看到的是 App 写好的第一页：点分类照样保存，点有小类的大类就记到这个大类，「更多大类」翻不了页。
+- 通知代理收按钮点击的方法要在主线程收尾（`@MainActor`）：异步版本默认在别的线程跑完，App 在前台时长按通知点分类，系统收尾时要求主线程，App 会崩溃退出。
+- 免费账号用 iLoader 安装时要用 v2.3.10：v2.4.0 起扩展借用主 App 的描述文件，系统不运行它。
 - 单元测试覆盖不到扩展本身，要真机验证：长按通知看第一页、翻页、点大类换小类、点小类后流水有了分类。

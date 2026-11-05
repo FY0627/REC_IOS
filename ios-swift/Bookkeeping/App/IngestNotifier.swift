@@ -9,8 +9,8 @@ import BKModel
 /// 在「我的 › 通知 › 记账结果」里选择全部通知、只通知失败或关闭；第一次打开时请求通知权限。
 /// 同一笔交易的另一来源（短信 + 邮件）合并、重复输入、验证码和营销短信不发通知。
 ///
-/// 选「全部」时，还没分类、或者自动归类的流水可以长按选分类（ADR 0020）：通知类别固定是 `categoryID`，
-/// 通知扩展（`NotificationContent`）按 userInfo 里的 `NotificationPicker` 换按钮——先是大类，翻页，点大类就地换成小类——
+/// 选「全部」时，还没分类、或者自动归类的流水可以长按选分类（ADR 0020）：每条通知用类别池子里的一个，类别上写好第一页按钮，
+/// 长按时系统马上显示；通知扩展（`NotificationContent`）按 userInfo 里的 `NotificationPicker` 接着换按钮——翻页，点大类就地换成小类——
 /// 点到一个分类把「pick.分类」交回这里，不打开 App，在后台保存（`handle`），锁屏时也能写
 /// （账本的保护等级是 `completeUntilFirstUserAuthentication`，和自动化入账一样）。
 /// 点「打开 App」或点通知本身，打开 App 里这一笔的选分类面板（`CategorizeRequest`）。
@@ -59,8 +59,7 @@ enum IngestNotifier {
             // 银行短信本身已经响过，这条通知不再出声
             content.sound = nil
             if let recordID = item.recordID, !suggestions.groups.isEmpty {
-                await registerCategory()
-                content.categoryIdentifier = categoryID
+                content.categoryIdentifier = await registerCategory(suggestions.picker)
                 content.userInfo = [recordIDKey: recordID, NotificationPicker.userInfoKey: suggestions.picker.json]
                 // 系统不让按钮露在收起的通知上，只能写一句告诉用户
                 content.body += suggestions.autoCategory == nil ? "，长按选分类" : "，长按可改"
@@ -73,8 +72,8 @@ enum IngestNotifier {
     // MARK: 通知上选分类
 
     private static let recordIDKey = "recordID"
-    /// 通知扩展认的类别（`Config/NotificationContent-Info.plist` 的 `UNNotificationExtensionCategory`）
-    static let categoryID = "ingest.pick"
+    /// 类别池子下一个轮到第几个
+    private static let slotKey = "notify.pickSlot"
 
     /// 只有选「全部」时才有成功的通知，才带按钮
     private static func categorySuggestions(for item: IngestItem, backend: LedgerBackend) async -> CategorySuggestions {
@@ -82,37 +81,53 @@ enum IngestNotifier {
         return (try? await backend.categorySuggestions(recordID: recordID)) ?? CategorySuggestions()
     }
 
-    /// 扩展没起来时系统显示的按钮：和扩展自己的「打开 App」写得不一样，长按一看就知道扩展有没有起来
-    static let fallbackTitle = "去 App 选"
-
-    /// 固定的一个类别，按钮由通知扩展按每条通知换（ADR 0020）。这里只放一个打开 App 的按钮，扩展没起来时还能打开面板。
-    /// 注册没有完成回调：读回来看到了才发，一直看不到时照发，这条通知只是没有按钮，这笔还在待分类
-    static func registerCategory() async {
-        let center = UNUserNotificationCenter.current()
-        let app = UNNotificationAction(
-            identifier: NotificationPicker.appIdentifier, title: fallbackTitle, options: [.foreground],
-            icon: UNNotificationActionIcon(systemImageName: NotificationPicker.Button.app.symbol)
+    /// 从通知扩展认的类别池子（`NotificationPicker.categoryIDs`）里轮一个，写上这条通知的第一页按钮（ADR 0020）：
+    /// 长按时系统马上显示，不用等扩展起来；扩展起来后设的还是这几个按钮，看不出变化，之后翻页、点大类换小类由扩展换。
+    /// 池子轮着用，20 条以前的通知的按钮会被后来的换掉（扩展起来后会改回它自己的）。
+    /// 注册是替换全部，所以留下池子里别的类别；没有完成回调：读回来看到了才发，一直看不到时照发
+    private static func registerCategory(_ picker: NotificationPicker) async -> String {
+        let ids = NotificationPicker.categoryIDs
+        let slot = UserDefaults.standard.integer(forKey: slotKey) % ids.count
+        UserDefaults.standard.set(slot + 1, forKey: slotKey)
+        let category = UNNotificationCategory(
+            identifier: ids[slot], actions: picker.parentButtons(page: 0).map(action), intentIdentifiers: [], options: []
         )
-        let category = UNNotificationCategory(identifier: categoryID, actions: [app], intentIdentifiers: [], options: [])
+        let center = UNUserNotificationCenter.current()
         for _ in 0..<5 {
             let registered = await center.notificationCategories()
-            if registered.contains(where: { $0.identifier == categoryID && $0.actions.map(\.title) == [fallbackTitle] }) { return }
-            center.setNotificationCategories([category])
+            if registered.contains(where: { $0.identifier == category.identifier && $0.actions.map(\.identifier) == category.actions.map(\.identifier) }) {
+                break
+            }
+            // 另一笔同时注册时可能盖掉了这一个，再补上
+            center.setNotificationCategories(registered.filter { $0.identifier != category.identifier }.union([category]))
             try? await Task.sleep(for: .milliseconds(50))
         }
+        return category.identifier
+    }
+
+    /// 和通知扩展里的按钮一样（`NotificationViewController.show`），改一边要改另一边。
+    /// 选项不设 `.foreground` 就不打开 App，不设 `.authenticationRequired` 就不用解锁；「打开 App」要打开 App
+    private static func action(_ button: NotificationPicker.Button) -> UNNotificationAction {
+        UNNotificationAction(
+            identifier: NotificationPicker.identifier(button), title: button.title,
+            options: button == .app ? [.foreground] : [],
+            icon: UNNotificationActionIcon(systemImageName: button.symbol)
+        )
     }
 
     /// 通知扩展交回来的点击：系统在后台拉起 App 调到这里，写完才返回。
     /// 写不进去（开机后还没解锁过、流水或分类已经删了）时这笔留在原处，下次打开 App 再选。
-    /// 点「打开 App」或通知本身：系统打开 App，这里只记下要打开哪一笔
+    /// 点「打开 App」或通知本身：系统打开 App，这里只记下要打开哪一笔。
+    /// 有小类的大类本来由扩展换成小类；扩展没起来、点击交到这里时，记到这个大类
     static func handle(_ response: UNNotificationResponse) async {
         guard let recordID = response.notification.request.content.userInfo[recordIDKey] as? String else { return }
-        if response.actionIdentifier == NotificationPicker.appIdentifier || response.actionIdentifier == UNNotificationDefaultActionIdentifier {
+        let identifier = response.actionIdentifier
+        if identifier == NotificationPicker.appIdentifier || identifier == UNNotificationDefaultActionIdentifier {
             await MainActor.run { CategorizeRequest.shared.recordID = recordID }
             return
         }
-        guard response.actionIdentifier.hasPrefix(NotificationPicker.pickPrefix) else { return }
-        let categoryID = String(response.actionIdentifier.dropFirst(NotificationPicker.pickPrefix.count))
+        guard let prefix = [NotificationPicker.pickPrefix, NotificationPicker.openPrefix].first(where: { identifier.hasPrefix($0) }) else { return }
+        let categoryID = String(identifier.dropFirst(prefix.count))
         do {
             // App 可能是被这个按钮拉起来的：打开账本（含迁移）放在后台线程
             let backend = try await Task.detached(priority: .userInitiated) { try AppServices.shared.backend() }.value
@@ -189,6 +204,9 @@ final class NotificationPresenter: NSObject, UNUserNotificationCenterDelegate, S
         [.banner, .list]
     }
 
+    /// 要在主线程上收尾：异步版本默认在别的线程跑完，系统收尾时要求主线程，
+    /// App 在前台时长按通知点分类按钮会崩溃（App 退出，重新打开回到首页）。写账本仍在数据库队列上
+    @MainActor
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
         await IngestNotifier.handle(response)
     }

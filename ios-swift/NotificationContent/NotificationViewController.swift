@@ -31,6 +31,8 @@ final class NotificationViewController: UIViewController, UNNotificationContentE
         }
     }
 
+    /// 和 App 注册类别时写的第一页按钮一样（`IngestNotifier.action`），改一边要改另一边：
+    /// 长按时系统先显示 App 写好的那一页，扩展起来后再设一遍同样的，看不出变化
     private func show(_ buttons: [NotificationPicker.Button]) {
         extensionContext?.notificationActions = buttons.map { button in
             UNNotificationAction(
