@@ -82,17 +82,21 @@ enum IngestNotifier {
         return (try? await backend.categorySuggestions(recordID: recordID)) ?? CategorySuggestions()
     }
 
-    /// 固定的一个类别，按钮由通知扩展按每条通知换（ADR 0020）。这里只放一个「打开 App」，扩展没起来时还能打开面板。
+    /// 扩展没起来时系统显示的按钮：和扩展自己的「打开 App」写得不一样，长按一看就知道扩展有没有起来
+    static let fallbackTitle = "去 App 选"
+
+    /// 固定的一个类别，按钮由通知扩展按每条通知换（ADR 0020）。这里只放一个打开 App 的按钮，扩展没起来时还能打开面板。
     /// 注册没有完成回调：读回来看到了才发，一直看不到时照发，这条通知只是没有按钮，这笔还在待分类
     static func registerCategory() async {
         let center = UNUserNotificationCenter.current()
         let app = UNNotificationAction(
-            identifier: NotificationPicker.appIdentifier, title: NotificationPicker.Button.app.title, options: [.foreground],
+            identifier: NotificationPicker.appIdentifier, title: fallbackTitle, options: [.foreground],
             icon: UNNotificationActionIcon(systemImageName: NotificationPicker.Button.app.symbol)
         )
         let category = UNNotificationCategory(identifier: categoryID, actions: [app], intentIdentifiers: [], options: [])
         for _ in 0..<5 {
-            if await center.notificationCategories().contains(where: { $0.identifier == categoryID }) { return }
+            let registered = await center.notificationCategories()
+            if registered.contains(where: { $0.identifier == categoryID && $0.actions.map(\.title) == [fallbackTitle] }) { return }
             center.setNotificationCategories([category])
             try? await Task.sleep(for: .milliseconds(50))
         }

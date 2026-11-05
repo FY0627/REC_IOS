@@ -361,11 +361,21 @@ struct PerformanceSettingsView: View {
             Section {
                 Toggle("显示帧率与内存", isOn: $flags.showMetrics)
             }
+            // 签名工具会改 Bundle ID；扩展的要以 App 的开头才认得是一家（ADR 0020）
+            Section("通知扩展") {
+                LabeledContent("App", value: Bundle.main.bundleIdentifier ?? "")
+                LabeledContent("扩展", value: extensionBundleID ?? "没有")
+            }
             Section {
                 Button("恢复默认") { flags.resetToDefaults() }
             }
         }
         .navigationTitle("性能开关")
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    /// 装好的 App 里通知扩展的 Bundle ID；签名工具把扩展删掉了时是 nil
+    private var extensionBundleID: String? {
+        Bundle.main.builtInPlugInsURL.flatMap { Bundle(url: $0.appendingPathComponent("NotificationContent.appex"))?.bundleIdentifier }
     }
 }
