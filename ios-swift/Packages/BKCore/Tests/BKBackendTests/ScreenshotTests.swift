@@ -92,6 +92,29 @@ final class ScreenshotTests: XCTestCase {
     转账单号  1000050000202610240000000004
     """
 
+    /// 聊天里点开转账：转给别人、对方收了以后（照真机截图的版式，名字、金额、时间换过）
+    let wechatTransferAccepted = """
+    14:32
+    71
+    示例老板已收款
+    ¥192.00
+    转账时间  2026年10月24日 12:08:40
+    收款时间  2026年10月24日 13:12:28
+    账单详情
+    """
+
+    /// 聊天里点开转账：别人转给自己、收了以后
+    let wechatTransferReceived = """
+    21:19
+    66
+    你已收款，资金已存入零钱
+    ¥339.00
+    零钱余额
+    转账时间  2026年10月24日 09:31:35
+    收款时间  2026年10月24日 11:06:51
+    账单详情
+    """
+
     /// 聊天里领到的红包
     let wechatRedPacket = """
     王五的红包
@@ -233,6 +256,36 @@ final class ScreenshotTests: XCTestCase {
         XCTAssertEqual(packet.kind, .income)
         XCTAssertEqual(packet.direction, .inflow)
         XCTAssertEqual(packet.counterparty, "王五")
+    }
+
+    func testTransferPageSaysWhoReceivedTheMoney() async throws {
+        let backend = try makeBackend()
+        let wallet = try await addWechat(backend)
+        _ = try await backend.ingestScreenshot(text: wechatTransferAccepted, capturedAt: at(14, 32))
+        _ = try await backend.ingestScreenshot(text: wechatTransferReceived, capturedAt: at(15, 19))
+        let rows = try await backend.records(accountID: wallet.id).map(\.record)
+        XCTAssertEqual(rows.count, 2)
+        let out = try XCTUnwrap(rows.first { $0.amountMinor == 192_00 })
+        XCTAssertEqual(out.direction, .outflow, "「示例老板已收款」：对方收了，是自己转出去的")
+        XCTAssertEqual(out.kind, .transferOut)
+        XCTAssertEqual(out.counterparty, "示例老板")
+        XCTAssertEqual(out.transactionTime?.sortKey, "2026-10-24T12:08:40", "转出看转账时间")
+        let into = try XCTUnwrap(rows.first { $0.amountMinor == 339_00 })
+        XCTAssertEqual(into.direction, .inflow)
+        XCTAssertEqual(into.kind, .transferIn)
+        XCTAssertNil(into.counterparty, "自己收的页面上没写对方，标题和「零钱余额」都不是")
+        XCTAssertEqual(into.transactionTime?.sortKey, "2026-10-24T11:06:51", "收到的看收款时间")
+    }
+
+    func testPendingTransferTitles() {
+        func direction(_ title: String) -> FlowDirection? {
+            let text = "\(title)\n¥50.00\n转账时间  2026年10月24日 12:00:00"
+            return ScreenshotParser.parse(text, referenceDate: now, calendar: calendar).message.events.first?.draft.direction
+        }
+        XCTAssertEqual(direction("待示例老板确认收款"), .outflow)
+        XCTAssertEqual(direction("待你收款"), .inflow)
+        XCTAssertEqual(direction("对方已收款"), .outflow)
+        XCTAssertEqual(direction("你已收款,资金已存入零钱"), .inflow)
     }
 
     func testAlipayDetailGoesToTheAlipayWallet() async throws {

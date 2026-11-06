@@ -87,6 +87,8 @@ enum ScreenshotParser {
     private static let topUp = Rx(#"(?:零钱|余额)充值|充值-来自|充值到(?:零钱|余额)"#)
     private static let refund = Rx(#"退款"#)
     private static let savedToWallet = Rx(#"已存入|存入零钱|存入余额"#)
+    /// 微信转账页的标题写着谁收了钱：「你已收款，资金已存入零钱」「待你收款」是自己收，「阿翔已收款」「待阿翔确认收款」是对方收、钱是自己转出去的
+    private static let receivedTitle = Rx(#"^(?:待(.{1,24}?)(?:确认)?收款|(.{1,24}?)已收款)(?:[，,\s].*)?$"#)
 
     /// 页面上的这些行不是商户名称：状态栏、导航、页面标题、按钮
     private static let noiseRow = Rx(#"^(?:\d{1,2}[:：]\d{2}|[0-9]{1,3}%?|[45]G|LTE|WiFi|<|返回|账单详情|交易详情|详情|全部账单|账单|支付成功|付款成功|交易成功|转账成功|收款成功|已收款|你已收款|微信支付|支付宝|完成|返回商家|\.{2,}|…+|·+|X|x|更多|查看账单|查看详情|联系商家|申请退款|常见问题|对此订单有疑问)$"#)
@@ -182,13 +184,15 @@ enum ScreenshotParser {
         let isTransfer = pageText.contains("转账") || pageText.contains("转帐")
         let status = values[.status]?.value ?? ""
         let isRefund = refund.test(titleText) || status.contains("退款成功") || (sign == "+" && refund.test(pageText))
+        let receiver = Self.receiver(rows: rows, before: amountRow, labelRows: labelRows)
 
-        // 5. 方向：先看正负号，再看页面上的字
+        // 5. 方向：先看正负号，再看页面上的字。「谁已收款」先于「已收款」这类词：对方收了是自己付的
         var direction: FlowDirection?
         if sign == "-" { direction = .outflow } else if sign == "+" { direction = .inflow }
         if direction == nil {
             if isRefund || isTopUp { direction = .inflow }
             else if isWithdraw { direction = .outflow }
+            else if let receiver { direction = receiver == "你" ? .inflow : .outflow }
             else if outgoingWords.test(pageText) { direction = .outflow }
             else if incomingWords.test(pageText) { direction = .inflow }
             else if purchaseWords.test(pageText) { direction = .outflow }
@@ -230,10 +234,13 @@ enum ScreenshotParser {
         }
         let walletHint = cardTail == nil && bankHint == nil ? app : nil
 
-        // 7. 商户或对方：标签 > 金额上面那一行（页面标题）> 金额下面不像广告的一行
+        // 7. 商户或对方：标签 > 金额上面那一行（页面标题）> 金额下面不像广告的一行。
+        // 转账页的标题是「谁已收款」：对方收的取名字；自己收的页面上没写对方，金额下面的「零钱余额」也不是
         var counterparty = values[.counterparty]?.value
-        if counterparty == nil || counterparty?.isEmpty == true { counterparty = title }
-        if counterparty == nil, let amountRow, amountRow + 1 < rows.count, !labelRows.contains(amountRow + 1) {
+        if counterparty == nil || counterparty?.isEmpty == true {
+            if let receiver { counterparty = receiver == "你" || receiver == "对方" ? nil : receiver } else { counterparty = title }
+        }
+        if counterparty == nil, receiver == nil, let amountRow, amountRow + 1 < rows.count, !labelRows.contains(amountRow + 1) {
             let below = rows[amountRow + 1]
             if below.count <= 20, !noiseRow.test(below), !adWords.test(below), !failedWords.test(below), amountOnly.first(NSString(string: below)) == nil { counterparty = below }
         }
@@ -296,6 +303,19 @@ enum ScreenshotParser {
             if noiseRow.test(row) || amountOnly.first(NSString(string: row)) != nil { continue }
             if row.count > 40 { return nil }
             return row
+        }
+        return nil
+    }
+
+    /// 金额上面写着谁收了钱的一行（`receivedTitle`）：收钱的人，自己是「你」
+    private static func receiver(rows: [String], before amountRow: Int?, labelRows: Set<Int>) -> String? {
+        let end = amountRow ?? rows.count
+        guard end > 0 else { return nil }
+        for index in stride(from: end - 1, through: 0, by: -1) where !labelRows.contains(index) {
+            let ns = NSString(string: rows[index])
+            guard let m = receivedTitle.first(ns) else { continue }
+            let name = (m.group(1, in: ns) ?? m.group(2, in: ns))?.trimmingCharacters(in: .whitespaces) ?? ""
+            return name.isEmpty ? nil : name
         }
         return nil
     }
