@@ -390,6 +390,34 @@ final class LedgerStore {
         return try await backend.categoryCheckup()
     }
 
+    // MARK: 截图记账（ADR 0021）
+
+    /// 从相册选的付款截图：一张一张识别、入账，和快捷指令交过来的一样。返回合在一起的结果，比如「入账 2 笔，待处理 1 条」；一张都没有时是空的
+    func ingestScreenshots(_ images: [Data]) async -> String {
+        guard let backend else { return "账本还没打开" }
+        var recorded = 0, merged = 0, pending = 0, skipped = 0, failed = 0
+        for data in images {
+            do {
+                let reading = try await ScreenshotReader.read(data)
+                let result = try await backend.ingestScreenshot(lines: reading.lines, capturedAt: reading.capturedAt ?? Date())
+                recorded += result.recordedCount
+                merged += result.mergedCount
+                pending += result.pendingCount
+                if result.items.isEmpty { skipped += 1 }
+            } catch {
+                failed += 1
+            }
+        }
+        await refresh()
+        var parts: [String] = []
+        if recorded > 0 { parts.append("入账 \(recorded) 笔") }
+        if merged > 0 { parts.append("和已记的合并 \(merged) 笔") }
+        if pending > 0 { parts.append("待处理 \(pending) 条") }
+        if skipped > 0 { parts.append("\(skipped) 张没有认出付款") }
+        if failed > 0 { parts.append("\(failed) 张读不出来") }
+        return parts.joined(separator: "，")
+    }
+
     // MARK: 模拟消费
 
     /// 模拟一笔消费，和快捷指令收到短信一样发记账结果通知。金额在这个场景的范围里随机

@@ -1,4 +1,5 @@
 import SwiftUI
+import PhotosUI
 import BKModel
 import BKBackend
 
@@ -9,6 +10,7 @@ import BKBackend
 /// 默认按当天的汇率估算，银行实际扣了多少可以直接填。多币种的卡可以选从哪个币种扣：支出时这个币种的可用余额不够，
 /// 默认整笔从主币种扣（恒生就是这样，ADR 0018）。
 /// 保存前查一下同一个账户前后 3 小时有没有同样金额的记录（多半是自动记账已经记过了），有就先问一句。
+/// 也可以从相册选微信、支付宝的付款截图，识别后直接入账（ADR 0021）。
 struct AddRecordView: View {
     @Environment(LedgerStore.self) private var store
     @Environment(\.dismiss) private var dismiss
@@ -34,6 +36,9 @@ struct AddRecordView: View {
     @State private var similar: [RecordRow] = []
     @State private var confirmSimilar = false
     @FocusState private var amountFocused: Bool
+    @State private var screenshotItems: [PhotosPickerItem] = []
+    @State private var readingScreenshots = false
+    @State private var screenshotResult: String?
 
     private var accounts: [Account] { store.accounts }
 
@@ -77,6 +82,18 @@ struct AddRecordView: View {
                     Section {
                         Text("先在资产页添加一个账户（银行卡、现金或电子钱包）。").foregroundStyle(.secondary)
                     }
+                }
+                Section {
+                    PhotosPicker(selection: $screenshotItems, maxSelectionCount: 20, matching: .images) {
+                        HStack {
+                            Label("从相册选截图", systemImage: "photo.on.rectangle")
+                            if readingScreenshots {
+                                Spacer()
+                                ProgressView()
+                            }
+                        }
+                    }
+                    .disabled(readingScreenshots)
                 }
                 Section {
                     Picker("类型", selection: $type) {
@@ -155,6 +172,15 @@ struct AddRecordView: View {
                     Button("保存", systemImage: "checkmark") { Task { await check() } }
                         .disabled(saving || accountID == nil || currency == nil)
                 }
+            }
+            .onChange(of: screenshotItems) {
+                guard !screenshotItems.isEmpty else { return }
+                let items = screenshotItems
+                screenshotItems = []
+                Task { await readScreenshots(items) }
+            }
+            .alert(screenshotResult ?? "", isPresented: Binding(get: { screenshotResult != nil }, set: { if !$0 { screenshotResult = nil } })) {
+                Button("好") { dismiss() }
             }
             .confirmationDialog("可能已经记过了", isPresented: $confirmSimilar, titleVisibility: .visible) {
                 Button("仍然记一笔") { Task { await save() } }
@@ -289,6 +315,21 @@ struct AddRecordView: View {
             categoryID: type == .transfer ? nil : categoryID, counterparty: type == .transfer ? nil : counterparty, note: note, time: time,
             chargeCurrency: chargeCurrency(accountID), settlementMinor: from.minor
         )
+    }
+
+    /// 选好的截图一张一张读出来交给账本；读不出的算在结果里
+    private func readScreenshots(_ items: [PhotosPickerItem]) async {
+        readingScreenshots = true
+        defer { readingScreenshots = false }
+        var images: [Data] = []
+        var unreadable = 0
+        for item in items {
+            if let data = try? await item.loadTransferable(type: Data.self) { images.append(data) } else { unreadable += 1 }
+        }
+        let summary = await store.ingestScreenshots(images)
+        var parts = summary.isEmpty ? [] : [summary]
+        if unreadable > 0 { parts.append("\(unreadable) 张打不开") }
+        screenshotResult = parts.isEmpty ? "没有认出付款" : parts.joined(separator: "，")
     }
 
     /// 先查一下是不是已经记过

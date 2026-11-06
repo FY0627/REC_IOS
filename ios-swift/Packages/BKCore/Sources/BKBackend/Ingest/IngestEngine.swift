@@ -100,7 +100,10 @@ struct IngestEngine {
         }
 
         let ingestID = newID()
-        var parsed = MessageParser.parse(MessageContext(
+        // 付款页截图（ADR 0021）走自己的解析：认页面、按标签读，不按银行通知的写法
+        let screenshot = request.source == .screenshot
+            ? ScreenshotParser.parse(request.text, referenceDate: request.receivedAt ?? now, calendar: calendar) : nil
+        var parsed = screenshot?.message ?? MessageParser.parse(MessageContext(
             text: request.text, source: request.source, sender: request.sender, subject: request.subject,
             referenceDate: request.receivedAt ?? now, calendar: calendar
         ))
@@ -115,7 +118,8 @@ struct IngestEngine {
         let accounts = try AccountDAO.all(db)
         // 固定写法认不出尾号时，在正文里找已添加的卡的尾号；再找卡片信息里填的账号、完整卡号
         // 电子钱包发的不找：里面的四位数字（订单号、金额）不是卡号
-        let fallbackTail = parsed.walletHint != nil ? nil
+        // 截图上的数字多半是单号和时间，也不找
+        let fallbackTail = parsed.walletHint != nil || screenshot != nil ? nil
             : Self.knownTail(in: parsed.cleanedText, accounts: accounts) ?? Self.identifierTail(in: parsed.cleanedText, accounts: accounts)
 
         // 自动化可以对所有短信 / 邮件 / App 通知触发，先筛掉不是动账的：
@@ -131,14 +135,17 @@ struct IngestEngine {
             || accounts.contains { !$0.archived && parsed.walletHint != nil && WalletDirectory.provider(of: $0) == parsed.walletHint }
         let named = parsed.hasAmount ? Self.namedAccounts(in: parsed.cleanedText, accounts: accounts) : []
         var classification = parsed.classification
-        if !ownAccount, parsed.nonBankSignature {
+        if screenshot != nil {
+            // 用户自己交的截图：认不出是付款页的不记（解析时已经判断），不按银行通知的规则筛
+            if classification == .empty { classification = .noFinancialContent }
+        } else if !ownAccount, parsed.nonBankSignature {
             classification = .noFinancialContent
         } else if !ownAccount, [MessageClassification.transaction, .unrecognized, .marketing].contains(classification),
                   parsed.bankHint == nil, !parsed.bankSignature, parsed.walletHint == nil || parsed.events.isEmpty,
                   named.isEmpty, !Lexicon.bankish.test(parsed.cleanedText), !parsed.events.contains(where: { $0.issue == nil || Self.formalAmount($0.draft.amount) }) {
             classification = .noFinancialContent
         }
-        let logOnly = !ownAccount && !parsed.hasAmount
+        let logOnly = screenshot == nil && !ownAccount && !parsed.hasAmount
         // 不是动账通知的不保存，也不写接收日志：普通短信、邮件不会留在 App 里
         if classification == .noFinancialContent {
             return IngestResult(ingestID: nil, outcome: .filtered, classification: classification, recordedCount: 0, mergedCount: 0, pendingCount: 0, summary: classification.displayName)
@@ -167,11 +174,17 @@ struct IngestEngine {
                     draft.cardTail = other
                 }
                 let outcome: CommitOutcome
+                let route = screenshot.map { screenshotRoute(draft, reading: $0, accounts: accounts) }
                 if let issue = event.issue {
-                    let candidates = candidateIDs(for: draft, request: request, accounts: accounts)
+                    let candidates = route?.candidates ?? candidateIDs(for: draft, request: request, accounts: accounts)
                     outcome = .pending(issue, candidates: candidates, duplicateOf: nil)
+                } else if let route, let reason = route.pending {
+                    outcome = .pending(reason, candidates: route.candidates, duplicateOf: nil)
                 } else {
-                    outcome = try commit(draft, meta: meta, boundAccountID: request.boundAccountID, accounts: accounts, forcedAccount: nil, duplicateCheck: true)
+                    outcome = try commit(
+                        draft, meta: meta, boundAccountID: request.boundAccountID, accounts: accounts, forcedAccount: route?.account, duplicateCheck: true,
+                        assumedAccount: route?.assumed ?? false
+                    )
                 }
                 switch outcome {
                 case let .recorded(recordID):
@@ -234,7 +247,8 @@ struct IngestEngine {
         }
         return IngestItem(
             cardTail: account?.last4 ?? draft.cardTail, kind: record.kind, status: record.status, amountMinor: record.amountMinor,
-            currency: record.currency, amountText: nil, result: result, recordID: record.id, charge: charge, insufficientBalance: insufficient
+            currency: record.currency, amountText: nil, result: result, recordID: record.id, charge: charge, insufficientBalance: insufficient,
+            accountTitle: account.flatMap { $0.isCard ? nil : $0.displayTitle }, counterparty: record.counterparty
         )
     }
 
@@ -246,7 +260,12 @@ struct IngestEngine {
     private static func pendingItem(_ draft: EventDraft, result: IngestItem.Result) -> IngestItem {
         let candidates = draft.amount.currencyCandidates
         let currency = draft.amount.preferredCurrency ?? (candidates.count == 1 ? candidates[0] : nil)
-        return IngestItem(cardTail: draft.cardTail, kind: draft.kind, status: draft.status, amountMinor: nil, currency: currency, amountText: draft.amount.digits, result: result)
+        // 钱包的收支没写卡号：通知写钱包的名称
+        let wallet = draft.cardTail == nil ? WalletDirectory.profile(id: draft.walletHint)?.name : nil
+        return IngestItem(
+            cardTail: draft.cardTail, kind: draft.kind, status: draft.status, amountMinor: nil, currency: currency, amountText: draft.amount.digits, result: result,
+            accountTitle: wallet, counterparty: draft.counterparty
+        )
     }
 
     /// 正文里没认出尾号时，找已添加的卡的尾号：作为单独的 4 位数字出现、并且只有一张卡的尾号出现时，就是这张卡。
@@ -377,7 +396,11 @@ struct IngestEngine {
     }
 
     /// 把一份完整草稿写成记录；需要用户介入时返回 `.pending`，不写记录。
-    func commit(_ draft: EventDraft, meta: IngestMeta, boundAccountID: String?, accounts: [Account], forcedAccount: Account?, duplicateCheck: Bool, forcedDedupeKey: String? = nil) throws -> CommitOutcome {
+    /// `assumedAccount`：截图没写用什么付的，账户是猜的钱包（ADR 0021）
+    func commit(
+        _ draft: EventDraft, meta: IngestMeta, boundAccountID: String?, accounts: [Account], forcedAccount: Account?, duplicateCheck: Bool,
+        forcedDedupeKey: String? = nil, assumedAccount: Bool = false
+    ) throws -> CommitOutcome {
         let account: Account
         if let forcedAccount {
             account = forcedAccount
@@ -419,10 +442,12 @@ struct IngestEngine {
             return .pending(.uncertainKind, candidates: [account.id], duplicateOf: nil)
         }
 
+        // 截图上写了交易时间：按它排在那一天，不按截图的时间
+        let receivedAt = meta.source == .screenshot ? (date(of: draft.transactionTime) ?? meta.receivedAt) : meta.receivedAt
         var record = LedgerRecord(
             id: newID(), accountID: account.id, amountMinor: amountMinor, currency: currency, direction: direction,
             kind: draft.kind, status: draft.status, counterparty: draft.counterparty, transactionTime: draft.transactionTime,
-            receivedAt: meta.receivedAt, processedAt: meta.processedAt, source: meta.source, ingestID: meta.ingestID,
+            receivedAt: receivedAt, processedAt: meta.processedAt, source: meta.source, ingestID: meta.ingestID,
             partIndex: draft.partIndex, bankReference: draft.bankReference, balanceAfterMinor: balanceMinor,
             includedFeeMinor: includedFeeMinor, note: "", transferGroupID: nil, relatedRecordID: nil
         )
@@ -446,6 +471,10 @@ struct IngestEngine {
 
         let key = forcedDedupeKey ?? dedupeKey(record)
         if let existingID = try RecordDAO.idForDedupeKey(db, key), let existing = try RecordDAO.find(db, id: existingID) {
+            // 截图和别的来源（或者同一笔截了两次）：单号相同、时间到分钟相同，是同一笔
+            if meta.source == .screenshot || existing.source == .screenshot {
+                return try mergeScreenshot(record, into: existing, meta: meta, assumedAccount: assumedAccount)
+            }
             // 同一笔交易的另一来源（短信 + 邮件 + App 通知），证据充分：合并为来源证据。
             // 来源分不出（一个自动化接收全部）时，同一来源的同一条输入已由指纹去重，这里视为另一来源
             if existing.source != meta.source || meta.source == .auto || !duplicateCheck {
@@ -455,6 +484,9 @@ struct IngestEngine {
             }
             // 同一来源、内容不同但特征一致：可能是两笔真实交易，交给用户判断
             return .pending(.possibleDuplicate, candidates: [account.id], duplicateOf: existingID)
+        }
+        if duplicateCheck, let twin = try screenshotTwin(of: record, accounts: accounts, assumedAccount: assumedAccount) {
+            return try mergeScreenshot(record, into: twin, meta: meta, assumedAccount: assumedAccount)
         }
         if duplicateCheck, let similar = try possibleDuplicate(of: record) {
             return .pending(.possibleDuplicate, candidates: [account.id], duplicateOf: similar.id)
@@ -576,5 +608,119 @@ struct IngestEngine {
         if let time, time.year != nil, time.hasDate { return time.sortKey }
         let c = calendar.dateComponents([.year, .month, .day, .hour, .minute, .second], from: fallback)
         return WallClock(year: c.year, month: c.month, day: c.day, hour: c.hour, minute: c.minute, second: c.second).sortKey
+    }
+
+    /// 页面或通知上写的交易时间（年月日时分都有）换成这台手机的时间
+    func date(of clock: WallClock?) -> Date? {
+        guard let clock, let year = clock.year, let month = clock.month, let day = clock.day, let hour = clock.hour, let minute = clock.minute else { return nil }
+        return calendar.date(from: DateComponents(year: year, month: month, day: day, hour: hour, minute: minute, second: clock.second ?? 0))
+    }
+
+    // MARK: 截图（ADR 0021）
+
+    struct ScreenshotRoute {
+        /// 定下来的账户；nil 时按卡号尾号、钱包照常匹配
+        var account: Account?
+        /// 账户是猜的：页面没写用什么付的
+        var assumed: Bool
+        var pending: PendingReason?
+        var candidates: [String]
+    }
+
+    /// 截图记到哪：写了卡的照常按尾号和银行找卡；零钱通、余额宝、花呗先找名称里有它的账户；
+    /// 其余记到这个 App 的钱包。认不出是哪个 App 时，用户只有一个微信或支付宝钱包就是它
+    func screenshotRoute(_ draft: EventDraft, reading: ScreenshotReading, accounts: [Account]) -> ScreenshotRoute {
+        if draft.cardTail != nil || draft.bankHint != nil { return ScreenshotRoute(account: nil, assumed: false, pending: nil, candidates: []) }
+        let assumed = !reading.methodStated
+        let active = accounts.filter { !$0.archived }
+        if let name = reading.methodName {
+            let named = active.filter { $0.name.contains(name) }
+            if named.count == 1 { return ScreenshotRoute(account: named[0], assumed: false, pending: nil, candidates: []) }
+            if named.count > 1 { return ScreenshotRoute(account: nil, assumed: false, pending: .ambiguousAccount, candidates: named.map(\.id)) }
+            // 花呗是借的钱、亲属卡是别人的钱：不能记到余额里
+            if name == "花呗" || name == "亲属卡" { return ScreenshotRoute(account: nil, assumed: false, pending: .noWalletAccount, candidates: []) }
+        }
+        let providers = draft.walletHint.map { [$0] } ?? ["wechatpay", "alipay"]
+        var wallets = active.filter { account in WalletDirectory.provider(of: account).map(providers.contains) ?? false }
+        // 付的是零钱、余额：同一个 App 还有零钱通、余额宝账户时不算它们
+        if wallets.count > 1, reading.methodName == nil {
+            let plain = wallets.filter { wallet in !["零钱通", "余额宝", "花呗"].contains { wallet.name.contains($0) } }
+            if !plain.isEmpty { wallets = plain }
+        }
+        switch wallets.count {
+        case 0: return ScreenshotRoute(account: nil, assumed: assumed, pending: .noWalletAccount, candidates: [])
+        case 1: return ScreenshotRoute(account: wallets[0], assumed: assumed, pending: nil, candidates: [])
+        default: return ScreenshotRoute(account: nil, assumed: assumed, pending: .ambiguousAccount, candidates: wallets.map(\.id))
+        }
+    }
+
+    /// 截图和银行通知（或者同一笔的另一张截图）是不是同一笔：金额、币种、方向、状态一样，时间对得上，在同一个账户；
+    /// 或者一边是没写用什么付的截图（记到了猜的钱包），另一边是卡。只有一笔对得上才算；几笔都像时照常处理。
+    /// 手动记的不在这里合并，照常问是不是同一笔
+    func screenshotTwin(of record: LedgerRecord, accounts: [Account], assumedAccount: Bool) throws -> LedgerRecord? {
+        let window: TimeInterval = 10 * 60
+        let candidates = try RecordDAO.candidates(
+            db, amountMinor: record.amountMinor, currency: record.currency, direction: record.direction,
+            effectiveFrom: record.effectiveAt.addingTimeInterval(-window), effectiveTo: record.effectiveAt.addingTimeInterval(window),
+            excludingIngest: record.ingestID
+        ).filter { $0.status == record.status && $0.source != .manual && ($0.source == .screenshot || record.source == .screenshot) }
+        guard !candidates.isEmpty else { return nil }
+        func kindOf(_ id: String) -> CardType? { accounts.first { $0.id == id }?.cardType }
+        let matches = try candidates.filter { other in
+            if other.accountID != record.accountID {
+                if record.source == .screenshot {
+                    guard assumedAccount, kindOf(record.accountID) == .wallet, kindOf(other.accountID)?.isCard == true else { return false }
+                } else {
+                    guard kindOf(record.accountID)?.isCard == true, kindOf(other.accountID) == .wallet, try screenshotAssumed(other) else { return false }
+                }
+            }
+            // 两张截图都写了单号又不一样：是两笔
+            if record.source == other.source, let a = record.bankReference, let b = other.bankReference, a != b { return false }
+            if let a = date(of: record.transactionTime), let b = date(of: other.transactionTime) { return abs(a.timeIntervalSince(b)) <= 3 * 60 }
+            // 两张截图都没写时间（付款成功页）：截图的时间要很近
+            if record.source == other.source { return abs(record.effectiveAt.timeIntervalSince(other.effectiveAt)) <= 3 * 60 }
+            return true
+        }
+        return matches.count == 1 ? matches[0] : nil
+    }
+
+    /// 以前那笔截图的钱包是不是猜的：看它的截图原文写没写用什么付的。有一张写明了就不是；原文已经清掉的不算猜的
+    func screenshotAssumed(_ record: LedgerRecord) throws -> Bool {
+        guard record.source == .screenshot else { return false }
+        var unstated = false
+        for shot in try RecordDAO.evidence(db, recordID: record.id) where shot.source == .screenshot {
+            guard let raw = shot.rawText else { continue }
+            if ScreenshotParser.statesMethod(raw, calendar: calendar) { return false }
+            unstated = true
+        }
+        return unstated
+    }
+
+    private static let paymentChannel = Rx(#"财付通|微信|支付宝|tenpay|alipay|银联|快捷支付|网上支付|扫码|二维码"#)
+
+    /// 合并成一笔，加一份来源证据。
+    /// 截图来了：银行没写商户、或者写的是「财付通-…」这类渠道时，用截图上的商户；原来那张截图的钱包是猜的、这张写明了，改到写明的账户；
+    /// 原来没有页面上的时间就补上。银行通知来了、截图那笔的钱包是猜的：改到这张卡上
+    func mergeScreenshot(_ record: LedgerRecord, into twin: LedgerRecord, meta: IngestMeta, assumedAccount: Bool) throws -> CommitOutcome {
+        var updated = twin
+        if record.source == .screenshot {
+            if let name = record.counterparty, twin.counterparty == nil || (twin.source != .screenshot && Self.paymentChannel.test(twin.counterparty ?? "")) {
+                updated.counterparty = name
+            }
+            if twin.source == .screenshot, twin.accountID != record.accountID, !assumedAccount, try screenshotAssumed(twin) {
+                updated.accountID = record.accountID
+            }
+            if twin.transactionTime?.isMinutePrecise != true, record.transactionTime?.isMinutePrecise == true {
+                updated.transactionTime = record.transactionTime
+                updated.receivedAt = record.receivedAt
+            }
+        } else if twin.accountID != record.accountID {
+            updated.accountID = record.accountID
+        }
+        if updated != twin { try RecordDAO.update(db, updated) }
+        try RecordDAO.addEvidence(db, recordID: twin.id, ingestID: meta.ingestID, source: meta.source, at: now)
+        try AccountDAO.noteSuccess(db, id: updated.accountID, at: now, source: meta.source)
+        if updated.counterparty != twin.counterparty, updated.categoryID == nil { try Categorizer(db: db).categorize(recordID: twin.id) }
+        return .merged(twin.id)
     }
 }

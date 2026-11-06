@@ -115,10 +115,15 @@ public struct IngestItem: Sendable, Hashable {
     public var charge: RecordCharge?
     /// 换币种是因为这个币种的余额不够（多币种账户），不是账户没有这个币种
     public var insufficientBalance: Bool
+    /// 记到的不是卡（现金、电子钱包）：账户名称，通知里不写尾号
+    public var accountTitle: String?
+    /// 交易对方或商户（截图记账的通知写出来，看得出是哪一笔）
+    public var counterparty: String?
 
     public init(
         cardTail: String?, kind: TransactionKind?, status: SettlementStatus?, amountMinor: Int64?, currency: CurrencyCode?, amountText: String?,
-        result: Result, recordID: String? = nil, charge: RecordCharge? = nil, insufficientBalance: Bool = false
+        result: Result, recordID: String? = nil, charge: RecordCharge? = nil, insufficientBalance: Bool = false,
+        accountTitle: String? = nil, counterparty: String? = nil
     ) {
         self.cardTail = cardTail
         self.kind = kind
@@ -130,6 +135,8 @@ public struct IngestItem: Sendable, Hashable {
         self.recordID = recordID
         self.charge = charge
         self.insufficientBalance = insufficientBalance
+        self.accountTitle = accountTitle
+        self.counterparty = counterparty
     }
 }
 
@@ -181,6 +188,8 @@ public enum PendingReason: String, Sendable, Codable, CaseIterable {
     case possibleDuplicate
     /// 整条通知未能识别
     case unrecognized
+    /// 支付宝、微信支付的余额收支，还没有添加这个电子钱包。添加后自动入账
+    case noWalletAccount
 
     public var displayName: String {
         switch self {
@@ -193,6 +202,7 @@ public enum PendingReason: String, Sendable, Codable, CaseIterable {
         case .uncertainKind: "无法确定资金方向"
         case .possibleDuplicate: "可能与已有流水重复"
         case .unrecognized: "暂不支持的通知格式"
+        case .noWalletAccount: "没有添加这个电子钱包"
         }
     }
 
@@ -200,7 +210,7 @@ public enum PendingReason: String, Sendable, Codable, CaseIterable {
     /// 金额有歧义时，同一条通知里认出的每个数字各是一个候选，用户确认其中一个，其余的自动忽略。
     public var allowsConfirmation: Bool {
         switch self {
-        case .ambiguousAccount, .missingCardTail, .possibleDuplicate, .noMatchingAccount, .ambiguousAmount: true
+        case .ambiguousAccount, .missingCardTail, .possibleDuplicate, .noMatchingAccount, .ambiguousAmount, .noWalletAccount: true
         default: false
         }
     }

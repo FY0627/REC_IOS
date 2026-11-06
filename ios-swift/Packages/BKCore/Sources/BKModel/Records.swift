@@ -86,6 +86,8 @@ public enum SourceKind: String, Sendable, Codable, CaseIterable {
     case auto
     /// 用户在 App 里手动记的一笔（没有通知）
     case manual
+    /// 微信、支付宝的付款页截图（ADR 0021）：手机上识别出的文字
+    case screenshot
 
     public var displayName: String {
         switch self {
@@ -95,6 +97,7 @@ public enum SourceKind: String, Sendable, Codable, CaseIterable {
         case .other: "其他文本"
         case .auto: "自动化"
         case .manual: "手动记账"
+        case .screenshot: "截图"
         }
     }
 }

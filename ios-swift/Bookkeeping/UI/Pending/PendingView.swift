@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import BKModel
 
 /// 待处理：上面是「待分类」——已经入账、还没分类的支出和收入。点一笔打开面板：写备注、选分类，点「确定」才保存，
@@ -247,6 +248,15 @@ private struct PendingItemCard: View {
                 Text(draft.evidenceSnippet).font(.caption).foregroundStyle(.secondary).lineLimit(4)
             } else if let raw = item.rawText {
                 Text(raw).font(.caption).foregroundStyle(.secondary).lineLimit(5)
+            }
+            if let raw = item.rawText {
+                // 截图识别出的文字很长、只显示几行：整段拷出来核对，或者发给开发者做样本
+                Button {
+                    UIPasteboard.general.string = raw
+                } label: {
+                    Label("拷贝原文", systemImage: "doc.on.doc")
+                }
+                .buttonStyle(.borderless)
             }
             if item.reason == .possibleDuplicate {
                 Text("可能与已有流水重复").font(.caption2).foregroundStyle(.secondary)

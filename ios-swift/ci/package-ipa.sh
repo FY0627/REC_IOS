@@ -77,7 +77,8 @@ find "$INTENTS" -type f >> "$REPORT"
 [[ -n "$ACTIONS" ]] || fail "缺少 extract.actionsdata"
 grep -q "RecordBankMessageIntent" "$ACTIONS" || fail "App Intents 元数据里没有 RecordBankMessageIntent"
 grep -q "AccountEntity" "$ACTIONS" || fail "App Intents 元数据里没有 AccountEntity"
-ok "App Intents 元数据包含 RecordBankMessageIntent / AccountEntity"
+grep -q "RecordPaymentScreenshotIntent" "$ACTIONS" || fail "App Intents 元数据里没有 RecordPaymentScreenshotIntent"
+ok "App Intents 元数据包含 RecordBankMessageIntent / RecordPaymentScreenshotIntent / AccountEntity"
 python3 - "$ACTIONS" >> "$REPORT" <<'PY' || true
 import json, sys
 data = json.load(open(sys.argv[1]))

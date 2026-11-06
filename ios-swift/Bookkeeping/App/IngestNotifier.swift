@@ -46,13 +46,21 @@ enum IngestNotifier {
         }
     }
 
-    static func post(_ result: IngestResult, backend: LedgerBackend) async {
+    /// `screenshot`：用户自己交的付款截图（ADR 0021）。和已有的一笔合并、认不出是付款页也说一声，敲了背面总要知道有没有记上
+    static func post(_ result: IngestResult, backend: LedgerBackend, screenshot: Bool = false) async {
         let mode = mode
         guard mode != .off else { return }
         let center = UNUserNotificationCenter.current()
+        if screenshot, result.items.isEmpty, mode == .all || result.outcome == .filtered {
+            let content = UNMutableNotificationContent()
+            content.body = result.outcome == .duplicateInput ? "这张截图已经记过了" : "截图里没有认出付款"
+            content.threadIdentifier = "ingest"
+            try? await center.add(UNNotificationRequest(identifier: "screenshot-\(UUID().uuidString)", content: content, trigger: nil))
+            return
+        }
         for (index, item) in result.items.enumerated() {
-            let suggestions = await categorySuggestions(for: item, backend: backend)
-            guard let body = message(item, failuresOnly: mode == .failures, autoCategory: suggestions.autoCategory?.name) else { continue }
+            let suggestions = await categorySuggestions(for: item, backend: backend, screenshot: screenshot)
+            guard let body = message(item, failuresOnly: mode == .failures, autoCategory: suggestions.autoCategory?.name, screenshot: screenshot) else { continue }
             let content = UNMutableNotificationContent()
             content.body = body
             content.threadIdentifier = "ingest"
@@ -76,8 +84,9 @@ enum IngestNotifier {
     private static let slotKey = "notify.pickSlot"
 
     /// 只有选「全部」时才有成功的通知，才带按钮
-    private static func categorySuggestions(for item: IngestItem, backend: LedgerBackend) async -> CategorySuggestions {
-        guard mode == .all, item.result == .recorded, let recordID = item.recordID else { return CategorySuggestions() }
+    /// 截图合并到银行那一笔时补上了商户，也可以接着选分类
+    private static func categorySuggestions(for item: IngestItem, backend: LedgerBackend, screenshot: Bool) async -> CategorySuggestions {
+        guard mode == .all, item.result == .recorded || (screenshot && item.result == .merged), let recordID = item.recordID else { return CategorySuggestions() }
         return (try? await backend.categorySuggestions(recordID: recordID)) ?? CategorySuggestions()
     }
 
@@ -141,7 +150,8 @@ enum IngestNotifier {
     /// 尾号 1234 卡，消费，¥128.00，记账成功
     /// 尾号 1234 卡，消费，¥128.00，记账成功，已归到「午餐」
     /// 尾号 1234 卡，消费，128.00，记账失败：没有与尾号匹配的账户
-    static func message(_ item: IngestItem, failuresOnly: Bool, autoCategory: String? = nil) -> String? {
+    /// 截图：微信零钱，示例便利店，消费，¥12.00，记账成功；和银行那笔合并时「…，和已记的一笔合并」
+    static func message(_ item: IngestItem, failuresOnly: Bool, autoCategory: String? = nil, screenshot: Bool = false) -> String? {
         let succeeded: Bool
         var outcome: String
         switch item.result {
@@ -150,18 +160,22 @@ enum IngestNotifier {
             outcome = "记账成功"
             if let autoCategory { outcome += "，已归到「\(autoCategory)」" }
         case .merged:
-            return nil
+            guard screenshot else { return nil }
+            succeeded = true
+            outcome = "和已记的一笔合并"
         case .pending(let reason):
             succeeded = false
             outcome = "记账失败：\(reason.displayName)，已放入待处理"
         }
         if failuresOnly, succeeded { return nil }
         if item.kind == nil, item.amountText == nil, item.amountMinor == nil {
-            return "收到一条无法识别的银行通知，已放入待处理"
+            return screenshot ? "截图没有认全，已放入待处理" : "收到一条无法识别的银行通知，已放入待处理"
         }
 
         var parts: [String] = []
-        parts.append(item.cardTail.map { "尾号 \($0) 卡" } ?? "未知尾号的卡")
+        // 现金、电子钱包没有卡号：写账户名称
+        parts.append(item.accountTitle ?? item.cardTail.map { "尾号 \($0) 卡" } ?? "未知尾号的卡")
+        if screenshot, let counterparty = item.counterparty { parts.append(counterparty) }
         if let kind = item.kind {
             var action = kind.displayName
             if let status = item.status, status != .posted { action += "（\(status.displayName)）" }

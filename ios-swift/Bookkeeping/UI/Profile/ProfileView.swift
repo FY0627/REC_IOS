@@ -23,7 +23,7 @@ struct ProfileView: View {
 
 /// 「我的」推进去的二级页面
 enum ProfileRoute: Hashable {
-    case primaryCurrency, exchangeRates, categories, autoSetup, automationStatus, categoryCheckup, templates, help, dataExport, dataImport, simulation, performance
+    case primaryCurrency, exchangeRates, categories, autoSetup, screenshotSetup, automationStatus, categoryCheckup, templates, help, dataExport, dataImport, simulation, performance
 }
 
 /// 「我的」的列表和导航栈。顶部一行和首页、资产页一样高、一样的位置；列表滚到它下面时垫一层磨砂背景（和首页一样）。
@@ -101,6 +101,9 @@ private struct ProfileList: View {
                 Section("自动记账") {
                     NavigationLink(value: ProfileRoute.autoSetup) {
                         Label("设置自动记账", systemImage: "bolt.badge.automatic")
+                    }
+                    NavigationLink(value: ProfileRoute.screenshotSetup) {
+                        Label("设置截图记账", systemImage: "camera.viewfinder")
                     }
                     NavigationLink(value: ProfileRoute.automationStatus) {
                         Label("自动记账状态", systemImage: "checkmark.seal")
@@ -216,6 +219,7 @@ private struct ProfileList: View {
         case .exchangeRates: ExchangeRateGuideView()
         case .categories: CategoryManagerView()
         case .autoSetup: AutoSetupGuideView()
+        case .screenshotSetup: ScreenshotSetupGuideView()
         case .automationStatus: AutomationStatusView()
         case .categoryCheckup: CategoryCheckupView()
         case .templates: TemplateListView()

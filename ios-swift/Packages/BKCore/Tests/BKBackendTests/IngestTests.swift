@@ -70,7 +70,7 @@ final class IngestTests: XCTestCase {
         let recorded = try await backend.ingest(IngestRequest(text: text, source: .sms, sender: "95555"))
         let recordID = try XCTUnwrap(recorded.items.first?.recordID, "通知上选分类要用到流水标识")
         XCTAssertEqual(recorded.items, [
-            IngestItem(cardTail: "0427", kind: .purchase, status: .posted, amountMinor: 1250, currency: .cny, amountText: nil, result: .recorded, recordID: recordID),
+            IngestItem(cardTail: "0427", kind: .purchase, status: .posted, amountMinor: 1250, currency: .cny, amountText: nil, result: .recorded, recordID: recordID, counterparty: "全家"),
         ])
 
         let unrecognized = try await backend.ingest(IngestRequest(text: "【招商银行】您尾号0427的账户有一笔变动，详情请查看App", source: .sms, sender: "95555"))
