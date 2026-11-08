@@ -36,6 +36,8 @@ struct ScreenshotReading: Sendable {
     var methodStated: Bool
     /// 用零钱通、余额宝、花呗付的：先找名称里有这几个字的账户
     var methodName: String?
+    /// 银行 App 的换汇页：两笔（卖出、买入）记在同一个账户，配成一对（`IngestEngine.exchangeRoute`）
+    var exchange = false
 }
 
 /// 微信、支付宝付款页截图的规则解析（ADR 0021）：纯函数，不访问数据库。
@@ -52,7 +54,7 @@ enum ScreenshotParser {
         (.method, ["支付方式", "付款方式", "支付卡", "付款卡", "扣款方式"]),
         (.target, ["到账银行卡", "到账银行", "提现银行卡", "提现到", "充值银行卡", "充值来源"]),
         (.status, ["当前状态", "交易状态", "支付状态", "转账状态", "状态"]),
-        (.reference, ["交易单号", "转账单号", "订单号", "退款单号", "红包单号", "交易号"]),
+        (.reference, ["交易单号", "转账单号", "订单号", "退款单号", "红包单号", "交易编号", "交易号"]),
         (.counterparty, ["收款商户", "商户名称", "收款方", "收款人", "对方账户", "对方", "转账给", "付款方", "付款人", "商户"]),
         (.amount, ["付款金额", "支付金额", "收款金额", "转账金额", "退款金额", "实付款", "实付", "金额"]),
         (.time, ["支付时间", "付款时间", "交易时间", "转账时间", "收款时间", "到账时间", "退款时间", "提现时间", "充值时间", "领取时间", "发起时间", "创建时间"]),
@@ -95,6 +97,23 @@ enum ScreenshotParser {
     private static let adWords = Rx(#"优惠|券|奖励|领取|广告|立即|查看|积分|抽奖|推荐|活动|开通|服务|关注|公众号|小程序|随机立减|立减"#)
     private static let titlePrefix = Rx(#"^(?:转账-转给|转账-来自|转账给|转账-|微信红包-发给|微信红包-来自|微信红包-|扫二维码付款-给|二维码收款-来自|付款给|收款方[:：]?)\s*"#)
     private static let titleSuffix = Rx(#"(?:发出)?的红包$|(?:\.{2,}|…+)$"#)
+
+    // MARK: 换汇页（银行 App）
+
+    /// 银行 App 的货币兑换结果页（众安「货币兑换成功」）：同一个账户里卖出一个币种、买入另一个币种
+    private static let exchangeMark = Rx(#"兑换|换汇|(?<![A-Za-z])exchange"#)
+    /// 「+HKD 39.02」「-USD 5.00」：带正负号和币种代码的金额。OCR 会把负号认成破折号、减号
+    private static let signedCurrencyAmount = Rx(#"(?<![A-Za-z0-9.])([-+−–—])\s*([A-Za-z]{3})\s*(\d{1,3}(?:,\d{3})+|\d+)\.(\d{2})(?![0-9])"#)
+    /// 「卖出 (USD)」「买入 (HKD)」：两个金额在上一行，从左到右和这一行的标签对应
+    private static let exchangeSide = Rx(#"(?<![A-Za-z])(卖出|买入|sell|buy)\s*[(（]?\s*([A-Za-z]{3})(?![A-Za-z])\s*[)）]?"#)
+    private static let plainAmount = Rx(#"(?<![0-9.,])(\d{1,3}(?:,\d{3})+|\d+)\.(\d{2})(?![0-9])"#)
+    private static let exchangeTimeRow = Rx(#"^(?:兑换时间|交易时间|时间)\s"#)
+    private static let exchangeFailed = Rx(#"兑换失败|交易失败|未成功|已取消|(?<![A-Za-z])failed"#)
+
+    struct ExchangeLeg: Equatable {
+        var currency: CurrencyCode
+        var digits: String
+    }
 
     // MARK: 入口
 
@@ -141,6 +160,29 @@ enum ScreenshotParser {
             }
             if key == .time { timeValues[name] = timeValues[name] ?? value }
             if values[key] == nil { values[key] = (name, value, index) }
+        }
+
+        // 银行 App 的换汇页：不是付款页，没有「支付成功」这类字，两个金额写在同一行。认出来就记成同一个账户里的一对转帐
+        if let legs = exchangeLegs(rows: rows, cleaned: cleaned) {
+            let timeRow = rows.first { exchangeTimeRow.test($0) }
+            let time = timeRow.flatMap { clock(in: $0, reference: referenceDate, calendar: calendar) } ?? clock(in: cleaned, reference: referenceDate, calendar: calendar)
+            let ref = (values[.reference]?.value).flatMap { Self.reference.test($0) ? $0 : nil }
+            let status: SettlementStatus = exchangeFailed.test(cleaned) ? .failed : .posted
+            let snippet = "\(legs.sold.currency) \(legs.sold.digits) → \(legs.bought.currency) \(legs.bought.digits)"
+            func draft(_ leg: ExchangeLeg, _ direction: FlowDirection, part: Int) -> EventDraft {
+                EventDraft(
+                    amount: AmountText(digits: leg.digits, currencyCandidates: [leg.currency], preferredCurrency: leg.currency),
+                    direction: direction, kind: direction == .outflow ? .transferOut : .transferIn, status: status, counterparty: nil, cardTail: nil,
+                    counterpartyTail: nil, transactionTime: time, bankReference: ref, balanceAfter: nil, includedFee: nil, isSplitFee: false,
+                    partIndex: part, bankHint: nil, walletHint: nil, evidenceSnippet: snippet
+                )
+            }
+            var reading = result(
+                .transaction, [ParsedEvent(draft: draft(legs.sold, .outflow, part: 0), issue: nil), ParsedEvent(draft: draft(legs.bought, .inflow, part: 2), issue: nil)],
+                time: time, reference: ref, hasAmount: true, stated: true
+            )
+            reading.exchange = true
+            return reading
         }
 
         // 2. 金额：第一行只有金额的；没有就看「付款金额 ¥12.00」
@@ -270,6 +312,44 @@ enum ScreenshotParser {
     /// 页面写没写用什么付的（入账时判断以前那笔截图的钱包是不是猜的）
     static func statesMethod(_ text: String, calendar: Calendar) -> Bool {
         parse(text, referenceDate: Date(), calendar: calendar).methodStated
+    }
+
+    /// 换汇页卖出、买入的币种和金额。先看「卖出 (USD)  买入 (HKD)」和上一行的两个金额，再看「-USD 5.00」「+HKD 39.02」。
+    /// 两个币种要不一样，并且都是认得的币种代码；页面上没有「兑换」「换汇」的不算
+    static func exchangeLegs(rows: [String], cleaned: String) -> (sold: ExchangeLeg, bought: ExchangeLeg)? {
+        guard exchangeMark.test(cleaned) else { return nil }
+        func code(_ raw: String) -> CurrencyCode? {
+            let code = CurrencyCode(raw)
+            return CurrencyCode.supported.contains(code) ? code : nil
+        }
+        func digits(_ m: NSTextCheckingResult, _ ns: NSString, from group: Int) -> String {
+            (m.group(group, in: ns) ?? "") + "." + (m.group(group + 1, in: ns) ?? "00")
+        }
+        for index in rows.indices.dropFirst() {
+            let ns = NSString(string: rows[index])
+            let sides = exchangeSide.matches(ns).compactMap { m -> (sell: Bool, code: CurrencyCode)? in
+                guard let word = m.group(1, in: ns), let c = m.group(2, in: ns).flatMap(code) else { return nil }
+                return (word == "卖出" || word.lowercased() == "sell", c)
+            }
+            guard sides.count == 2, sides[0].sell != sides[1].sell, sides[0].code != sides[1].code else { continue }
+            let above = NSString(string: rows[index - 1])
+            let amounts = plainAmount.matches(above).map { digits($0, above, from: 1) }
+            guard amounts.count == 2 else { continue }
+            let legs = zip(sides, amounts).map { (sell: $0.0.sell, leg: ExchangeLeg(currency: $0.0.code, digits: $0.1)) }
+            guard let sold = legs.first(where: { $0.sell })?.leg, let bought = legs.first(where: { !$0.sell })?.leg else { continue }
+            return (sold, bought)
+        }
+        var sold: [ExchangeLeg] = [], bought: [ExchangeLeg] = []
+        for row in rows {
+            let ns = NSString(string: row)
+            for m in signedCurrencyAmount.matches(ns) {
+                guard let sign = m.group(1, in: ns), let c = m.group(2, in: ns).flatMap(code) else { continue }
+                let leg = ExchangeLeg(currency: c, digits: digits(m, ns, from: 3))
+                if sign == "+" { if !bought.contains(leg) { bought.append(leg) } } else if !sold.contains(leg) { sold.append(leg) }
+            }
+        }
+        guard sold.count == 1, bought.count == 1, sold[0].currency != bought[0].currency else { return nil }
+        return (sold[0], bought[0])
     }
 
     // MARK: 小工具
