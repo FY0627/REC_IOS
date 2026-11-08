@@ -163,10 +163,6 @@ final class LedgerStore {
         return (try? await backend.records(filter: filter, before: cursor, limit: limit)) ?? []
     }
 
-    func recordCount(_ filter: RecordFilter) async -> Int {
-        (try? await backend?.recordCount(filter: filter)) ?? 0
-    }
-
     func updateRecord(id: String, _ edit: RecordEdit) async throws {
         guard let backend else { throw BackendError.notFound }
         try await backend.updateRecord(id: id, edit)

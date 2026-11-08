@@ -2,7 +2,6 @@ import SwiftUI
 import BKModel
 
 /// 一段时间的支出（减去退款）、收入、结余，所有币种换算成主要币种（首页的本月合计、统计页的总览）。
-/// 支出在左边、大字；收入和结余在右边上下排，靠右对齐。
 /// 外币交易有实际扣款的用实际扣款，否则按当天的汇率；还没有汇率的币种不算进去，只有这时多一行小字
 struct ConvertedTotalsView: View {
     let total: MonthStats.ConvertedTotals?
@@ -11,28 +10,23 @@ struct ConvertedTotalsView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
+            Text(expenseTitle).font(.subheadline).foregroundStyle(.secondary)
             if let total {
-                HStack(alignment: .center, spacing: 16) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(expenseTitle).font(.subheadline).foregroundStyle(.secondary)
-                        Text(Fmt.money(total.expenseMinor, total.currency))
-                            .font(.system(.largeTitle, design: .rounded).weight(.bold))
-                            .monospacedDigit()
-                            .lineLimit(1).minimumScaleFactor(0.5)
-                    }
-                    Spacer(minLength: 0)
-                    VStack(alignment: .trailing, spacing: 8) {
-                        stat(incomeTitle, Fmt.money(total.incomeMinor, total.currency))
-                        stat("结余", Fmt.money(total.balanceMinor, total.currency))
-                    }
-                    .fixedSize()
+                Text(Fmt.money(total.expenseMinor, total.currency))
+                    .font(.system(.largeTitle, design: .rounded).weight(.bold))
+                    .monospacedDigit()
+                    .lineLimit(1).minimumScaleFactor(0.6)
+                    .padding(.top, 2)
+                HStack(alignment: .top, spacing: 20) {
+                    stat(incomeTitle, Fmt.money(total.incomeMinor, total.currency))
+                    stat("结余", Fmt.money(total.balanceMinor, total.currency))
                 }
+                .padding(.top, 12)
                 if !total.unconverted.isEmpty {
                     Text(L("\(total.unconverted.map(\.localizedName).joined(separator: L("、")))没有汇率，没算进去"))
                         .font(.footnote).foregroundStyle(.secondary).padding(.top, 10)
                 }
             } else {
-                Text(expenseTitle).font(.subheadline).foregroundStyle(.secondary)
                 Text("—").font(.system(.largeTitle, design: .rounded).weight(.bold)).foregroundStyle(.secondary)
             }
         }
@@ -41,9 +35,9 @@ struct ConvertedTotalsView: View {
     }
 
     private func stat(_ title: LocalizedStringKey, _ value: String) -> some View {
-        VStack(alignment: .trailing, spacing: 2) {
+        VStack(alignment: .leading, spacing: 2) {
             Text(title).font(.footnote).foregroundStyle(.secondary)
-            Text(value).font(.headline).monospacedDigit().lineLimit(1)
+            Text(value).font(.headline).monospacedDigit().lineLimit(1).minimumScaleFactor(0.7)
         }
     }
 }

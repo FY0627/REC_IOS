@@ -7,7 +7,6 @@ import BKModel
 @Observable
 final class WalletDetailModel {
     var pendingCount = 0
-    var recordTotal = 0
     /// 卡里的币种，主币种在前；多币种的卡按币种分开看流水
     var currencies: [CurrencyCode] = []
     /// 正在看的币种；单币种的卡为 nil（看全部）
@@ -402,7 +401,6 @@ final class WalletDetailList: NSObject, UITableViewDelegate {
         loadTask = Task { [weak self] in
             guard let self else { return }
             let first = await self.store.records(filter, after: nil, limit: WalletDetailList.pageSize)
-            let total = await self.store.recordCount(filter)
             let pending = await self.pendingCount(accountID: id)
             guard !Task.isCancelled, session == self.session else { return }
             self.loadTask = nil
@@ -411,7 +409,6 @@ final class WalletDetailList: NSObject, UITableViewDelegate {
             self.rowsByID = Dictionary(uniqueKeysWithValues: self.rows.map { ($0.id, $0) })
             self.hasMore = first.count == WalletDetailList.pageSize
             // 只在变化时写入：写入就会让读它的 SwiftUI 视图重新计算
-            if self.model.recordTotal != total { self.model.recordTotal = total }
             if self.model.pendingCount != pending { self.model.pendingCount = pending }
             let reveal = !self.contentShown
             self.contentShown = true

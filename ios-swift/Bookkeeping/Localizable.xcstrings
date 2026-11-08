@@ -3435,40 +3435,6 @@
         }
       }
     },
-    "共 %lld 笔" : {
-      "localizations" : {
-        "en" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld transaction"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld transactions"
-                }
-              }
-            }
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "共 %lld 笔"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "共 %lld 筆"
-          }
-        }
-      }
-    },
     "关于" : {
       "localizations" : {
         "en" : {

@@ -1,7 +1,7 @@
 import SwiftUI
 import BKModel
 
-/// 卡片详情里卡片下面、流水之前的部分：待处理提示；「交易记录」标题、币种（多币种的卡按币种分开看流水）和笔数。
+/// 卡片详情里卡片下面、流水之前的部分：待处理提示；「交易记录」标题，多币种的卡右边是选币种的按钮（按币种分开看流水）。
 /// 放在详情列表（`WalletDetailList`）里；卡片本身、流水、「暂无流水」和顶部按钮（含时间段）在别处。
 /// 余额在卡片上，初始余额在「卡片信息」里。
 ///
@@ -19,11 +19,10 @@ struct AccountDetailSummary: View {
             }
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 Text("交易记录").font(.title3.weight(.semibold))
+                Spacer(minLength: 0)
                 if model.currencies.count > 1 {
                     currencyMenu
                 }
-                Spacer()
-                Text("共 \(model.recordTotal) 笔").font(.subheadline).foregroundStyle(.secondary)
             }
             .padding(.top, 8)
             .padding(.bottom, 10)
@@ -44,10 +43,11 @@ struct AccountDetailSummary: View {
         .tapAction(openPending)
     }
 
-    /// 每个币种的流水分开看，放在「交易记录」旁边。卡里没有的币种的交易按主币种扣款，放在主币种里。
+    /// 每个币种的流水分开看，放在「交易记录」这一行的最右边（英文标题长，放在标题旁边会挤得换行）。
+    /// 卡里没有的币种的交易按主币种扣款，放在主币种里。
     /// 点开是一个小弹窗：币种名称靠左对齐，选中的在最右边打勾。系统菜单的勾（或图标）在名称前面，
     /// 只有选中的那行有，几行名称对不齐。
-    /// 弹窗固定在币种名称的右边：不指定时系统按放不放得下选，币种少的在上面、多的在右边
+    /// 弹窗固定从按钮旁边横着弹出：按钮靠屏幕右边，往左弹。不指定时系统按放不放得下选，币种少的在上面、多的在旁边
     private var currencyMenu: some View {
         let current = model.currency ?? model.currencies.first ?? .cny
         return HStack(spacing: 3) {
@@ -58,7 +58,7 @@ struct AccountDetailSummary: View {
         .foregroundStyle(Color.primary)
         .tapAction { choosingCurrency = true }
         .accessibilityLabel("币种：\(current.localizedName)")
-        .popover(isPresented: $choosingCurrency, arrowEdge: .trailing) {
+        .popover(isPresented: $choosingCurrency, arrowEdge: .leading) {
             CurrencyChoices(currencies: model.currencies, current: current) { code in
                 choosingCurrency = false
                 selectCurrency(code)
@@ -69,7 +69,7 @@ struct AccountDetailSummary: View {
 }
 
 /// 卡片详情选币种的弹窗：每行左边是币种，选中的右边打勾。币种多时可以滚动。
-/// 宽度跟着最长的币种名称：弹窗在名称右边，屏幕右边剩下的地方不多
+/// 宽度跟着最长的币种名称
 private struct CurrencyChoices: View {
     let currencies: [CurrencyCode]
     let current: CurrencyCode
