@@ -380,10 +380,6 @@ final class LedgerStore {
         await refresh()
     }
 
-    func ingestLog() async -> [IngestLogEntry] {
-        (try? await backend?.ingestLog(limit: 100)) ?? []
-    }
-
     /// 分类建议体检：已经选好分类的流水重新推荐一遍，只读
     func categoryCheckup() async throws -> CategoryCheckup {
         guard let backend else { throw BackendError.notFound }

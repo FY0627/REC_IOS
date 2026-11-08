@@ -46,7 +46,8 @@ struct AccountDetailSummary: View {
 
     /// 每个币种的流水分开看，放在「交易记录」旁边。卡里没有的币种的交易按主币种扣款，放在主币种里。
     /// 点开是一个小弹窗：币种名称靠左对齐，选中的在最右边打勾。系统菜单的勾（或图标）在名称前面，
-    /// 只有选中的那行有，几行名称对不齐
+    /// 只有选中的那行有，几行名称对不齐。
+    /// 弹窗固定在币种名称的右边：不指定时系统按放不放得下选，币种少的在上面、多的在右边
     private var currencyMenu: some View {
         let current = model.currency ?? model.currencies.first ?? .cny
         return HStack(spacing: 3) {
@@ -57,7 +58,7 @@ struct AccountDetailSummary: View {
         .foregroundStyle(Color.primary)
         .tapAction { choosingCurrency = true }
         .accessibilityLabel("币种：\(current.chineseName)")
-        .popover(isPresented: $choosingCurrency) {
+        .popover(isPresented: $choosingCurrency, arrowEdge: .trailing) {
             CurrencyChoices(currencies: model.currencies, current: current) { code in
                 choosingCurrency = false
                 selectCurrency(code)
@@ -67,7 +68,8 @@ struct AccountDetailSummary: View {
     }
 }
 
-/// 卡片详情选币种的弹窗：每行左边是币种，选中的右边打勾。币种多时可以滚动
+/// 卡片详情选币种的弹窗：每行左边是币种，选中的右边打勾。币种多时可以滚动。
+/// 宽度跟着最长的币种名称：弹窗在名称右边，屏幕右边剩下的地方不多
 private struct CurrencyChoices: View {
     let currencies: [CurrencyCode]
     let current: CurrencyCode
@@ -78,7 +80,7 @@ private struct CurrencyChoices: View {
             rows
             ScrollView { rows }
         }
-        .frame(width: 240)
+        .frame(minWidth: 150)
     }
 
     private var rows: some View {
@@ -91,6 +93,8 @@ private struct CurrencyChoices: View {
                     HStack(spacing: 12) {
                         Text("\(code.chineseName) \(code.rawValue)")
                             .foregroundStyle(Color.primary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
                         Spacer(minLength: 0)
                         Image(systemName: "checkmark")
                             .font(.body.weight(.semibold))

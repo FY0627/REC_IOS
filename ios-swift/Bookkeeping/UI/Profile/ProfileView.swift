@@ -23,7 +23,7 @@ struct ProfileView: View {
 
 /// 「我的」推进去的二级页面
 enum ProfileRoute: Hashable {
-    case primaryCurrency, exchangeRates, categories, autoSetup, screenshotSetup, automationStatus, categoryCheckup, templates, help, dataExport, dataImport, simulation, performance
+    case primaryCurrency, exchangeRates, categories, autoSetup, screenshotSetup, categoryCheckup, templates, help, dataExport, dataImport, simulation, performance
 }
 
 /// 「我的」的列表和导航栈。顶部一行和首页、资产页一样高、一样的位置；列表滚到它下面时垫一层磨砂背景（和首页一样）。
@@ -108,9 +108,6 @@ private struct ProfileList: View {
                     }
                     NavigationLink(value: ProfileRoute.screenshotSetup) {
                         Label("设置截图记账", systemImage: "camera.viewfinder")
-                    }
-                    NavigationLink(value: ProfileRoute.automationStatus) {
-                        Label("自动记账状态", systemImage: "checkmark.seal")
                     }
                     NavigationLink(value: ProfileRoute.templates) {
                         Label("识别模板", systemImage: "text.viewfinder")
@@ -232,7 +229,6 @@ private struct ProfileList: View {
         case .categories: CategoryManagerView()
         case .autoSetup: AutoSetupGuideView()
         case .screenshotSetup: ScreenshotSetupGuideView()
-        case .automationStatus: AutomationStatusView()
         case .categoryCheckup: CategoryCheckupView()
         case .templates: TemplateListView()
         case .help: HelpView()
@@ -303,42 +299,6 @@ enum BuildInfo {
         let build = info["CFBundleVersion"] as? String ?? "?"
         let commit = (info["BKBuildCommit"] as? String).map { String($0.prefix(7)) } ?? "本地构建"
         return "\(version) (\(build)) · \(commit)"
-    }
-}
-
-/// 自动记账状态：收到过的输入（接收日志）。App 无法读取快捷指令里自动化是否存在或已启用，
-/// 这里只展示 App 自己能确认的事实
-struct AutomationStatusView: View {
-    @Environment(LedgerStore.self) private var store
-    @State private var log: [IngestLogEntry] = []
-
-    var body: some View {
-        List {
-            Section {
-                if log.isEmpty { Text("还没有收到任何输入").foregroundStyle(.secondary) }
-                ForEach(log) { entry in
-                    VStack(alignment: .leading, spacing: 2) {
-                        HStack {
-                            Text(entry.detail.isEmpty ? entry.classification.displayName : entry.detail)
-                            Spacer()
-                            Text(entry.source.displayName).font(.subheadline).foregroundStyle(.secondary)
-                        }
-                        Text("处理于 \(Fmt.dateTime(entry.processedAt))" + (entry.receivedAt.map { " · 接收于 \(Fmt.dateTime($0))" } ?? " · 系统未提供接收时间"))
-                            .font(.footnote).foregroundStyle(.secondary)
-                        // 被过滤的写上原文，银行通知被误滤时能看出来
-                        if entry.outcome == .filtered, let raw = entry.rawText {
-                            Text(raw).font(.footnote).foregroundStyle(.secondary).lineLimit(3)
-                        }
-                    }
-                }
-            } header: {
-                Text("接收日志（最近 100 条）")
-            }
-        }
-        .navigationTitle("自动记账状态")
-        .navigationBarTitleDisplayMode(.inline)
-        .task { log = await store.ingestLog() }
-        .refreshable { await store.refresh(); log = await store.ingestLog() }
     }
 }
 

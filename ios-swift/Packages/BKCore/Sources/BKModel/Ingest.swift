@@ -140,7 +140,7 @@ public struct IngestItem: Sendable, Hashable {
     }
 }
 
-/// 「我的 › 自动记账状态」里展示的接收日志。
+/// 接收日志：每条输入怎么处理的（界面上不显示，排查用）。
 public struct IngestLogEntry: Identifiable, Hashable, Sendable {
     public var id: String
     public var source: SourceKind
