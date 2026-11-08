@@ -164,6 +164,9 @@ struct IngestEngine {
 
         var recorded = 0, merged = 0, pending = 0
         var items: [IngestItem] = []
+        // 银行 App 的换汇页：两笔都记到同时有这两个币种的账户，记完配成一对（同卡换汇）
+        let exchangeRoute = screenshot?.exchange == true && !templateHit ? Self.exchangeRoute(parsed.events.map(\.draft), accounts: accounts) : nil
+        var exchangeIDs: [String] = []
         if classification == .transaction {
             for event in parsed.events {
                 var draft = event.draft
@@ -174,24 +177,31 @@ struct IngestEngine {
                     draft.cardTail = other
                 }
                 let outcome: CommitOutcome
-                let route = screenshot.map { screenshotRoute(draft, reading: $0, accounts: accounts) }
+                let route = exchangeRoute ?? screenshot.map { screenshotRoute(draft, reading: $0, accounts: accounts) }
                 if let issue = event.issue {
                     let candidates = route?.candidates ?? candidateIDs(for: draft, request: request, accounts: accounts)
                     outcome = .pending(issue, candidates: candidates, duplicateOf: nil)
                 } else if let route, let reason = route.pending {
                     outcome = .pending(reason, candidates: route.candidates, duplicateOf: nil)
                 } else {
+                    // 换汇的两笔写着同一个交易编号：按单号去重时分开卖出、买入两边
+                    var exchangeKey: String?
+                    if exchangeRoute != nil, let account = route?.account?.id, let reference = draft.bankReference {
+                        exchangeKey = ["ref", account, reference, "fx", draft.direction?.rawValue ?? "-"].joined(separator: "|")
+                    }
                     outcome = try commit(
                         draft, meta: meta, boundAccountID: request.boundAccountID, accounts: accounts, forcedAccount: route?.account, duplicateCheck: true,
-                        assumedAccount: route?.assumed ?? false
+                        forcedDedupeKey: exchangeKey, assumedAccount: route?.assumed ?? false
                     )
                 }
                 switch outcome {
                 case let .recorded(recordID):
                     recorded += 1
+                    if exchangeRoute != nil { exchangeIDs.append(recordID) }
                     items.append(try item(recordID: recordID, draft: draft, result: .recorded, accounts: accounts))
                 case let .merged(recordID):
                     merged += 1
+                    if exchangeRoute != nil { exchangeIDs.append(recordID) }
                     items.append(try item(recordID: recordID, draft: draft, result: .merged, accounts: accounts))
                 case let .pending(reason, candidates, duplicateOf):
                     // 没有卡号和署名、只是正文提到账户名称：证据不够直接入账，把它列成候选
@@ -201,6 +211,7 @@ struct IngestEngine {
                     items.append(Self.pendingItem(draft, reason: reason))
                 }
             }
+            if exchangeIDs.count == 2, exchangeIDs[0] != exchangeIDs[1] { try pairExchange(exchangeIDs) }
         } else if classification == .unrecognized, !logOnly {
             try PendingDAO.insert(db, id: newID(), ingestID: ingestID, partIndex: 0, reason: .unrecognized, draft: nil, candidates: request.boundAccountID.map { [$0] } ?? [], duplicateOf: nil, now: now)
             pending += 1
@@ -652,6 +663,26 @@ struct IngestEngine {
         case 1: return ScreenshotRoute(account: wallets[0], assumed: assumed, pending: nil, candidates: [])
         default: return ScreenshotRoute(account: nil, assumed: assumed, pending: .ambiguousAccount, candidates: wallets.map(\.id))
         }
+    }
+
+    /// 银行 App 的换汇页记到哪：页面上没有银行名称和卡号，记到同时有这两个币种的账户（信用卡不算）。
+    /// 只有一个就是它；几个都有、或者一个都没有（账户还没加这个币种）时让用户选，候选是有其中一个币种的账户
+    static func exchangeRoute(_ drafts: [EventDraft], accounts: [Account]) -> ScreenshotRoute {
+        let codes = Set(drafts.compactMap(\.amount.preferredCurrency))
+        let usable = accounts.filter { !$0.archived && $0.cardType != .credit }
+        let both = usable.filter { codes.isSubset(of: Set($0.currencies)) }
+        if both.count == 1 { return ScreenshotRoute(account: both[0], assumed: false, pending: nil, candidates: []) }
+        let either = usable.filter { !codes.isDisjoint(with: $0.currencies) }
+        let candidates = both.isEmpty ? (either.isEmpty ? usable : either) : both
+        return ScreenshotRoute(account: nil, assumed: false, pending: .ambiguousAccount, candidates: candidates.map(\.id))
+    }
+
+    /// 换汇的卖出、买入两笔配成一对（和手动记的同卡换汇一样）。已经是一对的不动；有一笔失败的不配
+    func pairExchange(_ ids: [String]) throws {
+        let records = try ids.compactMap { try RecordDAO.find(db, id: $0) }
+        guard records.count == 2, records.allSatisfy({ $0.status == .posted }) else { return }
+        if let group = records[0].transferGroupID, records[1].transferGroupID == group { return }
+        try RecordDAO.setTransferGroup(db, ids: ids, group: newID())
     }
 
     /// 截图和银行通知（或者同一笔的另一张截图）是不是同一笔：金额、币种、方向、状态一样，时间对得上，在同一个账户；

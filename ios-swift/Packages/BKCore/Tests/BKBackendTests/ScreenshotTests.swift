@@ -477,4 +477,91 @@ final class ScreenshotTests: XCTestCase {
         let item = try await backend.openPendingItems()[0]
         XCTAssertEqual(item.reason, .possibleDuplicate)
     }
+
+    // MARK: 银行 App 的换汇页
+
+    /// 众安 App「货币兑换成功」页（照真机截图排成行，交易编号太长换了行）
+    let zaExchange = """
+    23:33  78
+    X  全部动态
+    USD 兑换 HKD  +HKD 39.02
+    今天 23:31  -USD 5.00
+    货币兑换成功
+    今天 23:31
+    USD 兑换为 HKD
+    5.00  39.02
+    卖出 (USD)  买入 (HKD)
+    兑换汇率  1HKD = 0.128137USD
+    交易编号  2026263317600031287091
+    2
+    时间  11 月 7 日 23:31
+    外汇  活期存款
+    """
+
+    var afterExchange: Date { calendar.date(from: DateComponents(year: 2026, month: 11, day: 8, hour: 9))! }
+
+    @discardableResult
+    func addZA(_ backend: LedgerBackend, extra: [CurrencyCode] = [.usd]) async throws -> Account {
+        try await backend.addAccount(AccountDraft(
+            name: "", bankID: "zabank", bankName: "众安银行", last4: "0106", cardType: .debit, currency: .hkd, paletteID: "ocean", extraCurrencies: extra
+        ))
+    }
+
+    func testExchangeLegsAreRead() {
+        let rows = ScreenshotParser.cleaned(zaExchange).split(separator: "\n").map(String.init)
+        let legs = ScreenshotParser.exchangeLegs(rows: rows, cleaned: ScreenshotParser.cleaned(zaExchange))
+        XCTAssertEqual(legs?.sold, ScreenshotParser.ExchangeLeg(currency: .usd, digits: "5.00"))
+        XCTAssertEqual(legs?.bought, ScreenshotParser.ExchangeLeg(currency: .hkd, digits: "39.02"))
+        // 只截到上半页：看带正负号的金额
+        let header = "USD 兑换 HKD  +HKD 39.02\n今天 23:31  -USD 5.00\n货币兑换成功"
+        let fromHeader = ScreenshotParser.exchangeLegs(rows: header.split(separator: "\n").map(String.init), cleaned: header)
+        XCTAssertEqual(fromHeader?.sold, ScreenshotParser.ExchangeLeg(currency: .usd, digits: "5.00"))
+        XCTAssertEqual(fromHeader?.bought, ScreenshotParser.ExchangeLeg(currency: .hkd, digits: "39.02"))
+        XCTAssertNil(ScreenshotParser.exchangeLegs(rows: wechatDetail.split(separator: "\n").map(String.init), cleaned: wechatDetail))
+    }
+
+    func testBankExchangePageIsRecordedAsAnExchangeOnTheSameAccount() async throws {
+        let backend = try makeBackend()
+        let za = try await addZA(backend)
+        let result = try await backend.ingestScreenshot(text: zaExchange, capturedAt: afterExchange)
+        XCTAssertEqual(result.recordedCount, 2, result.summary)
+        let rows = try await backend.records(accountID: za.id).map(\.record)
+        XCTAssertEqual(rows.count, 2)
+        let sold = try XCTUnwrap(rows.first { $0.direction == .outflow })
+        let bought = try XCTUnwrap(rows.first { $0.direction == .inflow })
+        XCTAssertEqual(sold.currency, .usd)
+        XCTAssertEqual(sold.amountMinor, 5_00)
+        XCTAssertEqual(sold.kind, .transferOut)
+        XCTAssertEqual(bought.currency, .hkd)
+        XCTAssertEqual(bought.amountMinor, 39_02)
+        XCTAssertEqual(bought.kind, .transferIn)
+        XCTAssertNotNil(sold.transferGroupID)
+        XCTAssertEqual(sold.transferGroupID, bought.transferGroupID, "卖出、买入配成同卡换汇")
+        XCTAssertEqual(sold.bankReference, "20262633176000312870912", "换行的交易编号接上")
+        XCTAssertEqual(sold.transactionTime?.month, 11)
+        XCTAssertEqual(sold.transactionTime?.day, 7)
+        XCTAssertEqual(sold.transactionTime?.hour, 23)
+        XCTAssertEqual(sold.transactionTime?.minute, 31)
+        XCTAssertEqual(sold.transactionTime?.year, 2026)
+    }
+
+    func testSameExchangeScreenshotTwiceIsOneExchange() async throws {
+        let backend = try makeBackend()
+        try await addZA(backend)
+        _ = try await backend.ingestScreenshot(text: zaExchange, capturedAt: afterExchange)
+        let again = try await backend.ingestScreenshot(text: zaExchange, capturedAt: afterExchange.addingTimeInterval(600))
+        XCTAssertEqual(again.mergedCount, 2, again.summary)
+        let count = try await backend.recordCount()
+        XCTAssertEqual(count, 2)
+    }
+
+    func testExchangeWithoutAnAccountHoldingBothCurrenciesAsks() async throws {
+        let backend = try makeBackend()
+        let za = try await addZA(backend, extra: [.cny])
+        let result = try await backend.ingestScreenshot(text: zaExchange, capturedAt: afterExchange)
+        XCTAssertEqual(result.pendingCount, 2, result.summary)
+        let items = try await backend.openPendingItems()
+        XCTAssertTrue(items.allSatisfy { $0.reason == .ambiguousAccount })
+        XCTAssertEqual(items.first?.candidateAccountIDs, [za.id])
+    }
 }
