@@ -11,7 +11,7 @@ import BKModel
 /// 由 App 判断是不是动账通知：认出尾号（固定写法，或正文里出现已添加的卡的尾号）才入账；
 /// 不是动账通知的短信不保存。
 /// iOS 不允许 App 创建、导入或查询快捷指令自动化，这里只给出最少的手动步骤。
-/// 只放设置步骤；各卡收到过没有、接收日志在「自动记账状态」（`AutomationStatusView`）。
+/// 只放设置步骤；接收日志在「自动记账状态」（`AutomationStatusView`）。
 struct AutoSetupGuideView: View {
     /// 作为添加流程的最后一步出现时，右上角显示「完成」
     var onDone: (() -> Void)?

@@ -78,20 +78,23 @@ struct TransferSideFields: View {
         return account.currencies.first { $0 != sourceCurrency } ?? account.currency
     }
 
-    /// 另一边的金额：币种相同时空着就是一样多。返回金额，或者要提示的错误
+    /// 另一边的金额：币种相同时空着就是一样多。返回金额，或者要弹窗提示的问题
     static func resolve(
         text: String, currency: CurrencyCode, account: Account, sourceAccountID: String?, sourceAmount: Int64, sourceCurrency: CurrencyCode,
         receiving: Bool = true
-    ) -> (minor: Int64?, error: String?) {
-        if account.id == sourceAccountID, currency == sourceCurrency { return (nil, "同一个账户要转到另一个币种") }
+    ) -> (minor: Int64?, error: InputProblem?) {
+        let currencyTitle = receiving ? "到账币种" : "转出币种"
+        if account.id == sourceAccountID, currency == sourceCurrency {
+            return (nil, InputProblem(title: "\(currencyTitle)不对", message: "同一个账户要转到另一个币种"))
+        }
         let title = receiving ? "到账金额" : "转出金额"
         switch MoneyInput.parse(text, negative: false, currency: currency) {
         case .empty:
-            return currency == sourceCurrency ? (sourceAmount, nil) : (nil, "币种不一样，请填\(title)")
+            return currency == sourceCurrency ? (sourceAmount, nil) : (nil, InputProblem(title: "没填\(title)", message: "币种不一样，请填\(title)"))
         case .valid(let minor) where minor > 0:
             return (minor, nil)
         default:
-            return (nil, "\(title)：" + MoneyInput.invalidAmountMessage(currency))
+            return (nil, .amount(title, currency))
         }
     }
 }

@@ -101,6 +101,31 @@ struct OpeningBalanceRow: View {
     }
 }
 
+/// 保存时填得不对的地方：弹窗标题写哪一项，内容写怎么填。不放在表单最下面，滑不到就看不见
+struct InputProblem: Equatable {
+    let title: String
+    var message = ""
+
+    /// 金额格式不对：「金额填得不对」「实际扣款填得不对」
+    static func amount(_ field: String, _ currency: CurrencyCode) -> InputProblem {
+        InputProblem(title: "\(field)填得不对", message: MoneyInput.invalidAmountMessage(currency))
+    }
+}
+
+extension View {
+    /// 有问题时弹窗，点「好」关掉
+    func inputProblemAlert(_ problem: Binding<InputProblem?>) -> some View {
+        alert(problem.wrappedValue?.title ?? "", isPresented: Binding(
+            get: { problem.wrappedValue != nil },
+            set: { if !$0 { problem.wrappedValue = nil } }
+        )) {
+            Button("好", role: .cancel) {}
+        } message: {
+            if let message = problem.wrappedValue?.message, !message.isEmpty { Text(message) }
+        }
+    }
+}
+
 extension MoneyInput {
     /// 金额输入框里的灰色提示：日元这类没有小数的写「0」
     static func placeholder(_ currency: CurrencyCode?) -> String {

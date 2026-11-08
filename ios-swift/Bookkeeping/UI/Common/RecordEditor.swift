@@ -35,7 +35,7 @@ struct RecordEditor: View {
     @State private var peerCurrency: CurrencyCode?
     @State private var peerAmountText: String
     @State private var saving = false
-    @State private var errorText: String?
+    @State private var problem: InputProblem?
 
     /// 转帐的另一边
     enum PeerChoice: Hashable {
@@ -232,10 +232,8 @@ struct RecordEditor: View {
                     DatePicker("时间", selection: $time)
                         .onChange(of: time) { timeChanged = true }
                 }
-                if let errorText {
-                    Section { Text(errorText).foregroundStyle(.red) }
-                }
             }
+            .inputProblemAlert($problem)
             .navigationTitle("编辑流水")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -294,7 +292,7 @@ struct RecordEditor: View {
     private func save() async {
         guard let currency else { return }
         guard case .valid(let amount) = MoneyInput.parse(amountText, negative: false, currency: currency), amount > 0 else {
-            errorText = MoneyInput.invalidAmountMessage(currency)
+            problem = .amount("金额", currency)
             return
         }
         var settlement: Int64?
@@ -303,7 +301,7 @@ struct RecordEditor: View {
             case .empty: settlement = nil
             case .valid(let minor) where minor > 0: settlement = minor
             default:
-                errorText = "实际金额：" + MoneyInput.invalidAmountMessage(settlementCurrency)
+                problem = .amount(settlementTitle, settlementCurrency)
                 return
             }
         }
@@ -314,7 +312,7 @@ struct RecordEditor: View {
                 sourceAmount: amount, sourceCurrency: currency, receiving: transferDirection == .outflow
             )
             if let error = side.error {
-                errorText = error
+                problem = error
                 return
             }
             peerAmount = side.minor
@@ -346,7 +344,7 @@ struct RecordEditor: View {
             onSaved()
             dismiss()
         } catch {
-            errorText = "保存失败：\(error.localizedDescription)"
+            problem = InputProblem(title: "保存失败", message: error.localizedDescription)
         }
     }
 }

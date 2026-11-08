@@ -39,6 +39,10 @@ private struct ProfileList: View {
     @AppStorage(ExchangeRateStore.primaryKey) private var primaryCurrency = CurrencyCode.cny.rawValue
     @AppStorage(IngestNotifier.modeKey) private var notifyMode = IngestNotifier.Mode.off.rawValue
     @AppStorage(ImportExchangeRatesIntent.notifyKey) private var notifyRates = true
+    /// 「开发与调试」平时藏着：连点 7 次版本号显示，再连点 7 次藏起来
+    @AppStorage("showDevTools") private var showDevTools = false
+    @State private var versionTaps = 0
+    @State private var lastVersionTap = Date.distantPast
     @State private var retention = 30
     @State private var notifyDenied = false
     @State private var scrolledUnderBar = false
@@ -153,12 +157,17 @@ private struct ProfileList: View {
                     }
                 }
 
-                Section("开发与调试") {
-                    NavigationLink(value: ProfileRoute.simulation) {
-                        Label("模拟消费", systemImage: "cart.badge.plus")
-                    }
-                    NavigationLink(value: ProfileRoute.performance) {
-                        Label("性能开关与调试指标", systemImage: "speedometer")
+                if showDevTools {
+                    Section("开发与调试") {
+                        NavigationLink(value: ProfileRoute.categoryCheckup) {
+                            Label("分类建议体检", systemImage: "stethoscope")
+                        }
+                        NavigationLink(value: ProfileRoute.simulation) {
+                            Label("模拟消费", systemImage: "cart.badge.plus")
+                        }
+                        NavigationLink(value: ProfileRoute.performance) {
+                            Label("性能开关与调试指标", systemImage: "speedometer")
+                        }
                     }
                 }
 
@@ -166,6 +175,8 @@ private struct ProfileList: View {
                     LabeledContent("REC", value: "iOS 原生 Swift 版")
                     LabeledContent("版本", value: BuildInfo.summary)
                         .font(.subheadline.monospaced())
+                        .contentShape(Rectangle())
+                        .onTapGesture(perform: tapVersion)
                     LabeledContent("汇率", value: rateStatus)
                     // 汇率数据源要求注明来源并链接到官网
                     Link(ExchangeRateFeed.attribution, destination: ExchangeRateFeed.attributionURL)
@@ -175,6 +186,7 @@ private struct ProfileList: View {
             // 这里的 themeColor 比 App 那层的 .tint 先变：按主题色重建的菜单行如果只靠外面的 .tint，
             // 重建时拿到的还是上一个颜色（比现在选的晚一个）。用同一个值，重建时就是新颜色
             .tint(ThemeColor.color(stored: themeColor))
+            .sensoryFeedback(.success, trigger: showDevTools)
             .sheet(isPresented: $choosingTheme) { ThemeColorSheet(selection: $themeColor) }
             .alert("没有通知权限", isPresented: $notifyDenied) {
                 Button("去设置") {
@@ -231,6 +243,16 @@ private struct ProfileList: View {
         }
     }
 
+    /// 版本号连点 7 次（每两下间隔不超过 1.5 秒）：显示或藏起「开发与调试」
+    private func tapVersion() {
+        let now = Date()
+        versionTaps = now.timeIntervalSince(lastVersionTap) < 1.5 ? versionTaps + 1 : 1
+        lastVersionTap = now
+        guard versionTaps >= 7 else { return }
+        versionTaps = 0
+        withAnimation { showDevTools.toggle() }
+    }
+
     /// 打开一种通知时要通知权限；被拒绝就关回去，提示去系统设置
     private func askPermission(revert: @escaping () -> Void) {
         Task {
@@ -284,39 +306,14 @@ enum BuildInfo {
     }
 }
 
-/// 自动记账的可观测状态。App 无法读取快捷指令里自动化是否存在或已启用，
-/// 这里只展示 App 自己能确认的事实。
+/// 自动记账状态：收到过的输入（接收日志）。App 无法读取快捷指令里自动化是否存在或已启用，
+/// 这里只展示 App 自己能确认的事实
 struct AutomationStatusView: View {
     @Environment(LedgerStore.self) private var store
     @State private var log: [IngestLogEntry] = []
 
-    /// 能自动记账的账户：银行卡，和选了是哪个钱包的电子钱包
-    private var automated: [Account] {
-        store.accounts.filter { $0.isCard || WalletDirectory.provider(of: $0) != nil }
-    }
-
     var body: some View {
         List {
-            Section("各账户最近一次成功接收") {
-                if automated.isEmpty { Text("还没有添加银行卡").foregroundStyle(.secondary) }
-                ForEach(automated) { account in
-                    let status = store.automation[account.id]
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(account.displayTitle)
-                        if let last = status?.lastSuccessAt {
-                            Text("已通过真实触发验证 · \(Fmt.dateTime(last))（\(status?.lastSuccessSource?.displayName ?? "")）· 累计 \(status?.receivedCount ?? 0) 次")
-                                .font(.subheadline).foregroundStyle(.secondary)
-                        } else {
-                            Text("待验证 · 尚未收到这个账户的自动输入").font(.subheadline).foregroundStyle(.orange)
-                        }
-                    }
-                }
-            }
-            Section {
-                NavigationLink(value: ProfileRoute.categoryCheckup) {
-                    Label("分类建议体检", systemImage: "stethoscope")
-                }
-            }
             Section {
                 if log.isEmpty { Text("还没有收到任何输入").foregroundStyle(.secondary) }
                 ForEach(log) { entry in

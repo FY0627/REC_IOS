@@ -1,7 +1,7 @@
 import SwiftUI
 import BKModel
 
-/// 分类建议体检（「自动记账状态」里进来）：拿已经选好分类的流水，按时间从早到晚一笔笔重新推荐，每笔只用它之前的记录，
+/// 分类建议体检（「我的 › 开发与调试」里进来）：拿已经选好分类的流水，按时间从早到晚一笔笔重新推荐，每笔只用它之前的记录，
 /// 看建议准不准（`CategoryCheckup`）。不用等新账单，打开就算；只读，不改账本，也不改学到的规律。下拉重新算
 struct CategoryCheckupView: View {
     @Environment(LedgerStore.self) private var store

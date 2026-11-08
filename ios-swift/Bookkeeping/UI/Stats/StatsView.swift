@@ -338,7 +338,7 @@ private struct CategoryStatsView: View {
             Section("每一笔") {
                 ForEach(rows) { row in
                     NavigationLink {
-                        RecordDetailView(recordID: row.id)
+                        RecordPage(row: row)
                     } label: {
                         RecordRowView(row: row)
                     }

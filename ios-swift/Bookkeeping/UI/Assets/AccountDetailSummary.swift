@@ -10,6 +10,7 @@ struct AccountDetailSummary: View {
     let model: WalletDetailModel
     let openPending: () -> Void
     let selectCurrency: (CurrencyCode) -> Void
+    @State private var choosingCurrency = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -43,29 +44,68 @@ struct AccountDetailSummary: View {
         .tapAction(openPending)
     }
 
-    /// 每个币种的流水分开看，放在「交易记录」旁边。卡里没有的币种的交易按主币种扣款，放在主币种里
+    /// 每个币种的流水分开看，放在「交易记录」旁边。卡里没有的币种的交易按主币种扣款，放在主币种里。
+    /// 点开是一个小弹窗：币种名称靠左对齐，选中的在最右边打勾。系统菜单的勾（或图标）在名称前面，
+    /// 只有选中的那行有，几行名称对不齐
     private var currencyMenu: some View {
         let current = model.currency ?? model.currencies.first ?? .cny
-        return Menu {
-            ForEach(model.currencies, id: \.self) { code in
-                Button { selectCurrency(code) } label: {
-                    if code == current {
-                        Label("\(code.chineseName) \(code.rawValue)", systemImage: "checkmark")
-                    } else {
-                        Text("\(code.chineseName) \(code.rawValue)")
-                    }
-                }
-            }
-        } label: {
-            // 文字用 Color.primary：菜单里的层级样式 .primary 会跟着强调色变成蓝色
-            HStack(spacing: 3) {
-                Text(current.chineseName)
-                Image(systemName: "chevron.up.chevron.down").font(.caption2.weight(.semibold))
-            }
-            .font(.subheadline.weight(.medium))
-            .foregroundStyle(Color.primary)
+        return HStack(spacing: 3) {
+            Text(current.chineseName)
+            Image(systemName: "chevron.up.chevron.down").font(.caption2.weight(.semibold))
         }
+        .font(.subheadline.weight(.medium))
+        .foregroundStyle(Color.primary)
+        .tapAction { choosingCurrency = true }
         .accessibilityLabel("币种：\(current.chineseName)")
+        .popover(isPresented: $choosingCurrency) {
+            CurrencyChoices(currencies: model.currencies, current: current) { code in
+                choosingCurrency = false
+                selectCurrency(code)
+            }
+            .presentationCompactAdaptation(.popover)
+        }
+    }
+}
+
+/// 卡片详情选币种的弹窗：每行左边是币种，选中的右边打勾。币种多时可以滚动
+private struct CurrencyChoices: View {
+    let currencies: [CurrencyCode]
+    let current: CurrencyCode
+    let select: (CurrencyCode) -> Void
+
+    var body: some View {
+        ViewThatFits(in: .vertical) {
+            rows
+            ScrollView { rows }
+        }
+        .frame(width: 240)
+    }
+
+    private var rows: some View {
+        VStack(spacing: 0) {
+            ForEach(currencies, id: \.self) { code in
+                if code != currencies.first {
+                    Divider().padding(.leading, 16)
+                }
+                Button { select(code) } label: {
+                    HStack(spacing: 12) {
+                        Text("\(code.chineseName) \(code.rawValue)")
+                            .foregroundStyle(Color.primary)
+                        Spacer(minLength: 0)
+                        Image(systemName: "checkmark")
+                            .font(.body.weight(.semibold))
+                            .foregroundStyle(.tint)
+                            .opacity(code == current ? 1 : 0)
+                    }
+                    .padding(.horizontal, 16)
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(code == current ? .isSelected : [])
+            }
+        }
+        .padding(.vertical, 6)
     }
 }
 

@@ -33,8 +33,6 @@ struct PendingView: View {
                         }
                     } header: {
                         Text("待分类")
-                    } footer: {
-                        Text(waitingFooter)
                     }
                 }
                 Section {
@@ -74,13 +72,6 @@ struct PendingView: View {
         categorizing = CategorizeTarget(row: row, suggestions: suggestions)
     }
 
-    /// 待分类的笔数；超过一次列出的数量时说明只列了最近的
-    private var waitingFooter: String {
-        let total = account == nil ? max(store.uncategorizedCount, shownWaiting.count) : shownWaiting.count
-        let listed = total > shownWaiting.count ? "，先列出最近 \(shownWaiting.count) 笔" : ""
-        return "共 \(total) 笔\(listed)。点一笔选分类，可以顺手写备注。"
-    }
-
     private var shownWaiting: [RecordRow] {
         guard let account else { return waiting }
         return waiting.filter { $0.record.accountID == account.id }
@@ -115,7 +106,7 @@ struct PendingView: View {
 }
 
 /// 要打开面板的这一笔和它的候选。候选放在 sheet 的 item 里传：只在 sheet 闭包里读的 `@State` 打开时可能还是旧值
-struct CategorizeTarget: Identifiable {
+struct CategorizeTarget: Identifiable, Hashable {
     let row: RecordRow
     let suggestions: CategorySuggestions
 
@@ -141,11 +132,63 @@ private struct UncategorizedRow: View {
     }
 }
 
+/// 选分类的面板（待处理页、通知点进来）：带「取消」的弹出面板，内容是 `CategorizeForm`
+struct CategorizeSheet: View {
+    let target: CategorizeTarget
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            CategorizeForm(target: target)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) { Button("取消", systemImage: "xmark") { dismiss() } }
+                }
+        }
+    }
+}
+
+/// 列表里点一笔待分类的流水推进来的选分类页：先取好候选再显示，「确定」后回到列表
+struct CategorizePage: View {
+    let row: RecordRow
+    @Environment(LedgerStore.self) private var store
+    @State private var target: CategorizeTarget?
+
+    var body: some View {
+        Group {
+            if let target {
+                CategorizeForm(target: target)
+            } else {
+                Color(.systemGroupedBackground).ignoresSafeArea()
+            }
+        }
+        .navigationTitle("选分类")
+        .navigationBarTitleDisplayMode(.inline)
+        .task {
+            guard target == nil else { return }
+            target = CategorizeTarget(row: row, suggestions: await store.categorySuggestions(recordID: row.id))
+        }
+    }
+}
+
+/// 列表里点一笔流水打开的页面：待分类的直接选分类，其余的是流水详情
+struct RecordPage: View {
+    let row: RecordRow
+
+    var body: some View {
+        if row.needsCategory {
+            CategorizePage(row: row)
+        } else {
+            RecordDetailView(recordID: row.id)
+        }
+    }
+}
+
 /// 给一笔待分类选分类：先写备注（选填），点分类选上（可以换），点「确定」才保存。
 /// 「建议」是最可能的几个分类，这个商户选过的已经选好，看一眼点「确定」就行。
 /// 没确认对方的转账多一个「转给自己的账户」：算转帐，不算收支（选了分类就是转给别人）。
-/// 从通知点进来也是这个面板；自动归类的那笔，现在的分类已经选好
-struct CategorizeSheet: View {
+/// 从通知点进来也是这个面板；自动归类的那笔，现在的分类已经选好。
+/// 保存后 `dismiss`：弹出面板里是关掉，推进来的页面是返回
+struct CategorizeForm: View {
     let row: RecordRow
     let suggested: [LedgerCategory]
 
@@ -164,57 +207,54 @@ struct CategorizeSheet: View {
 
     var body: some View {
         let r = row.record
-        NavigationStack {
-            Form {
+        Form {
+            Section {
+                UncategorizedRow(row: row)
+                if let counterparty = r.counterparty, counterparty != row.title {
+                    LabeledContent("交易对方", value: counterparty)
+                }
+            }
+            Section("备注") {
+                TextField("选填，比如买了什么", text: $note, axis: .vertical)
+                    .lineLimit(1...4)
+            }
+            if r.needsTransferConfirmation {
                 Section {
-                    UncategorizedRow(row: row)
-                    if let counterparty = r.counterparty, counterparty != row.title {
-                        LabeledContent("交易对方", value: counterparty)
+                    Button {
+                        Task { await save { try await store.setTransferParty(recordID: row.id, party: .own) } }
+                    } label: {
+                        Label(r.direction == .outflow ? "转给自己的账户（不算支出）" : "来自自己的账户（不算收入）", systemImage: "arrow.left.arrow.right.circle")
                     }
-                }
-                Section("备注") {
-                    TextField("选填，比如买了什么", text: $note, axis: .vertical)
-                        .lineLimit(1...4)
-                }
-                if r.needsTransferConfirmation {
-                    Section {
-                        Button {
-                            Task { await save { try await store.setTransferParty(recordID: row.id, party: .own) } }
-                        } label: {
-                            Label(r.direction == .outflow ? "转给自己的账户（不算支出）" : "来自自己的账户（不算收入）", systemImage: "arrow.left.arrow.right.circle")
-                        }
-                    } footer: {
-                        Text("转给别人的话，直接在下面选分类。")
-                    }
-                }
-                if !suggested.isEmpty {
-                    Section("建议") {
-                        SuggestedCategories(categories: suggested, selected: categoryID) { categoryID = $0 }
-                    }
-                }
-                Section("分类") {
-                    CategoryGrid(type: CategoryType(row.entryType), selected: categoryID, expandsSelected: true) { categoryID = $0 }
-                }
-                if let errorText {
-                    Section { Text(errorText).foregroundStyle(.red) }
+                } footer: {
+                    Text("转给别人的话，直接在下面选分类。")
                 }
             }
-            .disabled(busy)
-            .navigationTitle("选分类")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("取消", systemImage: "xmark") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("确定", systemImage: "checkmark") {
-                        guard let categoryID else { return }
-                        let trimmed = note.trimmingCharacters(in: .whitespacesAndNewlines)
-                        Task { await save { try await store.setCategory(recordID: row.id, categoryID: categoryID, note: trimmed.isEmpty ? nil : trimmed) } }
-                    }
-                    .disabled(categoryID == nil || busy)
+            if !suggested.isEmpty {
+                Section("建议") {
+                    SuggestedCategories(categories: suggested, selected: categoryID) { categoryID = $0 }
                 }
             }
-            .onAppear { note = row.record.note }
+            Section("分类") {
+                CategoryGrid(type: CategoryType(row.entryType), selected: categoryID, expandsSelected: true) { categoryID = $0 }
+            }
+            if let errorText {
+                Section { Text(errorText).foregroundStyle(.red) }
+            }
         }
+        .disabled(busy)
+        .navigationTitle("选分类")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .confirmationAction) {
+                Button("确定", systemImage: "checkmark") {
+                    guard let categoryID else { return }
+                    let trimmed = note.trimmingCharacters(in: .whitespacesAndNewlines)
+                    Task { await save { try await store.setCategory(recordID: row.id, categoryID: categoryID, note: trimmed.isEmpty ? nil : trimmed) } }
+                }
+                .disabled(categoryID == nil || busy)
+            }
+        }
+        .onAppear { note = row.record.note }
     }
 
     private func save(_ action: () async throws -> Void) async {

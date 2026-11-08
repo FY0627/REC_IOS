@@ -8,6 +8,9 @@ extension RecordRow {
     /// 支出、收入还没有分类
     var isUncategorized: Bool { entryType != .transfer && category == nil }
 
+    /// 已入账、待分类（和待处理页的「待分类」一样）：行上标出来，点开直接选分类
+    var needsCategory: Bool { isUncategorized && record.status == .posted }
+
     /// 首页合成一行的转帐（两边都在 App 里）
     var isPairedTransfer: Bool { entryType == .transfer && peer != nil }
 

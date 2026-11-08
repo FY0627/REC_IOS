@@ -29,6 +29,8 @@ struct AssetsView: View {
     enum AssetsSheet: Identifiable, Hashable {
         case info, face, pending, manage, customPeriod
         case record(RecordRow)
+        /// 点了一笔待分类的：直接选分类
+        case categorize(CategorizeTarget)
         var id: Self { self }
     }
 
@@ -69,11 +71,23 @@ struct AssetsView: View {
             openInfo: { sheet = .info },
             openFace: { sheet = .face },
             openPending: { sheet = .pending },
-            openRecord: { sheet = .record($0) },
+            openRecord: openRecord,
             editRecord: { swipe.editing = $0 },
             deleteRecord: { swipe.confirmedDelete = $0 },
             chooseCustomPeriod: { sheet = .customPeriod }
         )
+    }
+
+    /// 待分类的先取好候选再打开选分类面板，其余的打开流水详情
+    private func openRecord(_ row: RecordRow) {
+        guard row.needsCategory else {
+            sheet = .record(row)
+            return
+        }
+        Task {
+            let suggestions = await store.categorySuggestions(recordID: row.id)
+            sheet = .categorize(CategorizeTarget(row: row, suggestions: suggestions))
+        }
     }
 
     @ViewBuilder
@@ -83,6 +97,8 @@ struct AssetsView: View {
             AccountManagerView()
         case .record(let row):
             RecordDetailSheet(recordID: row.id)
+        case .categorize(let target):
+            CategorizeSheet(target: target)
         case .pending:
             PendingView(account: selectedID.flatMap { store.account(id: $0) })
         case .info:

@@ -11,6 +11,7 @@ import BKModel
 /// 查过的条件记住结果，来回切换类型不重新查；数据变了才重新查。
 /// 按天分组，每一笔只写时间（日期在分组标题上），完整时间在流水详情里。
 /// 一行流水左滑露出「编辑」「删除」（`RecordSwipe.swift`，删除要先确认），流水详情里也能改、能删。
+/// 点一笔打开流水详情；待分类的（标题旁标着「待分类」）直接推进选分类页（`RecordPage`）。
 struct HomeView: View {
     let openPending: () -> Void
     @Environment(LedgerStore.self) private var store
@@ -88,7 +89,7 @@ struct HomeView: View {
                     .padding(.bottom, AppLayout.topBarBottom)
                     .background { TopBarBackdrop(visible: scrolledUnderBar) }
             }
-            .navigationDestination(for: String.self) { id in RecordDetailView(recordID: id) }
+            .navigationDestination(for: RecordRow.self) { row in RecordPage(row: row) }
             .sheet(isPresented: $adding) { AddRecordView() }
             .recordSwipeHost($swipe)
             .task(id: SearchKey(text: trimmedQuery, scope: scope, revision: store.revision)) {
@@ -132,7 +133,7 @@ struct HomeView: View {
     }
 
     private func recordLink(_ row: RecordRow) -> some View {
-        NavigationLink(value: row.id) { RecordRowView(row: row, timeOnly: true) }
+        NavigationLink(value: row) { RecordRowView(row: row, timeOnly: true) }
             .recordSwipe(row, state: $swipe)
     }
 

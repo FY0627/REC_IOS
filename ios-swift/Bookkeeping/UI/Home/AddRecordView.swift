@@ -32,7 +32,7 @@ struct AddRecordView: View {
     @State private var counterparty = ""
     @State private var time = Date()
     @State private var saving = false
-    @State private var errorText: String?
+    @State private var problem: InputProblem?
     @State private var similar: [RecordRow] = []
     @State private var confirmSimilar = false
     @FocusState private var amountFocused: Bool
@@ -160,10 +160,8 @@ struct AddRecordView: View {
                     }
                     DatePicker("时间", selection: $time)
                 }
-                if let errorText {
-                    Section { Text(errorText).foregroundStyle(.red) }
-                }
             }
+            .inputProblemAlert($problem)
             .navigationTitle("记一笔")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -273,14 +271,14 @@ struct AddRecordView: View {
         return "\(Fmt.dateTime(row.record.effectiveAt))「\(row.title)」\(row.amountText(inAccount: true))，同一个账户、同样的金额。"
     }
 
-    /// 实际扣款（入账）：空着是 nil（按汇率估算）；格式不对时写错误提示并返回 false
+    /// 实际扣款（入账）：空着是 nil（按汇率估算）；格式不对时弹窗提示并返回 false
     private func settlement(_ text: String, for id: String?) -> (ok: Bool, minor: Int64?) {
         guard let charge = chargeCurrency(id) else { return (true, nil) }
         switch MoneyInput.parse(text, negative: false, currency: charge) {
         case .empty: return (true, nil)
         case .valid(let minor) where minor > 0: return (true, minor)
         default:
-            errorText = "实际金额：" + MoneyInput.invalidAmountMessage(charge)
+            problem = .amount(type == .income ? "实际入账" : "实际扣款", charge)
             return (false, nil)
         }
     }
@@ -288,13 +286,13 @@ struct AddRecordView: View {
     private func entry() -> ManualEntry? {
         guard let accountID, let currency else { return nil }
         guard let amount else {
-            errorText = MoneyInput.invalidAmountMessage(currency)
+            problem = .amount("金额", currency)
             return nil
         }
         var toAmount: Int64?
         if type == .transfer {
             guard let transferTarget, let toCurrency else {
-                errorText = "请选择转到哪个账户"
+                problem = InputProblem(title: "没选转到哪个账户")
                 return nil
             }
             let side = TransferSideFields.resolve(
@@ -302,7 +300,7 @@ struct AddRecordView: View {
                 sourceAmount: amount, sourceCurrency: currency
             )
             if let error = side.error {
-                errorText = error
+                problem = error
                 return nil
             }
             toAmount = side.minor
@@ -351,7 +349,7 @@ struct AddRecordView: View {
             try await store.addRecord(entry)
             dismiss()
         } catch {
-            errorText = "保存失败：\(error.localizedDescription)"
+            problem = InputProblem(title: "保存失败", message: error.localizedDescription)
         }
     }
 }

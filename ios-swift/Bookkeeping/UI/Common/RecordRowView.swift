@@ -27,6 +27,7 @@ struct RecordRowView: View {
                     if r.status != .posted { badge(r.status.displayName) }
                     if r.isRefund { badge("退款") }
                     if r.categoryAuto { badge("自动") }
+                    if row.needsCategory { badge("待分类", tinted: true) }
                 }
                 Text(subtitle)
                     .font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
@@ -63,7 +64,8 @@ struct RecordRowView: View {
     private var subtitle: String {
         let r = row.record
         var parts = [timeOnly ? Fmt.recordClock(r) : Fmt.recordTime(r)]
-        if row.title != row.category?.name || row.category == nil { parts.append(row.categoryText) }
+        // 待分类的标在标题旁边，这里不再写
+        if !row.needsCategory, row.title != row.category?.name || row.category == nil { parts.append(row.categoryText) }
         if inAccount {
             if let side = row.transferSideText { parts.append(side) }
         } else if let order = row.orderText {
@@ -84,12 +86,13 @@ struct RecordRowView: View {
         return nil
     }
 
-    private func badge(_ text: String) -> some View {
+    /// `tinted`：用主题色，要用户处理的（待分类）
+    private func badge(_ text: String, tinted: Bool = false) -> some View {
         Text(text)
             .font(.caption2.weight(.semibold))
-            .foregroundStyle(.secondary)
+            .foregroundStyle(tinted ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
             .padding(.horizontal, 6).padding(.vertical, 2)
-            .background(Color.primary.opacity(0.08), in: Capsule())
+            .background(tinted ? AnyShapeStyle(TintShapeStyle().opacity(0.15)) : AnyShapeStyle(Color.primary.opacity(0.08)), in: Capsule())
     }
 }
 
