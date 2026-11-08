@@ -114,6 +114,9 @@ struct HomeView: View {
     private var feed: some View {
         Section {
             ConvertedTotalsView(total: store.monthStats?.converted, expenseTitle: "本月支出", incomeTitle: "本月收入")
+                .background(RowInsetsProbe { insets in
+                    if FirstBoxLayout.shared.homeRowInsets != insets { FirstBoxLayout.shared.homeRowInsets = insets }
+                })
         } header: {
             Text(Self.monthTitle)
                 .background(FirstBoxProbe(listInset: listInset) { position in

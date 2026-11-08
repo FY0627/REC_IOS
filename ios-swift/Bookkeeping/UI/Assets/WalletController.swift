@@ -189,6 +189,23 @@ final class WalletController: UIViewController, UIScrollViewDelegate, UIGestureR
             controller.detailList.invalidateSizes()
             controller.view.setNeedsLayout()
         }
+        observeFirstBox()
+    }
+
+    /// 标题区跟着首页量出的位置和边距排（`FirstBoxLayout`）。量出来的变了要重新算标题区的高度：
+    /// 只是 SwiftUI 重画时，标题区还是原来的高度，内容在里面居中，整块上下偏一点。
+    /// 只读首页量出的值，不往回写，不会越改越多
+    private func observeFirstBox() {
+        withObservationTracking {
+            _ = FirstBoxLayout.shared.home
+            _ = FirstBoxLayout.shared.homeRowInsets
+        } onChange: { [weak self] in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.view.setNeedsLayout()
+                self.observeFirstBox()
+            }
+        }
     }
 
     override func viewIsAppearing(_ animated: Bool) {

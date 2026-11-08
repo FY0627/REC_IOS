@@ -49,11 +49,54 @@ struct FirstBoxPosition: Equatable {
 
 /// 首页第一组的实际位置。系统列表顶上的间距随系统版本、字号变，所以不写死：
 /// 首页、统计、「我的」由系统排（同一种列表，上面的顶部一行一样高），资产页不是系统列表，跟着首页排，四个标签页的第一个白框一样高。
+/// 资产页的净资产卡里的边距也照着首页合计那一格（系统给格子留的边距），两张卡一样高。
+/// 资产页只读这里，不往回写：首页量出来的不受资产页影响
 @MainActor
 @Observable
 final class FirstBoxLayout {
     static let shared = FirstBoxLayout()
     var home: FirstBoxPosition?
+    /// 首页合计那一格里，内容离白框上、左、下的距离（右边和左边一样）
+    var homeRowInsets: EdgeInsets?
+}
+
+/// 放在列表一格的内容上，量出内容离这一格白框的距离（系统给格子留的边距）
+struct RowInsetsProbe: UIViewRepresentable {
+    let report: @MainActor (EdgeInsets) -> Void
+
+    func makeUIView(context: Context) -> Probe {
+        let view = Probe()
+        view.isUserInteractionEnabled = false
+        return view
+    }
+
+    func updateUIView(_ uiView: Probe, context: Context) {
+        uiView.report = report
+        uiView.scheduleMeasure()
+    }
+
+    final class Probe: UIView {
+        var report: @MainActor (EdgeInsets) -> Void = { _ in }
+
+        override func layoutSubviews() {
+            super.layoutSubviews()
+            scheduleMeasure()
+        }
+
+        /// 放到布局之后：这时格子的大小排好了
+        func scheduleMeasure() {
+            Task { [weak self] in self?.measure() }
+        }
+
+        private func measure() {
+            var view = superview
+            while let current = view, !(current is UICollectionViewCell) { view = current.superview }
+            guard let cell = view as? UICollectionViewCell, cell.bounds.height > 0 else { return }
+            let frame = convert(bounds, to: cell)
+            // 内容不一定撑满一行，右边不量
+            report(EdgeInsets(top: frame.minY, leading: frame.minX, bottom: cell.bounds.height - frame.maxY, trailing: frame.minX))
+        }
+    }
 }
 
 extension View {

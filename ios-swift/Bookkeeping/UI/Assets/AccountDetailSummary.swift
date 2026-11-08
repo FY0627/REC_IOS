@@ -47,7 +47,9 @@ struct AccountDetailSummary: View {
     /// 卡里没有的币种的交易按主币种扣款，放在主币种里。
     /// 点开是一个小弹窗：币种名称靠左对齐，选中的在最右边打勾。系统菜单的勾（或图标）在名称前面，
     /// 只有选中的那行有，几行名称对不齐。
-    /// 弹窗固定从按钮旁边横着弹出：按钮靠屏幕右边，往左弹。不指定时系统按放不放得下选，币种少的在上面、多的在旁边
+    /// 弹窗固定从按钮左边弹出（按钮靠屏幕右边，左边地方大）。不指定时系统按放不放得下选，币种少的在上面、多的在旁边。
+    /// iOS 上 `arrowEdge` 是箭头在弹窗的哪一边：`.trailing` 箭头在弹窗右边、弹窗在按钮左边；
+    /// `.leading` 弹窗在按钮右边，挤在屏幕边上只剩一小条（真机上试过）
     private var currencyMenu: some View {
         let current = model.currency ?? model.currencies.first ?? .cny
         return HStack(spacing: 3) {
@@ -58,7 +60,7 @@ struct AccountDetailSummary: View {
         .foregroundStyle(Color.primary)
         .tapAction { choosingCurrency = true }
         .accessibilityLabel("币种：\(current.localizedName)")
-        .popover(isPresented: $choosingCurrency, arrowEdge: .leading) {
+        .popover(isPresented: $choosingCurrency, arrowEdge: .trailing) {
             CurrencyChoices(currencies: model.currencies, current: current) { code in
                 choosingCurrency = false
                 selectCurrency(code)

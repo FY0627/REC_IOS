@@ -133,7 +133,7 @@ struct StatsView: View {
     private var scopeTitle: String {
         switch current {
         case .all: L("全部账户")
-        case .account(let id): store.account(id: id)?.localizedTitle ?? L("全部账户")
+        case .account(let id): store.account(id: id).map(menuName) ?? L("全部账户")
         case .currency(let code): code.localizedName
         }
     }
@@ -143,7 +143,7 @@ struct StatsView: View {
         let selected = current
         let all = UIAction(title: L("全部账户"), state: selected == .all ? .on : .off) { _ in scope = .all }
         let accounts = (store.accounts + store.archivedAccounts).map { account in
-            UIAction(title: account.localizedTitle, state: selected == .account(account.id) ? .on : .off) { _ in scope = .account(account.id) }
+            UIAction(title: menuName(account), state: selected == .account(account.id) ? .on : .off) { _ in scope = .account(account.id) }
         }
         let currencies = menuCurrencies.map { code in
             UIAction(title: code.localizedName, state: selected == .currency(code) ? .on : .off) { _ in scope = .currency(code) }
@@ -152,6 +152,13 @@ struct StatsView: View {
         if !accounts.isEmpty { items.append(UIMenu(title: L("账户"), options: .displayInline, children: accounts)) }
         items.append(UIMenu(title: L("币种"), options: .displayInline, children: currencies))
         return items
+    }
+
+    /// 菜单和胶囊上写账户名称（「招商银行信用卡」），不写尾号；同名的几个账户才加尾号分开
+    private func menuName(_ account: Account) -> String {
+        let name = account.localizedName
+        let sameName = (store.accounts + store.archivedAccounts).contains { $0.id != account.id && $0.localizedName == name }
+        return sameName && account.isCard ? "\(name) ·\(account.last4)" : name
     }
 
     /// 主要币种、这段时间用过的币种、账户里有的币种

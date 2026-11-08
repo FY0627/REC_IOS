@@ -8,6 +8,11 @@ struct ConvertedTotalsView: View {
     var expenseTitle: LocalizedStringKey = "支出"
     var incomeTitle: LocalizedStringKey = "收入"
 
+    /// 大数下面那一行离大数的距离；资产页的净资产卡也用，两张卡一样高
+    static let figuresTop: CGFloat = 12
+    /// 上下多留的边距（在系统给格子留的边距里面）；资产页的净资产卡也用
+    static let verticalPadding: CGFloat = 6
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text(expenseTitle).font(.subheadline).foregroundStyle(.secondary)
@@ -21,7 +26,7 @@ struct ConvertedTotalsView: View {
                     stat(incomeTitle, Fmt.money(total.incomeMinor, total.currency))
                     stat("结余", Fmt.money(total.balanceMinor, total.currency))
                 }
-                .padding(.top, 12)
+                .padding(.top, Self.figuresTop)
                 if !total.unconverted.isEmpty {
                     Text(L("\(total.unconverted.map(\.localizedName).joined(separator: L("、")))没有汇率，没算进去"))
                         .font(.footnote).foregroundStyle(.secondary).padding(.top, 10)
@@ -30,7 +35,7 @@ struct ConvertedTotalsView: View {
                 Text("—").font(.system(.largeTitle, design: .rounded).weight(.bold)).foregroundStyle(.secondary)
             }
         }
-        .padding(.vertical, 6)
+        .padding(.vertical, Self.verticalPadding)
         .accessibilityElement(children: .combine)
     }
 

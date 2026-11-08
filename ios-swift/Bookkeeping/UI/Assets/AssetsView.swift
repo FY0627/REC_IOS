@@ -189,6 +189,9 @@ private struct OverviewCard: View {
     @AppStorage(ExchangeRateStore.primaryKey) private var primaryCode = CurrencyCode.cny.rawValue
     @State private var showDetail = false
 
+    /// 首页还没量出来时的边距（真机截图量的，iOS 26）
+    private static let rowInsets = EdgeInsets(top: 17, leading: 16, bottom: 17, trailing: 16)
+
     var body: some View {
         let summary = NetWorth(store: store, rates: rates.rates, primary: CurrencyCode(primaryCode))
         let main = summary.main
@@ -217,10 +220,12 @@ private struct OverviewCard: View {
                 figure("总资产", Fmt.money(main.assets, main.currency))
                 figure("总负债", Fmt.money(main.liabilities, main.currency))
             }
-            .padding(.top, 14)
+            .padding(.top, ConvertedTotalsView.figuresTop)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(18)
+        // 和首页、统计的合计卡一样高：里面的字和间距一样，边距取首页那一格实际留的（`FirstBoxLayout`）
+        .padding(.vertical, ConvertedTotalsView.verticalPadding)
+        .padding(FirstBoxLayout.shared.homeRowInsets ?? Self.rowInsets)
         .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
         .contentShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         .onTapGesture { showDetail = true }
