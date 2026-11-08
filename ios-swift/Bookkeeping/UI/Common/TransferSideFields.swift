@@ -21,7 +21,7 @@ struct TransferSideFields: View {
     @State private var estimate: Int64?
 
     /// 写在分组下面的说明
-    static let note = "到账比转出少的部分（手续费、汇损）只体现在余额上，不算支出。"
+    static var note: String { L("到账比转出少的部分（手续费、汇损）只体现在余额上，不算支出。") }
 
     private var sameAccount: Bool { account.id == sourceAccountID }
 
@@ -35,10 +35,10 @@ struct TransferSideFields: View {
     var body: some View {
         if options.count > 1 {
             Picker(receiving ? "到账币种" : "转出币种", selection: $currency) {
-                ForEach(options, id: \.self) { Text($0.chineseName).tag(CurrencyCode?.some($0)) }
+                ForEach(options, id: \.self) { Text($0.localizedName).tag(CurrencyCode?.some($0)) }
             }
         } else {
-            LabeledContent(receiving ? "到账币种" : "转出币种", value: currency?.chineseName ?? "")
+            LabeledContent(receiving ? "到账币种" : "转出币种", value: currency?.localizedName ?? "")
         }
         HStack {
             Text(receiving ? "到账金额" : "转出金额")
@@ -53,7 +53,7 @@ struct TransferSideFields: View {
     private var placeholder: String {
         guard let currency else { return "" }
         if currency == sourceCurrency { return sourceAmount.map { Fmt.money($0, currency) } ?? "" }
-        return estimate.map { "约 " + Fmt.money($0, currency) } ?? "必填"
+        return estimate.map { L("约 \(Fmt.money($0, currency))") } ?? L("必填")
     }
 
     private var estimateKey: String {
@@ -83,14 +83,16 @@ struct TransferSideFields: View {
         text: String, currency: CurrencyCode, account: Account, sourceAccountID: String?, sourceAmount: Int64, sourceCurrency: CurrencyCode,
         receiving: Bool = true
     ) -> (minor: Int64?, error: InputProblem?) {
-        let currencyTitle = receiving ? "到账币种" : "转出币种"
         if account.id == sourceAccountID, currency == sourceCurrency {
-            return (nil, InputProblem(title: "\(currencyTitle)不对", message: "同一个账户要转到另一个币种"))
+            return (nil, InputProblem(title: receiving ? L("到账币种不对") : L("转出币种不对"), message: L("同一个账户要转到另一个币种")))
         }
         let title = receiving ? "到账金额" : "转出金额"
         switch MoneyInput.parse(text, negative: false, currency: currency) {
         case .empty:
-            return currency == sourceCurrency ? (sourceAmount, nil) : (nil, InputProblem(title: "没填\(title)", message: "币种不一样，请填\(title)"))
+            let missing = receiving
+                ? InputProblem(title: L("没填到账金额"), message: L("币种不一样，请填到账金额"))
+                : InputProblem(title: L("没填转出金额"), message: L("币种不一样，请填转出金额"))
+            return currency == sourceCurrency ? (sourceAmount, nil) : (nil, missing)
         case .valid(let minor) where minor > 0:
             return (minor, nil)
         default:

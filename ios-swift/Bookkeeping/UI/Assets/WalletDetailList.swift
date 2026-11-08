@@ -230,7 +230,7 @@ final class WalletDetailList: NSObject, UITableViewDelegate {
     }
 
     private func measure(_ content: some View, width: CGFloat) -> CGFloat {
-        sizer.rootView = AnyView(content)
+        sizer.rootView = AnyView(content.appLocale())
         return sizer.sizeThatFits(in: CGSize(width: width, height: .greatestFiniteMagnitude)).height.rounded(.up)
     }
 
@@ -479,8 +479,8 @@ final class WalletDetailList: NSObject, UITableViewDelegate {
 
     private var cardLabel: String? {
         guard let account else { return nil }
-        let balance = store.balances[account.id]?.item(model.currency ?? account.currency)?.cardText ?? "余额未知"
-        return "\(account.spokenTitle)，\(balance)"
+        let balance = store.balances[account.id]?.item(model.currency ?? account.currency)?.cardText ?? L("余额未知")
+        return L("\(account.spokenTitle)，\(balance)")
     }
 
     // MARK: 点按
@@ -514,12 +514,12 @@ final class WalletDetailList: NSObject, UITableViewDelegate {
     func tableView(_ tableView: UITableView, trailingSwipeActionsConfigurationForRowAt indexPath: IndexPath) -> UISwipeActionsConfiguration? {
         guard case .record(let id) = dataSource.itemIdentifier(for: indexPath) else { return nil }
         // 和首页一样：不用 destructive（系统会马上把这一行划走，而这时还没有确认）；点了才算，滑到底不直接触发
-        let delete = UIContextualAction(style: .normal, title: "删除") { [weak self] _, source, finished in
+        let delete = UIContextualAction(style: .normal, title: L("删除")) { [weak self] _, source, finished in
             self?.confirmDelete(id, from: source, finished: finished)
         }
         delete.image = UIImage(systemName: "trash")
         delete.backgroundColor = .systemRed
-        let edit = UIContextualAction(style: .normal, title: "编辑") { [weak self] _, _, finished in
+        let edit = UIContextualAction(style: .normal, title: L("编辑")) { [weak self] _, _, finished in
             finished(true)
             self?.editRecord(id)
         }
@@ -592,7 +592,7 @@ private final class HostingCell: UITableViewCell {
     }
 
     func show(_ content: some View, parent: UIViewController) {
-        let view = AnyView(content.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top))
+        let view = AnyView(content.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top).appLocale())
         if let host {
             host.rootView = view
             return
@@ -619,7 +619,7 @@ private final class CardSlotCell: UITableViewCell {
         selectionStyle = .none
         isAccessibilityElement = true
         accessibilityTraits = .button
-        accessibilityHint = "返回卡包"
+        accessibilityHint = L("返回卡包")
     }
 
     required init?(coder: NSCoder) {

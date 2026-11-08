@@ -28,11 +28,11 @@ final class WalletTopBar: UIView {
     private let leadGlass = GlassControls.capsule(GlassControls.glass())
     /// 详情里的「更多」；卡包里静止时没有玻璃效果（见 `setSplit`）
     private let moreGlass = GlassControls.capsule(nil)
-    private let backButton = GlassControls.iconButton("chevron.left", label: "返回卡包")
-    private let addButton = GlassControls.iconButton("plus", label: "添加银行卡")
+    private let backButton = GlassControls.iconButton("chevron.left", label: L("返回卡包"))
+    private let addButton = GlassControls.iconButton("plus", label: L("添加银行卡"))
     /// 卡包里胶囊右半边的「更多」：管理银行卡
-    private let stackMoreButton = GlassControls.iconButton("ellipsis", label: "管理银行卡")
-    private let moreButton = GlassControls.iconButton("ellipsis", label: "管理银行卡")
+    private let stackMoreButton = GlassControls.iconButton("ellipsis", label: L("管理银行卡"))
+    private let moreButton = GlassControls.iconButton("ellipsis", label: L("管理银行卡"))
     private let periodButton = UIButton(configuration: GlassControls.pillConfiguration(""))
 
     private(set) var isDetail = false
@@ -202,7 +202,7 @@ final class WalletTopBar: UIView {
         backGlass.isUserInteractionEnabled = isDetail
         addButton.isUserInteractionEnabled = !isDetail
         periodButton.isUserInteractionEnabled = isDetail
-        moreButton.accessibilityLabel = isDetail ? "更多" : "管理银行卡"
+        moreButton.accessibilityLabel = isDetail ? L("更多") : L("管理银行卡")
         moreButton.showsMenuAsPrimaryAction = isDetail
         moreButton.menu = isDetail ? GlassControls.deferredMenu { [weak self] in self?.moreMenu() ?? [] } : nil
         accessibilityElements = isDetail ? [backButton, periodButton, moreButton] : [addButton, stackMoreButton]

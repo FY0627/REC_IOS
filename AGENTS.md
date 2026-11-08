@@ -22,6 +22,7 @@ AI 编程助手的入口文件。Claude Code 通过 `CLAUDE.md` 引用本文件�
 | `ios-swift/NotificationContent/` | 通知内容扩展：长按记账结果通知选分类（ADR 0020），只链接 `BKModel` | `NotificationContent` |
 | `ios-swift/Packages/BKCore/` | 纯 Swift 业务核心（见 ADR 0006–0009） | `BKModel` / `BKDatabase` / `BKBackend` |
 | `ios-swift/ci/` | GitHub Actions 调用的测试、构建、打包、校验脚本 | — |
+| `ios-swift/Localization/` | 界面文字的翻译表（台湾繁体、英文），生成 `Bookkeeping/Localizable.xcstrings`（ADR 0022） | — |
 | `docs/` | 文档 | — |
 
 详细说明见 [ios-swift/README.md](ios-swift/README.md)。

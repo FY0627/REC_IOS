@@ -53,7 +53,7 @@ struct ImportExchangeRatesIntent: AppIntent {
         }
         AppServices.logger.info("exchange rates imported count=\(rates.rates.count)")
         if Self.notifies { await Self.notifyImported(rates) }
-        return .result(value: "已导入 \(rates.rates.count) 个币种的汇率")
+        return .result(value: L("已导入 \(rates.rates.count) 个币种的汇率"))
     }
 
     /// 「我的 › 通知 › 导入汇率」：默认打开
@@ -64,8 +64,8 @@ struct ImportExchangeRatesIntent: AppIntent {
     private static func notifyImported(_ rates: ExchangeRates) async {
         let center = UNUserNotificationCenter.current()
         let content = UNMutableNotificationContent()
-        content.title = "汇率已更新"
-        content.body = "已导入 \(rates.rates.count) 个币种的汇率，数据更新于\(Fmt.dateTime(rates.updatedAt))"
+        content.title = L("汇率已更新")
+        content.body = L("已导入 \(rates.rates.count) 个币种的汇率，数据更新于\(Fmt.dateTime(rates.updatedAt))")
         content.threadIdentifier = "fx"
         try? await center.add(UNNotificationRequest(identifier: "fx-imported", content: content, trigger: nil))
     }

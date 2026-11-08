@@ -101,8 +101,8 @@ struct WalletCardView: View {
                         .frame(width: 30 * s, height: 30 * s)
                         .overlay(Text(Self.badge(account)).font(.system(size: 14 * s, weight: .bold)))
                     VStack(alignment: .leading, spacing: 0) {
-                        Text(account.name).font(.system(size: 14 * s, weight: .bold)).lineLimit(1)
-                        Text(account.isCard ? "\(account.bankName) · \(account.cardType.displayName)" : account.cardType.displayName)
+                        Text(account.localizedName).font(.system(size: 14 * s, weight: .bold)).lineLimit(1)
+                        Text(account.isCard ? "\(account.localizedBankName) · \(account.cardType.displayName.loc)" : account.cardType.displayName.loc)
                             .font(.system(size: 11 * s, weight: .medium))
                             .foregroundStyle(subtext)
                             .lineLimit(1)
@@ -217,7 +217,7 @@ private struct CardRasterization: ViewModifier {
 
 extension AccountBalances {
     /// 卡面上显示一个币种的余额：主币种有余额就用主币种，否则用第一个有余额的币种。
-    var cardText: String { display?.cardText ?? "余额未知" }
+    var cardText: String { display?.cardText ?? L("余额未知") }
 
     /// 卡包里的卡面（ADR 0018）：每张卡都按最新汇率换算成「我的」主要币种，多币种账户把各币种换算后相加，换算过就写「≈」。
     /// 没有汇率、有余额的币种缺汇率时显示账户主币种的余额，不显示少算了一部分的合计；余额未知的币种不计入
@@ -242,7 +242,7 @@ extension AccountBalances {
 extension AccountBalanceSummary {
     /// 卡面上显示的余额：从你填写的初始余额推算；没填时显示「余额未知」，不用部分流水冒充。
     var cardText: String {
-        guard let derived = ledgerDerivedMinor else { return "余额未知" }
+        guard let derived = ledgerDerivedMinor else { return L("余额未知") }
         return Fmt.money(derived, currency)
     }
 }

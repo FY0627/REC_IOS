@@ -23,7 +23,7 @@ struct ProfileView: View {
 
 /// 「我的」推进去的二级页面
 enum ProfileRoute: Hashable {
-    case primaryCurrency, exchangeRates, categories, autoSetup, screenshotSetup, categoryCheckup, templates, help, dataExport, dataImport, simulation, performance
+    case language, primaryCurrency, exchangeRates, categories, autoSetup, screenshotSetup, categoryCheckup, templates, help, dataExport, dataImport, simulation, performance
 }
 
 /// 「我的」的列表和导航栈。顶部一行和首页、资产页一样高、一样的位置；列表滚到它下面时垫一层磨砂背景（和首页一样）。
@@ -36,6 +36,7 @@ private struct ProfileList: View {
     @AppStorage("appearance") private var appearance = AppearanceMode.system.rawValue
     @AppStorage(AppearanceMode.iconKey) private var appIcon = AppearanceMode.system.rawValue
     @AppStorage(ThemeColor.key) private var themeColor = ThemeColor.blue.rawValue
+    @AppStorage(AppLanguage.key) private var language = AppLanguage.system.rawValue
     @AppStorage(ExchangeRateStore.primaryKey) private var primaryCurrency = CurrencyCode.cny.rawValue
     @AppStorage(IngestNotifier.modeKey) private var notifyMode = IngestNotifier.Mode.off.rawValue
     @AppStorage(ImportExchangeRatesIntent.notifyKey) private var notifyRates = true
@@ -83,10 +84,20 @@ private struct ProfileList: View {
                     }
                 }
 
+                Section("语言") {
+                    NavigationLink(value: ProfileRoute.language) {
+                        LabeledContent {
+                            Text((AppLanguage(rawValue: language) ?? .system).title)
+                        } label: {
+                            Label("App 语言", systemImage: "globe")
+                        }
+                    }
+                }
+
                 Section("币种与汇率") {
                     NavigationLink(value: ProfileRoute.primaryCurrency) {
                         LabeledContent {
-                            Text(CurrencyCode(primaryCurrency).chineseName)
+                            Text(CurrencyCode(primaryCurrency).localizedName)
                         } label: {
                             Label("主要币种", systemImage: "dollarsign.circle")
                         }
@@ -169,7 +180,7 @@ private struct ProfileList: View {
                 }
 
                 Section("关于") {
-                    LabeledContent("REC", value: "iOS 原生 Swift 版")
+                    LabeledContent("REC", value: L("iOS 原生 Swift 版"))
                     LabeledContent("版本", value: BuildInfo.summary)
                         .font(.subheadline.monospaced())
                         .contentShape(Rectangle())
@@ -224,6 +235,7 @@ private struct ProfileList: View {
     @ViewBuilder
     private func destination(_ route: ProfileRoute) -> some View {
         switch route {
+        case .language: LanguageSettingsView()
         case .primaryCurrency: CurrencyPicker(title: "主要币种", selection: primaryCurrencyList, multiple: false)
         case .exchangeRates: ExchangeRateGuideView()
         case .categories: CategoryManagerView()
@@ -260,7 +272,7 @@ private struct ProfileList: View {
     }
 
     private var rateStatus: String {
-        rates.rates.map { "更新于 \(Fmt.dateTime($0.updatedAt))" } ?? "尚未导入"
+        rates.rates.map { L("更新于 \(Fmt.dateTime($0.updatedAt))") } ?? L("尚未导入")
     }
 
     /// 选币种页面用的单选列表
@@ -297,7 +309,7 @@ enum BuildInfo {
         let info = Bundle.main.infoDictionary ?? [:]
         let version = info["CFBundleShortVersionString"] as? String ?? "?"
         let build = info["CFBundleVersion"] as? String ?? "?"
-        let commit = (info["BKBuildCommit"] as? String).map { String($0.prefix(7)) } ?? "本地构建"
+        let commit = (info["BKBuildCommit"] as? String).map { String($0.prefix(7)) } ?? L("本地构建")
         return "\(version) (\(build)) · \(commit)"
     }
 }
@@ -325,7 +337,7 @@ struct PerformanceSettingsView: View {
             // 签名工具会改 Bundle ID；扩展的要以 App 的开头才认得是一家（ADR 0020）
             Section("通知扩展") {
                 LabeledContent("App", value: Bundle.main.bundleIdentifier ?? "")
-                LabeledContent("扩展", value: extensionBundleID ?? "没有")
+                LabeledContent("扩展", value: extensionBundleID ?? L("没有"))
             }
             Section {
                 Button("恢复默认") { flags.resetToDefaults() }

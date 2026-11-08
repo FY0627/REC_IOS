@@ -31,7 +31,7 @@ struct CategoryGrid: View {
         let tree = store.categoryTree
         let nodes = tree.nodes(type)
         let selectedTop = tree.topLevel(selected)?.id
-        rows(nodes.map { Cell(id: $0.id, name: $0.category.name, symbol: $0.category.symbol, hasChildren: !$0.children.isEmpty) }) { cell in
+        rows(nodes.map { Cell(id: $0.id, name: $0.category.localizedName, symbol: $0.category.symbol, hasChildren: !$0.children.isEmpty) }) { cell in
             button(cell, isSelected: selectedTop == cell.id) { tap(cell, selectedTop: selectedTop) }
         }
         .padding(.vertical, 6)
@@ -53,9 +53,9 @@ struct CategoryGrid: View {
         }
         if let node = nodes.first(where: { $0.id == expanded }) {
             VStack(alignment: .leading, spacing: 10) {
-                Text("\(node.category.name)的小类").font(.footnote).foregroundStyle(.secondary)
-                let cells = [Cell(id: node.id, name: "不细分", symbol: node.category.symbol)]
-                    + node.children.map { Cell(id: $0.id, name: $0.name, symbol: $0.symbol) }
+                Text(L("\(node.category.localizedName)的小类")).font(.footnote).foregroundStyle(.secondary)
+                let cells = [Cell(id: node.id, name: L("不细分"), symbol: node.category.symbol)]
+                    + node.children.map { Cell(id: $0.id, name: $0.localizedName, symbol: $0.symbol) }
                 rows(cells) { cell in
                     button(cell, isSelected: selected == cell.id) {
                         withAnimation(.snappy(duration: 0.25)) { pick(cell.id) }
@@ -121,10 +121,10 @@ struct SuggestedCategories: View {
                 Button {
                     withAnimation(.snappy(duration: 0.25)) { pick(category.id) }
                 } label: {
-                    CategoryCell(name: category.name, symbol: category.symbol, isSelected: selected == category.id)
+                    CategoryCell(name: category.localizedName, symbol: category.symbol, isSelected: selected == category.id)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(category.name)
+                .accessibilityLabel(category.localizedName)
                 .accessibilityAddTraits(selected == category.id ? [.isSelected] : [])
             }
             ForEach(0..<max(0, CategoryGrid.columns - categories.count), id: \.self) { _ in

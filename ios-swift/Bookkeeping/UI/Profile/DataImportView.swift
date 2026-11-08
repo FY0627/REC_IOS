@@ -25,8 +25,8 @@ struct DataImportView: View {
             }
             if let info, archive != nil, result == nil {
                 Section("「\(fileName)」里有") {
-                    LabeledContent("流水", value: "\(info.records) 笔")
-                    LabeledContent("账户", value: "\(info.accounts) 个")
+                    LabeledContent("流水", value: L("\(info.records) 笔"))
+                    LabeledContent("账户", value: L("\(info.accounts) 个"))
                     if let last = info.lastRecordAt {
                         LabeledContent("最晚一笔", value: Fmt.dateTime(last))
                     }
@@ -47,15 +47,15 @@ struct DataImportView: View {
             if let result {
                 Section("导入完了") {
                     if result.mode == .merge {
-                        LabeledContent("加了流水", value: "\(result.records) 笔")
-                        LabeledContent("本来就有的流水", value: "\(result.existingRecords) 笔")
-                        LabeledContent("加了账户", value: "\(result.accounts) 个")
-                        LabeledContent("对上了已有的账户", value: "\(result.existingAccounts) 个")
-                        LabeledContent("加了分类", value: "\(result.categories) 个")
+                        LabeledContent("加了流水", value: L("\(result.records) 笔"))
+                        LabeledContent("本来就有的流水", value: L("\(result.existingRecords) 笔"))
+                        LabeledContent("加了账户", value: L("\(result.accounts) 个"))
+                        LabeledContent("对上了已有的账户", value: L("\(result.existingAccounts) 个"))
+                        LabeledContent("加了分类", value: L("\(result.categories) 个"))
                     } else {
-                        LabeledContent("流水", value: "\(result.records) 笔")
-                        LabeledContent("账户", value: "\(result.accounts) 个")
-                        LabeledContent("分类", value: "\(result.categories) 个")
+                        LabeledContent("流水", value: L("\(result.records) 笔"))
+                        LabeledContent("账户", value: L("\(result.accounts) 个"))
+                        LabeledContent("分类", value: L("\(result.categories) 个"))
                     }
                 }
             }
@@ -143,9 +143,9 @@ struct DataImportView: View {
 
     private func message(_ error: Error) -> String {
         switch error as? BackendError {
-        case .backupUnreadable?: "读不了这个文件"
-        case .backupTooNew?: "这个文件来自更新版本的 REC，先更新 App"
-        default: "导入失败：\(error.localizedDescription)"
+        case .backupUnreadable?: L("读不了这个文件")
+        case .backupTooNew?: L("这个文件来自更新版本的 REC，先更新 App")
+        default: L("导入失败：\(error.localizedDescription)")
         }
     }
 }

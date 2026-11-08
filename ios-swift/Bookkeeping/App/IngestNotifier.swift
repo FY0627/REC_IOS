@@ -23,9 +23,9 @@ enum IngestNotifier {
         var id: String { rawValue }
         var title: String {
             switch self {
-            case .all: "全部"
-            case .failures: "仅失败"
-            case .off: "关闭"
+            case .all: L("全部")
+            case .failures: L("仅失败")
+            case .off: L("关闭（通知）")
             }
         }
     }
@@ -53,24 +53,26 @@ enum IngestNotifier {
         let center = UNUserNotificationCenter.current()
         if screenshot, result.items.isEmpty, mode == .all || result.outcome == .filtered {
             let content = UNMutableNotificationContent()
-            content.body = result.outcome == .duplicateInput ? "这张截图已经记过了" : "截图里没有认出付款"
+            content.body = result.outcome == .duplicateInput ? L("这张截图已经记过了") : L("截图里没有认出付款")
             content.threadIdentifier = "ingest"
             try? await center.add(UNNotificationRequest(identifier: "screenshot-\(UUID().uuidString)", content: content, trigger: nil))
             return
         }
         for (index, item) in result.items.enumerated() {
             let suggestions = await categorySuggestions(for: item, backend: backend, screenshot: screenshot)
-            guard let body = message(item, failuresOnly: mode == .failures, autoCategory: suggestions.autoCategory?.name, screenshot: screenshot) else { continue }
+            guard let body = message(item, failuresOnly: mode == .failures, autoCategory: suggestions.autoCategory?.name.loc, screenshot: screenshot) else { continue }
             let content = UNMutableNotificationContent()
             content.body = body
             content.threadIdentifier = "ingest"
             // 银行短信本身已经响过，这条通知不再出声
             content.sound = nil
             if let recordID = item.recordID, !suggestions.groups.isEmpty {
-                content.categoryIdentifier = await registerCategory(suggestions.picker)
-                content.userInfo = [recordIDKey: recordID, NotificationPicker.userInfoKey: suggestions.picker.json]
+                // 分类名称和按钮上的字按选的语言写进去，通知扩展照着显示
+                let picker = suggestions.picker.localized(name: \.loc, labels: pickerLabels)
+                content.categoryIdentifier = await registerCategory(picker)
+                content.userInfo = [recordIDKey: recordID, NotificationPicker.userInfoKey: picker.json]
                 // 系统不让按钮露在收起的通知上，只能写一句告诉用户
-                content.body += suggestions.autoCategory == nil ? "，长按选分类" : "，长按可改"
+                content.body += suggestions.autoCategory == nil ? L("，长按选分类") : L("，长按可改")
             }
             let id = "ingest-\(result.ingestID ?? UUID().uuidString)-\(index)"
             try? await center.add(UNNotificationRequest(identifier: id, content: content, trigger: nil))
@@ -78,6 +80,12 @@ enum IngestNotifier {
     }
 
     // MARK: 通知上选分类
+
+    /// 按钮上固定的字，按选的语言
+    private static var pickerLabels: NotificationPicker.Labels {
+        // 「只记%@」：插进去的就是「%@」，留给 `NotificationPicker` 换成大类名称
+        NotificationPicker.Labels(only: L("只记\("%@")"), moreParents: L("更多大类"), back: L("返回"), more: L("更多"), openApp: L("打开 App"))
+    }
 
     private static let recordIDKey = "recordID"
     /// 类别池子下一个轮到第几个
@@ -96,6 +104,7 @@ enum IngestNotifier {
     /// 注册是替换全部，所以留下池子里别的类别；没有完成回调：读回来看到了才发，一直看不到时照发
     private static func registerCategory(_ picker: NotificationPicker) async -> String {
         let ids = NotificationPicker.categoryIDs
+        let action = { (button: NotificationPicker.Button) in Self.action(button, title: picker.title(button)) }
         let slot = UserDefaults.standard.integer(forKey: slotKey) % ids.count
         UserDefaults.standard.set(slot + 1, forKey: slotKey)
         let category = UNNotificationCategory(
@@ -116,9 +125,9 @@ enum IngestNotifier {
 
     /// 和通知扩展里的按钮一样（`NotificationViewController.show`），改一边要改另一边。
     /// 选项不设 `.foreground` 就不打开 App，不设 `.authenticationRequired` 就不用解锁；「打开 App」要打开 App
-    private static func action(_ button: NotificationPicker.Button) -> UNNotificationAction {
+    private static func action(_ button: NotificationPicker.Button, title: String) -> UNNotificationAction {
         UNNotificationAction(
-            identifier: NotificationPicker.identifier(button), title: button.title,
+            identifier: NotificationPicker.identifier(button), title: title,
             options: button == .app ? [.foreground] : [],
             icon: UNNotificationActionIcon(systemImageName: button.symbol)
         )
@@ -157,39 +166,42 @@ enum IngestNotifier {
         switch item.result {
         case .recorded:
             succeeded = true
-            outcome = "记账成功"
-            if let autoCategory { outcome += "，已归到「\(autoCategory)」" }
+            outcome = L("记账成功")
+            if let autoCategory { outcome += L("，已归到「\(autoCategory)」") }
         case .merged:
             guard screenshot else { return nil }
             succeeded = true
-            outcome = "和已记的一笔合并"
+            outcome = L("和已记的一笔合并")
         case .pending(let reason):
             succeeded = false
-            outcome = "记账失败：\(reason.displayName)，已放入待处理"
+            outcome = L("记账失败：\(reason.displayName.loc)，已放入待处理")
         }
         if failuresOnly, succeeded { return nil }
         if item.kind == nil, item.amountText == nil, item.amountMinor == nil {
-            return screenshot ? "截图没有认全，已放入待处理" : "收到一条无法识别的银行通知，已放入待处理"
+            return screenshot ? L("截图没有认全，已放入待处理") : L("收到一条无法识别的银行通知，已放入待处理")
         }
 
         var parts: [String] = []
         // 现金、电子钱包没有卡号：写账户名称
-        parts.append(item.accountTitle ?? item.cardTail.map { "尾号 \($0) 卡" } ?? "未知尾号的卡")
+        parts.append(item.accountTitle?.loc ?? item.cardTail.map { L("尾号 \($0) 卡") } ?? L("未知尾号的卡"))
         if screenshot, let counterparty = item.counterparty { parts.append(counterparty) }
         if let kind = item.kind {
-            var action = kind.displayName
-            if let status = item.status, status != .posted { action += "（\(status.displayName)）" }
+            var action = kind.displayName.loc
+            if let status = item.status, status != .posted { action = L("\(action)（\(status.displayName.loc)）") }
             parts.append(action)
         }
         if let amount = amountText(item) { parts.append(amount) }
         // 换成账户的另一个币种扣（ADR 0018）：「人民币余额不足，按港币扣约 HK$86.67」
         if let charge = item.charge, let currency = item.currency {
-            let reason = item.insufficientBalance ? "\(currency.chineseName)余额不足，" : ""
-            let amount = charge.amountMinor.map { (charge.isActual ? " " : "约 ") + Fmt.money($0, charge.currency) } ?? "（还没有汇率）"
-            parts.append(reason + "按\(charge.currency.chineseName)扣" + amount)
+            let name = charge.currency.localizedName
+            let charged = charge.amountMinor.map { minor in
+                let money = Fmt.money(minor, charge.currency)
+                return charge.isActual ? L("按\(name)扣 \(money)") : L("按\(name)扣约 \(money)")
+            } ?? L("按\(name)扣（还没有汇率）")
+            parts.append(item.insufficientBalance ? L("\(currency.localizedName)余额不足，\(charged)") : charged)
         }
         parts.append(outcome)
-        return parts.joined(separator: "，")
+        return parts.joined(separator: L("，"))
     }
 
     private static func amountText(_ item: IngestItem) -> String? {

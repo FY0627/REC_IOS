@@ -15,7 +15,7 @@ enum ScreenshotReader {
     enum ReadError: LocalizedError {
         case unreadable
 
-        var errorDescription: String? { "读不出这张图片" }
+        var errorDescription: String? { L("读不出这张图片") }
     }
 
     private static let queue = DispatchQueue(label: "rec.screenshot-ocr", qos: .userInitiated)

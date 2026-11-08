@@ -70,7 +70,7 @@ struct RecordBankMessageIntent: AppIntent {
         do {
             backend = try AppServices.shared.backend()
         } catch {
-            throw IntentFailure.storageUnavailable((error as? LocalizedError)?.errorDescription ?? "无法打开本地账本")
+            throw IntentFailure.storageUnavailable((error as? LocalizedError)?.errorDescription ?? L("无法打开本地账本"))
         }
         let request = IngestRequest(
             text: content ?? "",

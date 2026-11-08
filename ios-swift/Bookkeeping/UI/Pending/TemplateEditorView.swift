@@ -53,9 +53,9 @@ struct TemplateEditorView: View {
 
     private var title: String {
         switch origin {
-        case .new: "添加识别模板"
-        case .existing: "编辑识别模板"
-        case .pending: "做成识别模板"
+        case .new: L("添加识别模板")
+        case .existing: L("编辑识别模板")
+        case .pending: L("做成识别模板")
         }
     }
 
@@ -68,7 +68,7 @@ struct TemplateEditorView: View {
 
                 Section {
                     Picker("类型", selection: $type) {
-                        ForEach(EntryType.allCases, id: \.self) { Text($0.displayName).tag($0) }
+                        ForEach(EntryType.allCases, id: \.self) { Text($0.displayName.loc).tag($0) }
                     }
                     .pickerStyle(.segmented)
                     if type == .expense {
@@ -149,17 +149,17 @@ struct TemplateEditorView: View {
             .alert("已保存", isPresented: Binding(get: { savedCount != nil }, set: { if !$0 { savedCount = nil } })) {
                 Button("好") { dismiss() }
             } message: {
-                Text(savedCount.map { "待处理里有 \($0) 条通知按这个模板重新识别。" } ?? "")
+                Text(savedCount.map { L("待处理里有 \($0) 条通知按这个模板重新识别。") } ?? "")
             }
         }
     }
 
-    private func markRow(_ title: String, mark: Mark, range: NSRange?, tint: Color, required: Bool) -> some View {
+    private func markRow(_ title: LocalizedStringKey, mark: Mark, range: NSRange?, tint: Color, required: Bool) -> some View {
         HStack(spacing: 12) {
             Circle().fill(tint.opacity(0.6)).frame(width: 10, height: 10).accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                Text(range.map(substring) ?? (required ? "必选" : "可不选"))
+                Text(range.map(substring) ?? (required ? L("必选") : L("可不选")))
                     .font(.footnote).foregroundStyle(.secondary).lineLimit(1)
             }
             Spacer()
@@ -235,7 +235,7 @@ struct TemplateEditorView: View {
             sample = MessageParser.cleaned(item.rawText ?? "", source: item.source)
             if let draft = item.draft { guess(draft) }
             let bank = item.draft?.bankHint.flatMap { BankDirectory.profile(id: $0)?.name }
-            name = [bank, fields.kind.displayName + "通知"].compactMap { $0 }.joined(separator: " ")
+            name = [bank, L("\(fields.kind.displayName.loc)通知")].compactMap { $0 }.joined(separator: " ")
         }
     }
 
@@ -272,12 +272,12 @@ struct TemplateEditorView: View {
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let (kind, direction) = fields
         let template = MessageTemplate(
-            id: existing?.id ?? UUID().uuidString, name: trimmedName.isEmpty ? kind.displayName + "通知" : trimmedName,
+            id: existing?.id ?? UUID().uuidString, name: trimmedName.isEmpty ? L("\(kind.displayName.loc)通知") : trimmedName,
             pieces: pieces, kind: kind, direction: direction, createdAt: existing?.createdAt ?? Date()
         )
         // 模板至少要认得出原文这条通知
         guard MessageTemplates.match(template, in: sample) != nil else {
-            errorText = "用这个模板认不出这条通知，请换一种选法"
+            errorText = L("用这个模板认不出这条通知，请换一种选法")
             return
         }
         saving = true
@@ -286,7 +286,7 @@ struct TemplateEditorView: View {
             let count = try await store.saveTemplate(template)
             if count > 0 { savedCount = count } else { dismiss() }
         } catch {
-            errorText = "保存失败：\(error)"
+            errorText = L("保存失败：\(error.localizedDescription)")
         }
     }
 
@@ -295,7 +295,7 @@ struct TemplateEditorView: View {
             try await store.deleteTemplate(id: template.id)
             dismiss()
         } catch {
-            errorText = "删除失败：\(error)"
+            errorText = L("删除失败：\(error.localizedDescription)")
         }
     }
 

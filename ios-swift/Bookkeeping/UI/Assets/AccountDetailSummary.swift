@@ -51,13 +51,13 @@ struct AccountDetailSummary: View {
     private var currencyMenu: some View {
         let current = model.currency ?? model.currencies.first ?? .cny
         return HStack(spacing: 3) {
-            Text(current.chineseName)
+            Text(current.localizedName)
             Image(systemName: "chevron.up.chevron.down").font(.caption2.weight(.semibold))
         }
         .font(.subheadline.weight(.medium))
         .foregroundStyle(Color.primary)
         .tapAction { choosingCurrency = true }
-        .accessibilityLabel("币种：\(current.chineseName)")
+        .accessibilityLabel("币种：\(current.localizedName)")
         .popover(isPresented: $choosingCurrency, arrowEdge: .trailing) {
             CurrencyChoices(currencies: model.currencies, current: current) { code in
                 choosingCurrency = false
@@ -91,7 +91,7 @@ private struct CurrencyChoices: View {
                 }
                 Button { select(code) } label: {
                     HStack(spacing: 12) {
-                        Text("\(code.chineseName) \(code.rawValue)")
+                        Text("\(code.localizedName) \(code.rawValue)")
                             .foregroundStyle(Color.primary)
                             .lineLimit(1)
                             .minimumScaleFactor(0.8)
@@ -152,11 +152,11 @@ enum RecordPeriod: Hashable {
 
     var title: String {
         switch self {
-        case .all: "全部"
-        case .thisWeek: "本周"
-        case .thisMonth: "本月"
-        case .lastMonth: "上月"
-        case .thisYear: "今年"
+        case .all: L("全部")
+        case .thisWeek: L("本周")
+        case .thisMonth: L("本月")
+        case .lastMonth: L("上月")
+        case .thisYear: L("今年")
         case .custom(let from, let to): "\(Fmt.shortDate(from))–\(Fmt.shortDate(to))"
         }
     }
@@ -240,7 +240,7 @@ struct PaletteGrid: View {
                         .fill(palette.gradient)
                         .frame(height: 64)
                         .overlay(alignment: .bottomLeading) {
-                            Text(palette.name).font(.footnote.weight(.semibold)).foregroundStyle(palette.textColor).padding(10)
+                            Text(palette.name.loc).font(.footnote.weight(.semibold)).foregroundStyle(palette.textColor).padding(10)
                         }
                         .overlay(
                             RoundedRectangle(cornerRadius: 14, style: .continuous)
@@ -248,7 +248,7 @@ struct PaletteGrid: View {
                         )
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(palette.name)
+                .accessibilityLabel(palette.name.loc)
                 .accessibilityAddTraits(selection == palette.id ? [.isSelected] : [])
             }
         }

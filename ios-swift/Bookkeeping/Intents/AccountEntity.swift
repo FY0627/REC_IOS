@@ -13,8 +13,8 @@ struct AccountEntity: AppEntity, Identifiable {
 
     init(account: Account) {
         id = account.id
-        title = "\(account.bankName) ·\(account.last4)"
-        subtitle = "\(account.name) · \(account.cardType.displayName) · \(account.currencies.map(\.rawValue).joined(separator: "/"))"
+        title = account.localizedTitle
+        subtitle = "\(account.localizedName) · \(account.cardType.displayName.loc) · \(account.currencies.map(\.rawValue).joined(separator: "/"))"
     }
 
     var displayRepresentation: DisplayRepresentation {

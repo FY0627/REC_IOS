@@ -121,7 +121,7 @@ struct CardFaceEditor: View {
                 .overlay {
                     WalletCardView(
                         account: preview,
-                        balanceText: store.balances[account.id]?.cardText ?? "余额未知",
+                        balanceText: store.balances[account.id]?.cardText ?? L("余额未知"),
                         amountSize: $amountSize
                     )
                 }
@@ -177,10 +177,10 @@ struct CardFaceEditor: View {
 
     @ViewBuilder
     private func colorRows(_ title: String, selection: Binding<UInt32?>, default defaultColor: UInt32) -> some View {
-        ColorPicker(title, selection: color(selection, default: defaultColor), supportsOpacity: false)
+        ColorPicker(title.loc, selection: color(selection, default: defaultColor), supportsOpacity: false)
         colorSwatches(selection, default: defaultColor)
         if selection.wrappedValue != nil {
-            Button("恢复默认\(title)") { selection.wrappedValue = nil }
+            Button(L("恢复默认\(title.loc)")) { selection.wrappedValue = nil }
         }
     }
 
@@ -201,7 +201,7 @@ struct CardFaceEditor: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(color.name)
+                .accessibilityLabel(color.name.loc)
                 .accessibilityAddTraits(isSelected ? [.isSelected] : [])
             }
         }
@@ -232,7 +232,7 @@ struct CardFaceEditor: View {
             face.imageID = id
             errorText = nil
         } catch {
-            errorText = (error as? LocalizedError)?.errorDescription ?? "无法读取这张图片"
+            errorText = (error as? LocalizedError)?.errorDescription ?? L("无法读取这张图片")
         }
     }
 
@@ -248,7 +248,7 @@ struct CardFaceEditor: View {
             CardFaceImages.shared.discard(unused)
             dismiss()
         } catch {
-            errorText = "保存失败：\(error)"
+            errorText = L("保存失败：\(error.localizedDescription)")
         }
     }
 }

@@ -9,10 +9,10 @@ enum AppTab: Hashable {
 
     var title: String {
         switch self {
-        case .home: "首页"
-        case .assets: "资产"
-        case .stats: "统计"
-        case .profile: "我的"
+        case .home: L("首页")
+        case .assets: L("资产")
+        case .stats: L("统计")
+        case .profile: L("我的")
         }
     }
     var symbol: String {
@@ -59,8 +59,8 @@ enum ActiveSheet: Identifiable {
 /// 切换标签按 iOS 的默认做法：每个页面保留自己的状态（滚动位置、打开的详情）。
 /// 资产页打开卡片详情时，资产页用系统的方式隐藏标签栏（随打开 / 关闭的动画滑出 / 滑入）。
 struct RootView: View {
+    @Binding var tab: AppTab
     @Environment(LedgerStore.self) private var store
-    @State private var tab: AppTab = .home
     @State private var detail = DetailMotionState()
     @State private var sheet: ActiveSheet?
     @State private var assetsReselectCount = 0

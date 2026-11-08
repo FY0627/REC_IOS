@@ -56,8 +56,8 @@ struct AccountManagerView: View {
             CardSwatch(account: account)
                 .grayscale(on ? 0 : 1)
             VStack(alignment: .leading, spacing: 2) {
-                Text(account.name).lineLimit(1)
-                Text(account.isCard ? "\(account.bankName) · \(account.cardType.displayName) · \(account.last4)" : account.cardType.displayName)
+                Text(account.localizedName).lineLimit(1)
+                Text(account.isCard ? "\(account.localizedBankName) · \(account.cardType.displayName.loc) · \(account.last4)" : account.cardType.displayName.loc)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)

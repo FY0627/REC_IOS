@@ -132,7 +132,7 @@ struct WalletHeader: View {
             if count > 0 {
                 // 只有银行卡时叫「银行卡」；加了现金、电子钱包后叫「账户」
                 let allCards = store.accounts.allSatisfy(\.isCard)
-                WalletSectionTitle(title: allCards ? "银行卡" : "账户", count: count, unit: allCards ? "张" : "个")
+                WalletSectionTitle(title: allCards ? "银行卡" : "账户", countText: allCards ? L("共 \(count) 张") : L("共 \(count) 个"))
             } else {
                 EmptyWalletCard(action: addAccount)
                     .padding(.top, 24)
@@ -143,20 +143,21 @@ struct WalletHeader: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .environment(store)
         .environment(rates)
+        .appLocale()
     }
 }
 
 /// 卡包上方的分组标题：「银行卡 共 N 张」「账户 共 N 个」「已停用 共 N 张」
 struct WalletSectionTitle: View {
-    let title: String
-    let count: Int
-    var unit = "张"
+    let title: LocalizedStringKey
+    /// 「共 3 张」
+    let countText: String
 
     var body: some View {
         HStack(alignment: .firstTextBaseline) {
             Text(title).font(.title3.weight(.semibold))
             Spacer()
-            Text("共 \(count) \(unit)").font(.subheadline).foregroundStyle(.secondary)
+            Text(countText).font(.subheadline).foregroundStyle(.secondary)
         }
         .padding(.horizontal, 4)
         .padding(.top, 24)
@@ -169,8 +170,9 @@ struct ArchivedPileTitle: View {
     let count: Int
 
     var body: some View {
-        WalletSectionTitle(title: "已停用", count: count)
+        WalletSectionTitle(title: "已停用", countText: L("共 \(count) 张"))
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+            .appLocale()
     }
 }
 
@@ -193,7 +195,7 @@ private struct OverviewCard: View {
         // 和首页、统计页的分组标题同一行，下面的白框才和它们一样高：位置取首页实际排出来的（`FirstBoxLayout`）。
         // 字号和系统的分组标题一样（真机截图量的：17pt，和正文一样大）
         let first = FirstBoxLayout.shared.home
-        Text("合计（\(main.currency.chineseName)）")
+        Text("合计（\(main.currency.localizedName)）")
             .font(.headline)
             .foregroundStyle(.secondary)
             .padding(.horizontal, 16)
@@ -227,7 +229,7 @@ private struct OverviewCard: View {
         .sheet(isPresented: $showDetail) { NetWorthDetailView() }
     }
 
-    private func figure(_ title: String, _ value: String) -> some View {
+    private func figure(_ title: LocalizedStringKey, _ value: String) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(title).font(.footnote).foregroundStyle(.secondary)
             Text(value).font(.headline).monospacedDigit().lineLimit(1).minimumScaleFactor(0.7)
@@ -248,7 +250,7 @@ private struct NetWorthDetailView: View {
         let summary = NetWorth(store: store, rates: rates.rates, primary: CurrencyCode(primaryCode))
         NavigationStack {
             List {
-                Section(summary.converted == nil ? summary.main.currency.chineseName : "合计（\(summary.main.currency.chineseName)）") {
+                Section(summary.converted == nil ? summary.main.currency.localizedName : L("合计（\(summary.main.currency.localizedName)）")) {
                     totalsRows(summary.main)
                 }
                 if !summary.totals.isEmpty {
@@ -256,8 +258,8 @@ private struct NetWorthDetailView: View {
                         ForEach(summary.totals, id: \.currency) { t in
                             let skipped = summary.converted?.skipped.contains(t.currency) == true
                             VStack(alignment: .leading, spacing: 6) {
-                                LabeledContent(t.currency.chineseName) {
-                                    Text(skipped ? "无汇率" : amount(t.net, t.currency)).monospacedDigit()
+                                LabeledContent(t.currency.localizedName) {
+                                    Text(skipped ? L("无汇率") : amount(t.net, t.currency)).monospacedDigit()
                                 }
                                 .font(.headline)
                                 if !skipped {

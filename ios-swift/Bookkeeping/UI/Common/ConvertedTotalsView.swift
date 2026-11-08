@@ -6,8 +6,8 @@ import BKModel
 /// 外币交易有实际扣款的用实际扣款，否则按当天的汇率；还没有汇率的币种不算进去，只有这时多一行小字
 struct ConvertedTotalsView: View {
     let total: MonthStats.ConvertedTotals?
-    var expenseTitle = "支出"
-    var incomeTitle = "收入"
+    var expenseTitle: LocalizedStringKey = "支出"
+    var incomeTitle: LocalizedStringKey = "收入"
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -28,7 +28,7 @@ struct ConvertedTotalsView: View {
                     .fixedSize()
                 }
                 if !total.unconverted.isEmpty {
-                    Text("\(total.unconverted.map(\.chineseName).joined(separator: "、"))没有汇率，没算进去")
+                    Text(L("\(total.unconverted.map(\.localizedName).joined(separator: L("、")))没有汇率，没算进去"))
                         .font(.footnote).foregroundStyle(.secondary).padding(.top, 10)
                 }
             } else {
@@ -40,7 +40,7 @@ struct ConvertedTotalsView: View {
         .accessibilityElement(children: .combine)
     }
 
-    private func stat(_ title: String, _ value: String) -> some View {
+    private func stat(_ title: LocalizedStringKey, _ value: String) -> some View {
         VStack(alignment: .trailing, spacing: 2) {
             Text(title).font(.footnote).foregroundStyle(.secondary)
             Text(value).font(.headline).monospacedDigit().lineLimit(1)

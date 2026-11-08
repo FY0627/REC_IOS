@@ -12,7 +12,7 @@ struct CurrencyEntry: Identifiable, Hashable, Sendable {
     var id: String { code.rawValue }
 }
 
-/// 选币种页面「全部币种」里的一组：中文名称拼音首字母相同的币种
+/// 选币种页面「全部币种」里的一组：首字母相同的币种
 struct CurrencySection: Identifiable, Sendable {
     let letter: String
     let entries: [CurrencyEntry]
@@ -20,22 +20,15 @@ struct CurrencySection: Identifiable, Sendable {
 }
 
 /// 汇率数据源支持的全部币种。第一次用到时生成（要查系统的名称），添加银行卡等页面出现时先在后台准备好。
+/// 按选的语言（`AppLanguage`）各生成一份：简体按拼音排、分组，英文按英文名称，台湾按币种代码（台湾不用拼音）
 enum CurrencyCatalog {
-    /// 按中文名称的拼音排序
-    static let all: [CurrencyEntry] = CurrencyCode.supported.map(makeEntry)
-        .sorted { $0.name.compare($1.name, locale: simplifiedChinese) == .orderedAscending }
-    static let common: [CurrencyEntry] = CurrencyCode.common.map(entry)
-    /// 按拼音首字母 A–Z 分组（侧边的字母索引跳到这里），不是字母开头的放在最后的「#」
-    static let sections: [CurrencySection] = {
-        var groups: [String: [CurrencyEntry]] = [:]
-        for entry in all { groups[initial(entry.name), default: []].append(entry) }
-        return groups.keys
-            .sorted { a, b in a == "#" ? false : b == "#" ? true : a < b }
-            .map { CurrencySection(letter: $0, entries: groups[$0] ?? []) }
-    }()
+    static var all: [CurrencyEntry] { built.all }
+    static var common: [CurrencyEntry] { built.common }
+    /// 按首字母 A–Z 分组（侧边的字母索引跳到这里），不是字母开头的放在最后的「#」
+    static var sections: [CurrencySection] { built.sections }
 
     static func entry(_ code: CurrencyCode) -> CurrencyEntry {
-        byCode[code.rawValue] ?? makeEntry(code)
+        built.byCode[code.rawValue] ?? makeEntry(code)
     }
 
     /// 名称完全一样 > 开头一样 > 包含；同样像时按列表顺序
@@ -59,18 +52,59 @@ enum CurrencyCatalog {
         await Task.detached(priority: .utility) { _ = CurrencyCatalog.sections.count }.value
     }
 
-    /// 名称拼音的首字母（大写）
-    private static func initial(_ name: String) -> String {
-        let latin = name.applyingTransform(.mandarinToLatin, reverse: false)?
-            .applyingTransform(.stripDiacritics, reverse: false) ?? name
+    private struct Built {
+        let all: [CurrencyEntry]
+        let common: [CurrencyEntry]
+        let sections: [CurrencySection]
+        let byCode: [String: CurrencyEntry]
+    }
+
+    private static let lock = NSLock()
+    private nonisolated(unsafe) static var cache: [AppLanguage: Built] = [:]
+
+    private static var built: Built {
+        let language = AppLanguage.resolved
+        lock.lock()
+        defer { lock.unlock() }
+        if let cached = cache[language] { return cached }
+        let value = build(language)
+        cache[language] = value
+        return value
+    }
+
+    private static func build(_ language: AppLanguage) -> Built {
+        let entries = CurrencyCode.supported.map(makeEntry)
+        let all: [CurrencyEntry] = switch language {
+        case .english: entries.sorted { $0.name.compare($1.name, locale: english) == .orderedAscending }
+        case .zhHant: entries.sorted { $0.code.rawValue < $1.code.rawValue }
+        default: entries.sorted { $0.name.compare($1.name, locale: simplifiedChinese) == .orderedAscending }
+        }
+        var groups: [String: [CurrencyEntry]] = [:]
+        for entry in all { groups[initial(entry, language), default: []].append(entry) }
+        let sections = groups.keys
+            .sorted { a, b in a == "#" ? false : b == "#" ? true : a < b }
+            .map { CurrencySection(letter: $0, entries: groups[$0] ?? []) }
+        let byCode = Dictionary(all.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let common = CurrencyCode.common.map { byCode[$0.rawValue] ?? makeEntry($0) }
+        return Built(all: all, common: common, sections: sections, byCode: byCode)
+    }
+
+    /// 分组的首字母：简体是名称拼音的首字母，英文是名称的首字母，台湾是代码的首字母
+    private static func initial(_ entry: CurrencyEntry, _ language: AppLanguage) -> String {
+        let text: String = switch language {
+        case .zhHant: entry.code.rawValue
+        case .english: entry.name
+        default: entry.name.applyingTransform(.mandarinToLatin, reverse: false) ?? entry.name
+        }
+        let latin = text.applyingTransform(.stripDiacritics, reverse: false) ?? text
         guard let first = latin.uppercased().unicodeScalars.first, first.isASCII, CharacterSet.uppercaseLetters.contains(first) else {
             return "#"
         }
         return String(first)
     }
 
-    private static let byCode: [String: CurrencyEntry] = Dictionary(all.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
     private static let simplifiedChinese = Locale(identifier: "zh_Hans")
+    private static let english = Locale(identifier: "en")
     private static let nameLocales = [Locale(identifier: "zh_Hant"), Locale.current]
     private static let regionLocales = [Locale(identifier: "zh_Hans"), Locale(identifier: "zh_Hant"), Locale(identifier: "en"), Locale.current]
     private static let isoRegions = Set(Locale.Region.isoRegions.map(\.identifier))
@@ -78,7 +112,7 @@ enum CurrencyCatalog {
     private static func makeEntry(_ code: CurrencyCode) -> CurrencyEntry {
         let raw = code.rawValue
         let region = regionCode(raw)
-        var names = [raw, code.chineseName, code.englishName]
+        var names = [raw, code.chineseName, code.localizedName, code.englishName]
         names += nameLocales.compactMap { $0.localizedString(forCurrencyCode: raw) }
         if let region { names += regionLocales.compactMap { $0.localizedString(forRegionCode: region) } }
         var keys: [String] = []
@@ -86,8 +120,9 @@ enum CurrencyCatalog {
             let key = BankCatalog.normalize(name)
             if !key.isEmpty, !keys.contains(key) { keys.append(key) }
         }
-        let detail = code.englishName == raw ? raw : "\(raw) · \(code.englishName)"
-        return CurrencyEntry(code: code, name: code.chineseName, detail: detail, flag: region.map(flag), keys: keys)
+        // 英文界面的名称已经是英文，下面一行只写代码
+        let detail = code.englishName == raw || AppLanguage.resolved == .english ? raw : "\(raw) · \(code.englishName)"
+        return CurrencyEntry(code: code, name: code.localizedName, detail: detail, flag: region.map(flag), keys: keys)
     }
 
     /// 币种代码的前两位多数是国家 / 地区代码；欧元用欧盟。X 开头的是多国共用的货币，没有国旗
@@ -155,7 +190,7 @@ struct CurrencyPicker: View {
                 .padding(.horizontal, AppLayout.cardInset)
                 .padding(.bottom, 6)
         }
-        .navigationTitle(title)
+        .navigationTitle(title.loc)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if multiple {
@@ -188,7 +223,7 @@ struct CurrencyPicker: View {
                 }
                 .frame(width: 36)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(isFixed ? "\(entry.name)（主币种）" : entry.name).foregroundStyle(isFixed ? Color.secondary : Color.primary)
+                    Text(isFixed ? L("\(entry.name)（主币种）") : entry.name).foregroundStyle(isFixed ? Color.secondary : Color.primary)
                     Text(entry.detail).font(.footnote).foregroundStyle(Color.secondary).lineLimit(1)
                 }
                 Spacer(minLength: 8)
@@ -226,7 +261,7 @@ struct CurrencyLink: View {
                 suggested: suggested
             )
         } label: {
-            LabeledContent(title, value: currency.map { "\($0.chineseName) \($0.rawValue)" } ?? "请选择")
+            LabeledContent(title.loc, value: currency.map { "\($0.localizedName) \($0.rawValue)" } ?? L("请选择"))
         }
     }
 }

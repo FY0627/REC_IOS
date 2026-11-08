@@ -124,10 +124,11 @@ struct RecordEditor: View {
             return (timeChanged ? time : r.effectiveAt) <= opening.at
         }
         guard !unaffected.isEmpty else { return nil }
-        return "这笔比「\(unaffected.map(\.displayTitle).joined(separator: "」「"))」的校准余额早，换账户不会改变它的余额（余额从校准那一刻算起）。"
+        let names = unaffected.map(\.localizedTitle).joined(separator: L("」「"))
+        return L("这笔比「\(names)」的校准余额早，换账户不会改变它的余额（余额从校准那一刻算起）。")
     }
 
-    /// 钱进这个账户（收入、退款、转入）是入账，否则是扣款
+    /// 钱进这个账户（收入、退款、转入）是入账，否则是扣款。简体中文原文，显示时 `.loc`
     private var settlementTitle: String {
         let inflow = type == .income || (type == .expense && refund) || (type == .transfer && transferDirection == .inflow)
         return inflow ? "实际入账" : "实际扣款"
@@ -151,7 +152,7 @@ struct RecordEditor: View {
             Form {
                 Section {
                     Picker("类型", selection: $type) {
-                        ForEach(EntryType.allCases, id: \.self) { Text($0.displayName).tag($0) }
+                        ForEach(EntryType.allCases, id: \.self) { Text($0.displayName.loc).tag($0) }
                     }
                     .pickerStyle(.segmented)
                     if type == .expense {
@@ -169,7 +170,7 @@ struct RecordEditor: View {
                 // 先选币种再选账户：账户没有这个币种时，下面多一行实际扣款（入账）
                 Section {
                     Picker("账户", selection: $accountID) {
-                        ForEach(accounts) { Text($0.displayTitle).tag($0.id) }
+                        ForEach(accounts) { Text($0.localizedTitle).tag($0.id) }
                     }
                     if type == .transfer {
                         Picker("这张卡", selection: $transferDirection) {
@@ -178,7 +179,7 @@ struct RecordEditor: View {
                         }
                         Picker(transferDirection == .outflow ? "转到" : "来自", selection: $peer) {
                             ForEach(peerOptions) { option in
-                                Text(option.id == accountID ? "\(option.displayTitle)（换汇）" : option.displayTitle)
+                                Text(option.id == accountID ? L("\(option.localizedTitle)（换汇）") : option.localizedTitle)
                                     .tag(PeerChoice.account(option.id))
                             }
                             Text("没添加到 App 的账户").tag(PeerChoice.untracked)
@@ -199,13 +200,13 @@ struct RecordEditor: View {
                                 settlementText = ""
                             }
                         )) {
-                            ForEach(account.currencies, id: \.self) { Text($0.chineseName).tag($0) }
+                            ForEach(account.currencies, id: \.self) { Text($0.localizedName).tag($0) }
                         }
                     }
                     if let settlementCurrency {
                         HStack {
-                            Text("\(settlementTitle)（\(settlementCurrency.chineseName)）")
-                            TextField(estimate?.amountMinor.map { "约 " + Fmt.money($0, settlementCurrency) } ?? "不填按汇率估算", text: $settlementText)
+                            Text(L("\(settlementTitle.loc)（\(settlementCurrency.localizedName)）"))
+                            TextField(estimate?.amountMinor.map { L("约 \(Fmt.money($0, settlementCurrency))") } ?? L("不填按汇率估算"), text: $settlementText)
                                 .keyboardType(settlementCurrency.minorUnitExponent == 0 ? .numberPad : .decimalPad)
                                 .multilineTextAlignment(.trailing)
                                 .font(.body.monospacedDigit())
@@ -344,7 +345,7 @@ struct RecordEditor: View {
             onSaved()
             dismiss()
         } catch {
-            problem = InputProblem(title: "保存失败", message: error.localizedDescription)
+            problem = InputProblem(title: L("保存失败"), message: error.localizedDescription)
         }
     }
 }

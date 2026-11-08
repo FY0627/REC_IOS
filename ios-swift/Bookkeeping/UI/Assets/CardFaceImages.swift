@@ -68,7 +68,7 @@ final class CardFaceImages {
     enum ImportError: LocalizedError {
         case unreadable
 
-        var errorDescription: String? { "无法读取这张图片" }
+        var errorDescription: String? { L("无法读取这张图片") }
     }
 
     /// 裁剪、缩小并保存，返回新图片的标识。不要在主线程调用。

@@ -14,9 +14,9 @@ struct AddAccountView: View {
 
         var title: String {
             switch self {
-            case .card: "银行卡"
-            case .cash: "现金"
-            case .wallet: "电子钱包"
+            case .card: L("银行卡")
+            case .cash: L("现金")
+            case .wallet: L("电子钱包")
             }
         }
 
@@ -125,7 +125,7 @@ struct AddAccountView: View {
                             }
                             .accessibilityHint("四位数字，保留开头的 0")
                         Picker("卡类型", selection: $cardType) {
-                            ForEach(CardType.cardCases, id: \.self) { Text($0.displayName).tag($0) }
+                            ForEach(CardType.cardCases, id: \.self) { Text($0.displayName.loc).tag($0) }
                         }
                         TextField("账户名称（可选）", text: $name)
                     }
@@ -133,11 +133,11 @@ struct AddAccountView: View {
                     Section {
                         if kind == .wallet {
                             Picker("钱包", selection: $walletID) {
-                                ForEach(Self.wallets) { Text($0.name).tag(String?.some($0.id)) }
+                                ForEach(Self.wallets) { Text($0.name.loc).tag(String?.some($0.id)) }
                                 Text("其他").tag(String?.none)
                             }
                         }
-                        TextField(kind == .cash ? "现金" : (WalletDirectory.profile(id: walletID)?.name ?? "例如 微信零钱、支付宝余额"), text: $name)
+                        TextField(kind == .cash ? L("现金") : (WalletDirectory.profile(id: walletID)?.name.loc ?? L("例如 微信零钱、支付宝余额")), text: $name)
                     } header: {
                         Text("名称")
                     } footer: {
@@ -151,7 +151,7 @@ struct AddAccountView: View {
                 Section("币种与初始余额") {
                     CurrencyLink(title: multiCurrency ? "主币种" : "币种", currency: primaryCurrency)
                     if let currency {
-                        OpeningBalanceRow(currency: currency, label: multiCurrency ? currency.chineseName : nil, input: balance(currency))
+                        OpeningBalanceRow(currency: currency, label: multiCurrency ? currency.localizedName : nil, input: balance(currency))
                     }
                     if kind == .card {
                         Toggle("多币种账户", isOn: $multiCurrency)
@@ -163,7 +163,7 @@ struct AddAccountView: View {
                             LabeledContent("其他币种", value: extrasSummary)
                         }
                         ForEach(currencies.dropFirst(), id: \.self) { code in
-                            OpeningBalanceRow(currency: code, label: code.chineseName, input: balance(code))
+                            OpeningBalanceRow(currency: code, label: code.localizedName, input: balance(code))
                         }
                     }
                 }
@@ -205,7 +205,7 @@ struct AddAccountView: View {
                 }
             }
             .onChange(of: bankText) { _, text in
-                if let bank, text != bank.name { self.bank = nil }
+                if let bank, text != bank.name.loc { self.bank = nil }
             }
             .onChange(of: cardType) { _, type in
                 for (code, input) in balances where input.text.isEmpty { balances[code]?.isDebt = type == .credit }
@@ -245,12 +245,12 @@ struct AddAccountView: View {
 
     private var extrasSummary: String {
         let extras = currencies.dropFirst()
-        return extras.isEmpty ? "请选择" : extras.map(\.chineseName).joined(separator: "、")
+        return extras.isEmpty ? L("请选择") : extras.map(\.localizedName).joined(separator: L("、"))
     }
 
     private func choose(_ entry: BankEntry) {
         bank = entry
-        bankText = entry.name
+        bankText = entry.name.loc
         bankFocused = false
         if !paletteTouched, let palette = entry.paletteID { paletteID = palette }
     }
@@ -271,7 +271,7 @@ struct AddAccountView: View {
             photoID = id
             errorText = nil
         } catch {
-            errorText = (error as? LocalizedError)?.errorDescription ?? "无法读取这张图片"
+            errorText = (error as? LocalizedError)?.errorDescription ?? L("无法读取这张图片")
         }
     }
 
@@ -297,9 +297,9 @@ struct AddAccountView: View {
                 await applyPhoto(to: account)
                 dismiss()
             } catch BackendError.invalidAccount(.duplicateAccount) {
-                errorText = "已经有一个叫「\(pocketName)」的\(pocketType.displayName)账户。"
+                errorText = L("已经有一个叫「\(pocketName.loc)」的\(pocketType.displayName.loc)账户。")
             } catch {
-                errorText = "保存失败：\(error)"
+                errorText = L("保存失败：\(error.localizedDescription)")
             }
             return
         }
@@ -323,14 +323,14 @@ struct AddAccountView: View {
             if alreadyAutomated { dismiss() } else { created = account }
         } catch BackendError.invalidAccount(let reason) {
             switch reason {
-            case .duplicateAccount: errorText = "已经添加过这张卡（同一银行、同一尾号、同一卡类型）。"
-            case .invalidLast4: errorText = "后四位必须是 4 位数字。"
-            case .emptyBank, .emptyName: errorText = "请填写银行。"
-            case .invalidCardNumber: errorText = "卡号格式不正确。"
-            case .invalidAccountNumber: errorText = "账号格式不正确。"
+            case .duplicateAccount: errorText = L("已经添加过这张卡（同一银行、同一尾号、同一卡类型）。")
+            case .invalidLast4: errorText = L("后四位必须是 4 位数字。")
+            case .emptyBank, .emptyName: errorText = L("请填写银行。")
+            case .invalidCardNumber: errorText = L("卡号格式不正确。")
+            case .invalidAccountNumber: errorText = L("账号格式不正确。")
             }
         } catch {
-            errorText = "保存失败：\(error)"
+            errorText = L("保存失败：\(error.localizedDescription)")
         }
     }
 }
@@ -342,8 +342,9 @@ private struct BankSuggestionRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(entry.name).foregroundStyle(Color.primary)
-            Text(entry.localName == entry.name ? entry.region : "\(entry.localName) · \(entry.region)")
+            let title = entry.name.loc
+            Text(title).foregroundStyle(Color.primary)
+            Text(entry.localName == entry.name || entry.localName == title ? entry.region.loc : "\(entry.localName) · \(entry.region.loc)")
                 .font(.footnote)
                 .foregroundStyle(Color.secondary)
                 .lineLimit(1)

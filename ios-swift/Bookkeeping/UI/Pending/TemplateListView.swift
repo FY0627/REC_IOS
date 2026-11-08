@@ -38,7 +38,7 @@ struct TemplateListView: View {
                 } label: {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(template.name).font(.headline).foregroundStyle(Color.primary)
-                        Text("\(template.kind.displayName) · \(template.direction.displayName)")
+                        Text("\(template.kind.displayName.loc) · \(template.direction.displayName.loc)")
                             .font(.subheadline).foregroundStyle(Color.secondary)
                         Text(template.preview)
                             .font(.caption).foregroundStyle(Color.secondary).lineLimit(3)

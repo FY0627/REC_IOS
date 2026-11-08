@@ -390,7 +390,7 @@ final class LedgerStore {
 
     /// 从相册选的付款截图：一张一张识别、入账，和快捷指令交过来的一样。返回合在一起的结果，比如「入账 2 笔，待处理 1 条」；一张都没有时是空的
     func ingestScreenshots(_ images: [Data]) async -> String {
-        guard let backend else { return "账本还没打开" }
+        guard let backend else { return L("账本还没打开") }
         var recorded = 0, merged = 0, pending = 0, skipped = 0, failed = 0
         for data in images {
             do {
@@ -406,12 +406,12 @@ final class LedgerStore {
         }
         await refresh()
         var parts: [String] = []
-        if recorded > 0 { parts.append("入账 \(recorded) 笔") }
-        if merged > 0 { parts.append("和已记的合并 \(merged) 笔") }
-        if pending > 0 { parts.append("待处理 \(pending) 条") }
-        if skipped > 0 { parts.append("\(skipped) 张没有认出付款") }
-        if failed > 0 { parts.append("\(failed) 张读不出来") }
-        return parts.joined(separator: "，")
+        if recorded > 0 { parts.append(L("入账 \(recorded) 笔")) }
+        if merged > 0 { parts.append(L("和已记的合并 \(merged) 笔")) }
+        if pending > 0 { parts.append(L("待处理 \(pending) 条")) }
+        if skipped > 0 { parts.append(L("\(skipped) 张没有认出付款")) }
+        if failed > 0 { parts.append(L("\(failed) 张读不出来")) }
+        return parts.joined(separator: L("，"))
     }
 
     // MARK: 模拟消费
@@ -446,7 +446,7 @@ final class LedgerStore {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("export", isDirectory: true)
         try? FileManager.default.removeItem(at: root)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-        let url = root.appendingPathComponent("REC 数据 \(day).zip")
+        let url = root.appendingPathComponent(L("REC 数据 \(day).zip"))
         return (url, try await backend.exportData(to: url))
     }
 

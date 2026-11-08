@@ -48,11 +48,31 @@ public struct NotificationPicker: Hashable, Sendable, Codable {
         case app
     }
 
+    /// 按钮上固定的字。App 发通知时按选的语言写进来（`localized`），通知扩展照着显示；
+    /// 以前的通知里没有，用简体中文。`only` 里的 `%@` 换成大类名称
+    public struct Labels: Hashable, Sendable, Codable {
+        public var only: String
+        public var moreParents: String
+        public var back: String
+        public var more: String
+        public var openApp: String
+
+        public init(only: String = "只记%@", moreParents: String = "更多大类", back: String = "返回", more: String = "更多", openApp: String = "打开 App") {
+            self.only = only
+            self.moreParents = moreParents
+            self.back = back
+            self.more = more
+            self.openApp = openApp
+        }
+    }
+
     /// 一页放几个选项（第 4 个按钮留给翻页、返回或打开 App）
     public static let perPage = 3
 
     public var first: Option?
     public var groups: [Group]
+    /// 没有时是简体中文（`Labels()`）
+    public var labels: Labels?
 
     public init(first: Option?, groups: [Group]) {
         self.first = first
@@ -74,18 +94,19 @@ public struct NotificationPicker: Hashable, Sendable, Codable {
 
     /// 第二层的选项：小类，最后是「只记这个大类」
     func childItems(_ group: Group) -> [Button] {
-        group.children.map { Button.pick($0, title: $0.name) } + [.pick(group.option, title: "只记\(group.option.name)")]
+        let only = (labels ?? Labels()).only.replacingOccurrences(of: "%@", with: group.option.name)
+        return group.children.map { Button.pick($0, title: $0.name) } + [.pick(group.option, title: only)]
     }
 
     /// 大类的第 `page` 页（从 0 开始）
     public func parentButtons(page: Int) -> [Button] {
-        Self.paged(parentItems, page: page, next: .parents(page: page + 1, title: "更多大类"), last: .app)
+        Self.paged(parentItems, page: page, next: .parents(page: page + 1, title: (labels ?? Labels()).moreParents), last: .app)
     }
 
     /// 这个大类的小类的第 `page` 页
     public func childButtons(of parentID: String, page: Int) -> [Button] {
         guard let group = groups.first(where: { $0.option.id == parentID }) else { return parentButtons(page: 0) }
-        return Self.paged(childItems(group), page: page, next: .children(parentID: parentID, page: page + 1), last: .parents(page: 0, title: "返回"))
+        return Self.paged(childItems(group), page: page, next: .children(parentID: parentID, page: page + 1), last: .parents(page: 0, title: (labels ?? Labels()).back))
     }
 
     static func paged(_ items: [Button], page: Int, next: Button, last: Button) -> [Button] {
@@ -112,6 +133,26 @@ public struct NotificationPicker: Hashable, Sendable, Codable {
         let firstPage = parentItems.prefix(Self.perPage).compactMap(\.optionID)
         if firstPage.contains(categoryID) { return true }
         return groups.contains { group in group.children.contains { $0.id == categoryID } && firstPage.contains(group.option.id) }
+    }
+
+    /// 按钮上写的字：「更多」「打开 App」按 `labels`，其他按钮自己带着
+    public func title(_ button: Button) -> String {
+        switch button {
+        case .children: (labels ?? Labels()).more
+        case .app: (labels ?? Labels()).openApp
+        default: button.title
+        }
+    }
+
+    /// 换成选的语言：分类名称按 `name` 换，固定的字用 `labels`
+    public func localized(name: (String) -> String, labels: Labels) -> NotificationPicker {
+        func option(_ value: Option) -> Option { Option(id: value.id, name: name(value.name), symbol: value.symbol) }
+        var copy = NotificationPicker(
+            first: first.map(option),
+            groups: groups.map { Group(option: option($0.option), children: $0.children.map(option)) }
+        )
+        copy.labels = labels
+        return copy
     }
 
     // MARK: 按钮的标识

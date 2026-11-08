@@ -60,7 +60,7 @@ struct CardInfoView: View {
                             copied = true
                         }
                     } else {
-                        LabeledContent("卡号", value: "尾号 \(account.last4)")
+                        LabeledContent("卡号", value: L("尾号 \(account.last4)"))
                     }
                     // 只写账号不写卡号尾号的通知（例如转账邮件）靠账号匹配；可以直接粘贴通知里打码的账号
                     if editing {
@@ -104,7 +104,7 @@ struct CardInfoView: View {
                 }
             }
         }
-        .navigationTitle(account.displayTitle)
+        .navigationTitle(account.localizedTitle)
         .navigationBarTitleDisplayMode(.inline)
         .onChange(of: cardType) { old, new in
             // 名称还是默认的（例如「招商银行借记卡」）：跟着卡类型改
@@ -145,26 +145,26 @@ struct CardInfoView: View {
     @ViewBuilder
     private func infoFields(_ account: Account) -> some View {
         Section {
-            LabeledContent("账户名称", value: account.name)
+            LabeledContent("账户名称", value: account.localizedName)
             if account.isCard {
-                LabeledContent("银行", value: account.bankName)
+                LabeledContent("银行", value: account.localizedBankName)
             }
-            LabeledContent(account.isCard ? "卡类型" : "类型", value: account.cardType.displayName)
+            LabeledContent(account.isCard ? "卡类型" : "类型", value: account.cardType.displayName.loc)
             LabeledContent(account.isMultiCurrency ? "主币种" : "币种", value: Self.title(account.currency))
             if account.isMultiCurrency {
-                LabeledContent("其他币种", value: account.extraCurrencies.map(\.chineseName).joined(separator: "、"))
+                LabeledContent("其他币种", value: account.extraCurrencies.map(\.localizedName).joined(separator: L("、")))
             }
             LabeledContent("添加时间", value: Fmt.dateTime(account.createdAt))
         }
         Section("余额") {
             ForEach(account.currencies, id: \.self) { code in
                 let summary = store.balances[account.id]?.item(code)
-                let prefix = account.isMultiCurrency ? code.chineseName : ""
-                LabeledContent("\(prefix)余额") {
-                    Text(summary?.ledgerDerivedMinor.map { Fmt.money($0, code) } ?? "未知").monospacedDigit()
+                let prefix = account.isMultiCurrency ? code.localizedName : ""
+                LabeledContent(prefix.isEmpty ? L("余额") : L("\(prefix)余额")) {
+                    Text(summary?.ledgerDerivedMinor.map { Fmt.money($0, code) } ?? L("未知")).monospacedDigit()
                 }
-                LabeledContent("\(prefix)上次校准") {
-                    Text(account.openingBalance(code).map { Fmt.money($0.amountMinor, code) } ?? "未填写").monospacedDigit()
+                LabeledContent(prefix.isEmpty ? L("上次校准") : L("\(prefix)上次校准")) {
+                    Text(account.openingBalance(code).map { Fmt.money($0.amountMinor, code) } ?? L("未填写")).monospacedDigit()
                 }
                 if let unconverted = summary?.unconvertedCount, unconverted > 0 {
                     Text("另有 \(unconverted) 笔外币交易还没有汇率，没算进余额").font(.footnote).foregroundStyle(.secondary)
@@ -180,16 +180,16 @@ struct CardInfoView: View {
         Section {
             TextField("账户名称", text: $name)
             if account.isCard {
-                LabeledContent("银行", value: account.bankName)
+                LabeledContent("银行", value: account.localizedBankName)
                 Picker("卡类型", selection: $cardType) {
-                    ForEach(CardType.cardCases, id: \.self) { Text($0.displayName).tag($0) }
+                    ForEach(CardType.cardCases, id: \.self) { Text($0.displayName.loc).tag($0) }
                 }
             }
         }
         Section {
             CurrencyLink(title: multiCurrency ? "主币种" : "币种", currency: primaryCurrency)
             if let currency {
-                OpeningBalanceRow(currency: currency, label: multiCurrency ? currency.chineseName : nil, input: balance(currency), placeholderTitle: "校准余额", emptyPlaceholder: "校准余额（选填）")
+                OpeningBalanceRow(currency: currency, label: multiCurrency ? currency.localizedName : nil, input: balance(currency), placeholderTitle: "校准余额", emptyPlaceholder: "校准余额（选填）")
             }
             if account.isCard {
                 Toggle("多币种账户", isOn: $multiCurrency)
@@ -198,10 +198,10 @@ struct CardInfoView: View {
                 NavigationLink {
                     CurrencyPicker(title: "其他币种", selection: $extras, multiple: true, fixed: currency)
                 } label: {
-                    LabeledContent("其他币种", value: heldExtras.isEmpty ? "请选择" : heldExtras.map(\.chineseName).joined(separator: "、"))
+                    LabeledContent("其他币种", value: heldExtras.isEmpty ? L("请选择") : heldExtras.map(\.localizedName).joined(separator: L("、")))
                 }
                 ForEach(heldExtras, id: \.self) { code in
-                    OpeningBalanceRow(currency: code, label: code.chineseName, input: balance(code), placeholderTitle: "校准余额", emptyPlaceholder: "校准余额（选填）")
+                    OpeningBalanceRow(currency: code, label: code.localizedName, input: balance(code), placeholderTitle: "校准余额", emptyPlaceholder: "校准余额（选填）")
                 }
             }
         } header: {
@@ -282,7 +282,7 @@ struct CardInfoView: View {
         }
     }
 
-    static func title(_ code: CurrencyCode) -> String { "\(code.chineseName) \(code.rawValue)" }
+    static func title(_ code: CurrencyCode) -> String { "\(code.localizedName) \(code.rawValue)" }
 
     static func grouped(_ digits: String) -> String {
         var result = ""
@@ -308,7 +308,7 @@ struct CardInfoView: View {
             let entered: Int64?
             switch value {
             case .invalid:
-                errorText = "\(code.chineseName)的校准余额格式不对，例如 1234.56"
+                errorText = L("\(code.localizedName)的校准余额格式不对，例如 1234.56")
                 return
             case .empty: entered = nil
             case .valid(let minor): entered = minor
@@ -328,13 +328,13 @@ struct CardInfoView: View {
             revealed = false
             withAnimation(Self.modeChange) { editing = false }
         } catch BackendError.invalidAccount(.duplicateAccount) {
-            errorText = "已经有一张同一银行、同一尾号的\(cardType.displayName)。"
+            errorText = L("已经有一张同一银行、同一尾号的\(cardType.displayName.loc)。")
         } catch BackendError.invalidAccount(.invalidAccountNumber) {
-            errorText = "账号只能包含数字、X 和短横线，至少 6 位。"
+            errorText = L("账号只能包含数字、X 和短横线，至少 6 位。")
         } catch BackendError.invalidAccount(.invalidCardNumber) {
-            errorText = "卡号必须是 12–19 位数字，末四位是 \(account.last4)。"
+            errorText = L("卡号必须是 12–19 位数字，末四位是 \(account.last4)。")
         } catch {
-            errorText = "保存失败：\(error)"
+            errorText = L("保存失败：\(error.localizedDescription)")
         }
     }
 }

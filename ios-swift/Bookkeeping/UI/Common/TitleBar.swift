@@ -123,7 +123,7 @@ struct TitleBar: UIViewRepresentable {
     var menus: [Menu] = []
 
     func makeUIView(context: Context) -> TitleBarView {
-        TitleBarView(title: title, menuCount: menus.count)
+        TitleBarView(title: title.loc, menuCount: menus.count)
     }
 
     func updateUIView(_ view: TitleBarView, context: Context) {

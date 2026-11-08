@@ -36,7 +36,7 @@ final class NotificationViewController: UIViewController, UNNotificationContentE
     private func show(_ buttons: [NotificationPicker.Button]) {
         extensionContext?.notificationActions = buttons.map { button in
             UNNotificationAction(
-                identifier: NotificationPicker.identifier(button), title: button.title,
+                identifier: NotificationPicker.identifier(button), title: picker.title(button),
                 options: button == .app ? [.foreground] : [],
                 icon: UNNotificationActionIcon(systemImageName: button.symbol)
             )

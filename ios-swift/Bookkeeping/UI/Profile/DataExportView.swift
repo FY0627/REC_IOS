@@ -16,8 +16,8 @@ struct DataExportView: View {
                     ShareLink(item: file) {
                         Label("导出全部数据", systemImage: "square.and.arrow.up")
                     }
-                    LabeledContent("流水", value: "\(summary.records) 笔")
-                    LabeledContent("账户", value: "\(summary.accounts) 个")
+                    LabeledContent("流水", value: L("\(summary.records) 笔"))
+                    LabeledContent("账户", value: L("\(summary.accounts) 个"))
                 } else if let errorText {
                     Text(errorText).foregroundStyle(.red)
                 } else {
@@ -36,7 +36,7 @@ struct DataExportView: View {
             summary = result.summary
             file = result.url
         } catch {
-            errorText = "导出失败：\(error.localizedDescription)"
+            errorText = L("导出失败：\(error.localizedDescription)")
         }
     }
 }

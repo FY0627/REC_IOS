@@ -33,7 +33,17 @@ struct HomeView: View {
     enum SearchScope: Hashable, CaseIterable {
         case all, expense, income, transfer
 
-        var title: String { entryType?.displayName ?? "全部" }
+        var title: String { entryType?.displayName.loc ?? L("全部") }
+
+        /// 搜索没有结果、又没打字时（只选了类型）
+        var emptyTitle: LocalizedStringKey {
+            switch self {
+            case .all: "还没有流水"
+            case .expense: "没有支出"
+            case .income: "没有收入"
+            case .transfer: "没有转帐"
+            }
+        }
 
         var entryType: EntryType? {
             switch self {
@@ -144,7 +154,7 @@ struct HomeView: View {
         if results.isEmpty {
             if searched?.text == trimmedQuery, searched?.scope == scope {
                 if trimmedQuery.isEmpty {
-                    ContentUnavailableView("没有\(scope.title)", systemImage: "magnifyingglass")
+                    ContentUnavailableView(scope.emptyTitle, systemImage: "magnifyingglass")
                 } else {
                     ContentUnavailableView.search(text: trimmedQuery)
                 }
@@ -232,9 +242,9 @@ struct HomeView: View {
 
     private var pendingTitle: String {
         var parts: [String] = []
-        if store.uncategorizedCount > 0 { parts.append("\(store.uncategorizedCount) 笔待分类") }
-        if store.pendingCount > 0 { parts.append("\(store.pendingCount) 条通知待处理") }
-        return parts.joined(separator: "，")
+        if store.uncategorizedCount > 0 { parts.append(L("\(store.uncategorizedCount) 笔待分类")) }
+        if store.pendingCount > 0 { parts.append(L("\(store.pendingCount) 条通知待处理")) }
+        return parts.joined(separator: L("，"))
     }
 
     private var pendingBanner: some View {

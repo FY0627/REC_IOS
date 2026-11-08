@@ -10,9 +10,9 @@ enum AppearanceMode: String, CaseIterable, Identifiable {
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .system: "跟随系统"
-        case .light: "浅色"
-        case .dark: "深色"
+        case .system: L("跟随系统")
+        case .light: L("浅色")
+        case .dark: L("深色")
         }
     }
     var colorScheme: ColorScheme? {
@@ -68,13 +68,22 @@ struct BookkeepingApp: App {
     @AppStorage("appearance") private var appearance = AppearanceMode.system.rawValue
     @AppStorage(ThemeColor.key) private var themeColor = ThemeColor.blue.rawValue
     @AppStorage(ExchangeRateStore.primaryKey) private var primaryCurrency = "CNY"
+    /// 换了语言整个界面按新语言重建（`AppLanguage`）；停在哪个标签放在外面，重建后还在这个标签
+    @AppStorage(AppLanguage.key) private var language = AppLanguage.system.rawValue
+    @State private var tab: AppTab = .home
     @Environment(\.scenePhase) private var scenePhase
+
+    init() {
+        AppLanguage.prepare()
+    }
 
     private var appearanceMode: AppearanceMode { AppearanceMode(rawValue: appearance) ?? .system }
 
     var body: some Scene {
         WindowGroup {
-            RootView()
+            RootView(tab: $tab)
+                .id(language)
+                .environment(\.locale, AppLanguage.locale)
                 .environment(store)
                 .environment(rates)
                 .preferredColorScheme(appearanceMode.colorScheme)

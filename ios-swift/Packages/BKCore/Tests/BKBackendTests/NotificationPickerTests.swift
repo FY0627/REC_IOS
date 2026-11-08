@@ -62,4 +62,21 @@ final class NotificationPickerTests: XCTestCase {
         XCTAssertEqual(NotificationPicker(json: picker.json), picker)
         XCTAssertNil(NotificationPicker(json: "不是 JSON"))
     }
+
+    /// 换语言：分类名称和固定的字都换，写进通知再读出来还是换过的；以前没有 `labels` 的通知按简体中文
+    func testLocalizedLabelsSurviveJSON() {
+        let names = ["饮食": "Food", "早餐": "Breakfast", "午餐": "Lunch", "晚餐": "Dinner", "饮料零食": "Snacks", "衣着": "Clothing"]
+        let labels = NotificationPicker.Labels(only: "Just %@", moreParents: "More", back: "Back", more: "Next", openApp: "Open App")
+        let picker = NotificationPicker(first: nil, groups: [food] + others).localized(name: { names[$0] ?? $0 }, labels: labels)
+        let decoded = try! XCTUnwrap(NotificationPicker(json: picker.json))
+        XCTAssertEqual(decoded.parentButtons(page: 0).map(decoded.title), ["Food", "Clothing", "居住", "More"])
+        let children = try! XCTUnwrap(decoded.buttons(after: "open.ex.food"))
+        XCTAssertEqual(children.map(decoded.title), ["Breakfast", "Lunch", "Dinner", "Next"])
+        let last = try! XCTUnwrap(decoded.buttons(after: NotificationPicker.identifier(children[3])))
+        XCTAssertEqual(last.map(decoded.title), ["Snacks", "Just Food", "Back"])
+
+        let old = try! XCTUnwrap(NotificationPicker(json: #"{"groups":[]}"#))
+        XCTAssertNil(old.labels)
+        XCTAssertEqual(old.title(.app), "打开 App")
+    }
 }

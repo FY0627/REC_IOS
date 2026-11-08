@@ -19,8 +19,8 @@ final class AppServices: Sendable {
 
         var errorDescription: String? {
             switch self {
-            case .protectedDataUnavailable: "设备自开机后尚未解锁，账本暂时无法读写。解锁一次后会恢复。"
-            case .failed(let message): "无法打开本地账本：\(message)"
+            case .protectedDataUnavailable: L("设备自开机后尚未解锁，账本暂时无法读写。解锁一次后会恢复。")
+            case .failed(let message): L("无法打开本地账本：\(message)")
             }
         }
     }

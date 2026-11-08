@@ -49,7 +49,7 @@ struct PendingView: View {
                         }
                     }
                 } header: {
-                    Text(account.map { "\($0.displayTitle) 的通知" } ?? "通知待处理")
+                    Text(account.map { L("\($0.localizedTitle) 的通知") } ?? L("通知待处理"))
                 }
             }
             .navigationTitle(account == nil ? "待处理" : "待处理账单")
@@ -99,7 +99,7 @@ struct PendingView: View {
             try await action()
             errorText = nil
         } catch {
-            errorText = "操作失败：\(error)"
+            errorText = L("操作失败：\(error.localizedDescription)")
         }
         await reload()
     }
@@ -121,7 +121,7 @@ private struct UncategorizedRow: View {
         HStack(alignment: .firstTextBaseline) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(row.title).font(.headline).foregroundStyle(Color.primary).lineLimit(1)
-                Text("\(Fmt.dateTime(row.record.effectiveAt)) · \(row.account.text)").font(.subheadline).foregroundStyle(Color.secondary).lineLimit(1)
+                Text("\(Fmt.dateTime(row.record.effectiveAt)) · \(row.account.localizedText)").font(.subheadline).foregroundStyle(Color.secondary).lineLimit(1)
             }
             Spacer()
             Text(row.amountText(inAccount: false))
@@ -264,7 +264,7 @@ struct CategorizeForm: View {
             try await action()
             dismiss()
         } catch {
-            errorText = "保存失败：\(error.localizedDescription)"
+            errorText = L("保存失败：\(error.localizedDescription)")
         }
     }
 }
@@ -279,9 +279,9 @@ private struct PendingItemCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text(item.reason.displayName).font(.subheadline.weight(.semibold))
+                Text(item.reason.displayName.loc).font(.subheadline.weight(.semibold))
                 Spacer()
-                Text("\(item.source.displayName) · \(Fmt.dateTime(item.receivedAt ?? item.createdAt))").font(.caption).foregroundStyle(.secondary)
+                Text("\(item.source.displayName.loc) · \(Fmt.dateTime(item.receivedAt ?? item.createdAt))").font(.caption).foregroundStyle(.secondary)
             }
             if let draft = item.draft {
                 Text(draftSummary(draft)).font(.footnote)
@@ -308,7 +308,7 @@ private struct PendingItemCard: View {
                 // 通知里没认出尾号，或尾号对不上任何卡：选一张卡记入
                 Menu {
                     ForEach(accounts) { account in
-                        Button(account.displayTitle) { Task { await confirm(account.id) } }
+                        Button(account.localizedTitle) { Task { await confirm(account.id) } }
                     }
                 } label: {
                     Label("选择账户记入", systemImage: "creditcard")
@@ -319,7 +319,7 @@ private struct PendingItemCard: View {
                     Button {
                         Task { await confirm(account.id) }
                     } label: {
-                        Label(item.reason == .possibleDuplicate ? "不是重复，记入 \(account.displayTitle)" : "记入 \(account.displayTitle)", systemImage: "checkmark.circle")
+                        Label(item.reason == .possibleDuplicate ? "不是重复，记入 \(account.localizedTitle)" : "记入 \(account.localizedTitle)", systemImage: "checkmark.circle")
                     }
                     .buttonStyle(.borderless)
                 }
@@ -351,12 +351,12 @@ private struct PendingItemCard: View {
     private func draftSummary(_ d: EventDraft) -> String {
         var parts: [String] = []
         let currency = d.amount.preferredCurrency?.rawValue ?? d.amount.currencyCandidates.map(\.rawValue).joined(separator: "/")
-        parts.append("\(d.direction?.displayName ?? "方向未知") \(currency.isEmpty ? "" : currency + " ")\(d.amount.digits)")
-        parts.append(d.kind.displayName)
-        if let s = d.settlement { parts.append("实际扣款 \(s.preferredCurrency?.rawValue ?? "") \(s.digits)") }
-        if let tail = d.cardTail { parts.append("尾号 \(tail)") }
+        parts.append("\(d.direction?.displayName.loc ?? L("方向未知")) \(currency.isEmpty ? "" : currency + " ")\(d.amount.digits)")
+        parts.append(d.kind.displayName.loc)
+        if let s = d.settlement { parts.append(L("实际扣款 \(s.preferredCurrency?.rawValue ?? "") \(s.digits)")) }
+        if let tail = d.cardTail { parts.append(L("尾号 \(tail)")) }
         if let c = d.counterparty { parts.append(c) }
-        if let t = d.transactionTime { parts.append(t.displayText) }
+        if let t = d.transactionTime { parts.append(Fmt.wallClock(t)) }
         return parts.joined(separator: " · ")
     }
 }

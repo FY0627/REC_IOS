@@ -19,14 +19,14 @@ extension RecordRow {
         let note = record.note.trimmingCharacters(in: .whitespacesAndNewlines)
         if !note.isEmpty { return note }
         if let counterparty = record.counterparty, !counterparty.isEmpty { return counterparty }
-        if let category { return category.name }
-        return record.isRefund ? "退款" : entryType.displayName
+        if let category { return category.localizedName }
+        return record.isRefund ? L("退款") : entryType.displayName.loc
     }
 
     /// 分类那一段文字：小类写「饮食 · 午餐」，没有分类写「待分类」
     var categoryText: String {
-        if let category { return category.fullName }
-        return isUncategorized ? "待分类" : entryType.displayName
+        if let category { return category.localizedFullName }
+        return isUncategorized ? L("待分类") : entryType.displayName.loc
     }
 
     var symbol: String {
@@ -71,24 +71,26 @@ extension RecordRow {
         guard let peer, entryType == .transfer else { return nil }
         if isExchange, let peerMoney {
             let (from, to) = record.direction == .outflow ? (record.currency, peerMoney.currency) : (peerMoney.currency, record.currency)
-            return "\(account.text) \(from.chineseName) → \(to.chineseName)"
+            return "\(account.localizedText) \(from.localizedName) → \(to.localizedName)"
         }
-        return record.direction == .outflow ? "\(account.text) → \(peer.text)" : "\(peer.text) → \(account.text)"
+        return record.direction == .outflow ? "\(account.localizedText) → \(peer.localizedText)" : "\(peer.localizedText) → \(account.localizedText)"
     }
 
     /// 卡片详情里写另一边：「转到 工商银行 ·6621」；同一个账户换汇写「换成人民币」
     var transferSideText: String? {
         guard let peer, entryType == .transfer else { return nil }
         if isExchange, let peerMoney {
-            return record.direction == .outflow ? "换成\(peerMoney.currency.chineseName)" : "由\(peerMoney.currency.chineseName)换入"
+            let name = peerMoney.currency.localizedName
+            return record.direction == .outflow ? L("换成\(name)") : L("由\(name)换入")
         }
-        return record.direction == .outflow ? "转到 \(peer.text)" : "来自 \(peer.text)"
+        let name = peer.localizedText
+        return record.direction == .outflow ? L("转到 \(name)") : L("来自 \(name)")
     }
 
     /// 合成一单的几张卡：「招商银行 ¥700.00 + 中国银行 ¥300.00」
     var orderText: String? {
         guard orderParts.count > 1 else { return nil }
-        return orderParts.map { "\($0.account.cardType.isCard ? $0.account.bankName : $0.account.name) \(Fmt.money($0.amountMinor, $0.currency))" }
+        return orderParts.map { "\($0.account.shortName) \(Fmt.money($0.amountMinor, $0.currency))" }
             .joined(separator: " + ")
     }
 }
@@ -96,7 +98,8 @@ extension RecordRow {
 extension Account {
     /// 读屏用：「招商银行 借记卡 尾号0427」「现金」
     var spokenTitle: String {
-        isCard ? "\(bankName) \(cardType.displayName) 尾号\(last4)" : "\(name) \(cardType.displayName)"
+        let type = cardType.displayName.loc
+        return isCard ? L("\(localizedBankName) \(type) 尾号\(last4)") : "\(name.loc) \(type)"
     }
 }
 

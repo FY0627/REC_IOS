@@ -89,7 +89,7 @@ final class WalletController: UIViewController, UIScrollViewDelegate, UIGestureR
     private let cardsView = UIView()
     private let topBar = WalletTopBar()
     /// 「资产」：在卡包的滚动区里，和「我的」「统计」的标题是同一个视图
-    private let titleBar = TitleBarView(title: "资产", menuCount: 0)
+    private let titleBar = TitleBarView(title: L("资产"), menuCount: 0)
     private var headerHost: UIHostingController<WalletHeader>!
     private var archivedTitleHost: UIHostingController<ArchivedPileTitle>!
     private var stackTap: UITapGestureRecognizer!
@@ -253,10 +253,10 @@ final class WalletController: UIViewController, UIScrollViewDelegate, UIGestureR
     /// 卡面上的余额：卡包里换算成「我的」主要币种（多币种的卡是合计）；打开的那张卡显示详情里正在看的币种，默认账户主币种（ADR 0018）
     private func cardBalance(_ account: Account) -> CardBalance {
         guard let selectedIndex, accounts.indices.contains(selectedIndex), accounts[selectedIndex].id == account.id else {
-            return CardBalance(text: balanceTexts[account.id] ?? "余额未知", currency: nil)
+            return CardBalance(text: balanceTexts[account.id] ?? L("余额未知"), currency: nil)
         }
         let currency = detailModel.currency ?? account.currency
-        let text = store.balances[account.id]?.item(currency)?.cardText ?? "余额未知"
+        let text = store.balances[account.id]?.item(currency)?.cardText ?? L("余额未知")
         return CardBalance(text: text, currency: account.isMultiCurrency ? currency : nil)
     }
 
@@ -579,7 +579,7 @@ final class WalletController: UIViewController, UIScrollViewDelegate, UIGestureR
         let presets: [UIMenuElement] = RecordPeriod.presets.map { period in
             UIAction(title: period.title, state: period == current ? .on : .off) { [weak self] _ in self?.setPeriod(period) }
         }
-        let custom = UIAction(title: current.isCustom ? current.title : "自定义…", state: current.isCustom ? .on : .off) { [weak self] _ in
+        let custom = UIAction(title: current.isCustom ? current.title : L("自定义…"), state: current.isCustom ? .on : .off) { [weak self] _ in
             self?.actions.chooseCustomPeriod()
         }
         return presets + [UIMenu(options: .displayInline, children: [custom])]
@@ -589,9 +589,9 @@ final class WalletController: UIViewController, UIScrollViewDelegate, UIGestureR
     private func moreMenuItems() -> [UIMenuElement] {
         let pending = detailModel.pendingCount
         return [
-            UIAction(title: "卡片信息", image: UIImage(systemName: "creditcard")) { [weak self] _ in self?.actions.openInfo() },
-            UIAction(title: "编辑卡面", image: UIImage(systemName: "paintbrush")) { [weak self] _ in self?.actions.openFace() },
-            UIAction(title: pending > 0 ? "待处理账单（\(pending)）" : "待处理账单", image: UIImage(systemName: "tray")) { [weak self] _ in
+            UIAction(title: L("卡片信息"), image: UIImage(systemName: "creditcard")) { [weak self] _ in self?.actions.openInfo() },
+            UIAction(title: L("编辑卡面"), image: UIImage(systemName: "paintbrush")) { [weak self] _ in self?.actions.openFace() },
+            UIAction(title: pending > 0 ? L("待处理账单（\(pending)）") : L("待处理账单"), image: UIImage(systemName: "tray")) { [weak self] _ in
                 self?.actions.openPending()
             },
         ]
@@ -783,8 +783,8 @@ final class WalletController: UIViewController, UIScrollViewDelegate, UIGestureR
                 width: width,
                 height: last ? layout.cardHeight : layout.peek
             )
-            element.accessibilityLabel = "\(account.spokenTitle)，\(cardBalance(account).text)"
-            element.accessibilityHint = account.archived ? "已停用，打开账户详情" : "打开账户详情"
+            element.accessibilityLabel = L("\(account.spokenTitle)，\(cardBalance(account).text)")
+            element.accessibilityHint = account.archived ? L("已停用，打开账户详情") : L("打开账户详情")
             element.accessibilityTraits = .button
             element.activate = { [weak self] in self?.openCard(index) }
             return element
@@ -850,11 +850,14 @@ private struct CardFace: View {
     let balance: CardBalance
 
     var body: some View {
-        if account.archived {
-            WalletCardView(account: account, balanceText: balance.text, currency: balance.currency).grayscale(1)
-        } else {
-            WalletCardView(account: account, balanceText: balance.text, currency: balance.currency)
+        Group {
+            if account.archived {
+                WalletCardView(account: account, balanceText: balance.text, currency: balance.currency).grayscale(1)
+            } else {
+                WalletCardView(account: account, balanceText: balance.text, currency: balance.currency)
+            }
         }
+        .appLocale()
     }
 }
 

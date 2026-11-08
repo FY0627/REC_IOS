@@ -132,25 +132,25 @@ struct StatsView: View {
 
     private var scopeTitle: String {
         switch current {
-        case .all: "全部账户"
-        case .account(let id): store.account(id: id)?.displayTitle ?? "全部账户"
-        case .currency(let code): code.chineseName
+        case .all: L("全部账户")
+        case .account(let id): store.account(id: id)?.localizedTitle ?? L("全部账户")
+        case .currency(let code): code.localizedName
         }
     }
 
     /// 看哪些数据的菜单：全部账户，另起两组「账户」「币种」
     private func scopeMenu() -> [UIMenuElement] {
         let selected = current
-        let all = UIAction(title: "全部账户", state: selected == .all ? .on : .off) { _ in scope = .all }
+        let all = UIAction(title: L("全部账户"), state: selected == .all ? .on : .off) { _ in scope = .all }
         let accounts = (store.accounts + store.archivedAccounts).map { account in
-            UIAction(title: account.displayTitle, state: selected == .account(account.id) ? .on : .off) { _ in scope = .account(account.id) }
+            UIAction(title: account.localizedTitle, state: selected == .account(account.id) ? .on : .off) { _ in scope = .account(account.id) }
         }
         let currencies = menuCurrencies.map { code in
-            UIAction(title: code.chineseName, state: selected == .currency(code) ? .on : .off) { _ in scope = .currency(code) }
+            UIAction(title: code.localizedName, state: selected == .currency(code) ? .on : .off) { _ in scope = .currency(code) }
         }
         var items: [UIMenuElement] = [all]
-        if !accounts.isEmpty { items.append(UIMenu(title: "账户", options: .displayInline, children: accounts)) }
-        items.append(UIMenu(title: "币种", options: .displayInline, children: currencies))
+        if !accounts.isEmpty { items.append(UIMenu(title: L("账户"), options: .displayInline, children: accounts)) }
+        items.append(UIMenu(title: L("币种"), options: .displayInline, children: currencies))
         return items
     }
 
@@ -166,7 +166,7 @@ struct StatsView: View {
         let presets: [UIMenuElement] = RecordPeriod.presets.map { option in
             UIAction(title: option.title, state: option == period ? .on : .off) { _ in period = option }
         }
-        let custom = UIAction(title: period.isCustom ? period.title : "自定义…", state: period.isCustom ? .on : .off) { _ in
+        let custom = UIAction(title: period.isCustom ? period.title : L("自定义…"), state: period.isCustom ? .on : .off) { _ in
             choosingCustom = true
         }
         return presets + [UIMenu(options: .displayInline, children: [custom])]
@@ -192,7 +192,7 @@ struct StatsView: View {
             Section {
                 ConvertedTotalsView(total: total)
             } header: {
-                Text("\(period.title) · 合计（\(currency.chineseName)）")
+                Text("\(period.title) · 合计（\(currency.localizedName)）")
             }
             if let total {
                 categorySections(Breakdown(
@@ -217,7 +217,7 @@ struct StatsView: View {
                 LabeledContent("转帐（不算收支）", value: Fmt.money(t.transferMinor, t.currency))
             }
         } header: {
-            Text("\(period.title) · \(t.currency.chineseName)")
+            Text("\(period.title) · \(t.currency.localizedName)")
         }
         categorySections(Breakdown(
             currency: t.currency, expense: t.expenseCategories, income: t.incomeCategories,
@@ -277,7 +277,7 @@ private struct CategoryTotalRow: View {
             CategoryIcon(symbol: item.symbol)
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
-                    Text(item.name).lineLimit(1)
+                    Text(item.name.loc).lineLimit(1)
                     if total > 0, item.amountMinor > 0 {
                         Text(percent).font(.footnote).foregroundStyle(.secondary).monospacedDigit()
                     }
@@ -320,7 +320,7 @@ private struct CategoryStatsView: View {
         List {
             Section {
                 LabeledContent("合计", value: Fmt.money(item.amountMinor, currency))
-                LabeledContent("笔数", value: "\(item.count) 笔")
+                LabeledContent("笔数", value: L("\(item.count) 笔"))
             }
             if item.children.count > 1 || (item.children.first.map { $0.categoryID != item.categoryID } ?? false) {
                 Section("小类") {
@@ -328,7 +328,7 @@ private struct CategoryStatsView: View {
                     ForEach(item.children) { child in
                         CategoryTotalRow(
                             item: child.categoryID == item.categoryID ? MonthStats.CategoryTotal(
-                                categoryID: child.categoryID, name: "不细分", symbol: child.symbol, amountMinor: child.amountMinor, count: child.count
+                                categoryID: child.categoryID, name: L("不细分"), symbol: child.symbol, amountMinor: child.amountMinor, count: child.count
                             ) : child,
                             currency: currency, maxAmount: maxAmount, total: item.amountMinor
                         )
@@ -346,7 +346,7 @@ private struct CategoryStatsView: View {
                 }
             }
         }
-        .navigationTitle(item.name)
+        .navigationTitle(item.name.loc)
         .navigationBarTitleDisplayMode(.inline)
         .recordSwipeHost($swipe)
         .task(id: store.revision) {

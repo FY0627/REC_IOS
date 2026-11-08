@@ -24,9 +24,9 @@ struct RecordRowView: View {
                 HStack(spacing: 6) {
                     Text(row.title)
                         .font(.body.weight(.medium)).foregroundStyle(.primary).lineLimit(1)
-                    if r.status != .posted { badge(r.status.displayName) }
+                    if r.status != .posted { badge(r.status.displayName.loc) }
                     if r.isRefund { badge("退款") }
-                    if r.categoryAuto { badge("自动") }
+                    if r.categoryAuto { badge("自动（归类）") }
                     if row.needsCategory { badge("待分类", tinted: true) }
                 }
                 Text(subtitle)
@@ -65,7 +65,7 @@ struct RecordRowView: View {
         let r = row.record
         var parts = [timeOnly ? Fmt.recordClock(r) : Fmt.recordTime(r)]
         // 待分类的标在标题旁边，这里不再写
-        if !row.needsCategory, row.title != row.category?.name || row.category == nil { parts.append(row.categoryText) }
+        if !row.needsCategory, row.title != row.category?.localizedName || row.category == nil { parts.append(row.categoryText) }
         if inAccount {
             if let side = row.transferSideText { parts.append(side) }
         } else if let order = row.orderText {
@@ -73,7 +73,7 @@ struct RecordRowView: View {
         } else if let route = row.transferRoute {
             parts.append(route)
         } else {
-            parts.append(row.account.text)
+            parts.append(row.account.localizedText)
         }
         return parts.joined(separator: " · ")
     }
@@ -81,14 +81,14 @@ struct RecordRowView: View {
     /// 金额下面的小字：外币按主币种扣了多少、同一条通知的手续费、已退款
     private var trailingDetail: String? {
         if let charge = row.charge { return Fmt.charge(charge) }
-        if let fee = row.feeMinor { return "手续费 " + Fmt.money(fee, row.record.currency) }
-        if let refunded = row.refundedMinor, refunded > 0 { return "已退 " + Fmt.money(refunded, row.record.currency) }
+        if let fee = row.feeMinor { return L("手续费 \(Fmt.money(fee, row.record.currency))") }
+        if let refunded = row.refundedMinor, refunded > 0 { return L("已退 \(Fmt.money(refunded, row.record.currency))") }
         return nil
     }
 
     /// `tinted`：用主题色，要用户处理的（待分类）
     private func badge(_ text: String, tinted: Bool = false) -> some View {
-        Text(text)
+        Text(text.loc)
             .font(.caption2.weight(.semibold))
             .foregroundStyle(tinted ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
             .padding(.horizontal, 6).padding(.vertical, 2)
@@ -186,11 +186,11 @@ struct RecordDetailView: View {
                 if let charge = row.charge {
                     chargeRow(charge, record: r)
                 }
-                LabeledContent("类型", value: r.isRefund ? "支出（退款，从支出里减掉）" : row.entryType.displayName)
+                LabeledContent("类型", value: r.isRefund ? L("支出（退款，从支出里减掉）") : row.entryType.displayName.loc)
                 // 只显示；改分类在右上角「编辑」里
                 if row.entryType != .transfer {
                     LabeledContent("分类") {
-                        Text(r.categoryAuto ? "\(row.categoryText)（自动归类）" : row.categoryText)
+                        Text(r.categoryAuto ? L("\(row.categoryText)（自动归类）") : row.categoryText)
                             .foregroundStyle(row.isUncategorized ? AppTheme.debt : Color.secondary)
                     }
                 }
@@ -207,7 +207,7 @@ struct RecordDetailView: View {
                 if let route = row.transferRoute {
                     LabeledContent("转帐", value: route)
                 } else {
-                    LabeledContent("账户", value: row.account.text)
+                    LabeledContent("账户", value: row.account.localizedText)
                 }
                 // 到账和转出不一样（手续费、换汇）时写出另一边
                 if let other = row.peerMoney, other != r.money {
@@ -265,12 +265,12 @@ struct RecordDetailView: View {
 
             Section {
                 DisclosureGroup("更多信息", isExpanded: $showMore) {
-                    LabeledContent("方向", value: r.direction.displayName)
-                    LabeledContent("交易性质", value: r.kind.displayName)
-                    LabeledContent("状态", value: r.status.displayName)
-                    LabeledContent("来源", value: Set(detail.evidence.map(\.source)).map(\.displayName).sorted().joined(separator: " + "))
-                    LabeledContent("交易时间（通知内）", value: r.transactionTime?.displayText ?? "通知未写明")
-                    LabeledContent("接收时间（系统）", value: r.receivedAt.map { Fmt.dateTime($0) } ?? "系统未提供")
+                    LabeledContent("方向", value: r.direction.displayName.loc)
+                    LabeledContent("交易性质", value: r.kind.displayName.loc)
+                    LabeledContent("状态", value: r.status.displayName.loc)
+                    LabeledContent("来源", value: Set(detail.evidence.map(\.source)).map(\.displayName.loc).sorted().joined(separator: " + "))
+                    LabeledContent("交易时间（通知内）", value: r.transactionTime.map(Fmt.wallClock) ?? L("通知未写明"))
+                    LabeledContent("接收时间（系统）", value: r.receivedAt.map { Fmt.dateTime($0) } ?? L("系统未提供"))
                     LabeledContent("处理时间", value: Fmt.dateTime(r.processedAt))
                     if let ref = r.bankReference { LabeledContent("交易标识", value: ref) }
                     if let balance = r.balanceAfterMinor { LabeledContent("通知中的余额", value: Fmt.money(balance, r.currency)) }
@@ -278,8 +278,8 @@ struct RecordDetailView: View {
                     ForEach(detail.evidence, id: \.ingestID) { e in
                         if e.source != .manual {
                             VStack(alignment: .leading, spacing: 4) {
-                                Text("\(e.source.displayName) · \(Fmt.dateTime(e.processedAt))").font(.caption).foregroundStyle(.secondary)
-                                Text(e.rawText ?? "原文已按保留期限清理").font(.footnote).textSelection(.enabled)
+                                Text("\(e.source.displayName.loc) · \(Fmt.dateTime(e.processedAt))").font(.caption).foregroundStyle(.secondary)
+                                Text(e.rawText ?? L("原文已按保留期限清理")).font(.footnote).textSelection(.enabled)
                             }
                         }
                     }
@@ -309,17 +309,18 @@ struct RecordDetailView: View {
     /// 换成账户的另一个币种扣（卡里没有这个币种，或者这个币种不够，ADR 0018）：扣了多少（估算的写明用哪天的汇率）
     private func chargeRow(_ charge: RecordCharge, record: LedgerRecord) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            LabeledContent(record.direction == .inflow ? "存入\(charge.currency.chineseName)" : "从\(charge.currency.chineseName)扣款") {
-                Text(charge.amountMinor.map { Fmt.money($0, charge.currency) } ?? "还没有汇率").monospacedDigit()
+            let name = charge.currency.localizedName
+            LabeledContent(record.direction == .inflow ? L("存入\(name)") : L("从\(name)扣款")) {
+                Text(charge.amountMinor.map { Fmt.money($0, charge.currency) } ?? L("还没有汇率")).monospacedDigit()
             }
             Text(chargeNote(charge)).font(.footnote).foregroundStyle(.secondary)
         }
     }
 
     private func chargeNote(_ charge: RecordCharge) -> String {
-        if charge.isActual { return "你填写的实际金额" }
-        guard let day = charge.rateDay else { return "导入汇率后按交易当天的汇率估算，可以在编辑里改成实际金额" }
-        return "按 \(Fmt.rateDay(day)) 的汇率估算，可以在编辑里改成实际金额"
+        if charge.isActual { return L("你填写的实际金额") }
+        guard let day = charge.rateDay else { return L("导入汇率后按交易当天的汇率估算，可以在编辑里改成实际金额") }
+        return L("按 \(Fmt.rateDay(day)) 的汇率估算，可以在编辑里改成实际金额")
     }
 
     private func reload() async {
@@ -335,7 +336,7 @@ struct RecordDetailView: View {
             self.detail?.row.record.note = note
             saveError = nil
         } catch {
-            saveError = "备注保存失败：\(error.localizedDescription)"
+            saveError = L("备注保存失败：\(error.localizedDescription)")
         }
     }
 
@@ -345,7 +346,7 @@ struct RecordDetailView: View {
             await reload()
             saveError = nil
         } catch {
-            saveError = "拆开失败：\(error.localizedDescription)"
+            saveError = L("拆开失败：\(error.localizedDescription)")
         }
     }
 
@@ -355,7 +356,7 @@ struct RecordDetailView: View {
             await reload()
             saveError = nil
         } catch {
-            saveError = "保存失败：\(error.localizedDescription)"
+            saveError = L("保存失败：\(error.localizedDescription)")
         }
     }
 
@@ -365,14 +366,14 @@ struct RecordDetailView: View {
             deleted = true
             dismiss()
         } catch {
-            saveError = "删除失败：\(error.localizedDescription)"
+            saveError = L("删除失败：\(error.localizedDescription)")
         }
     }
 }
 
 /// 详情里的操作按钮：只有文字，靠左；整行都能点
 struct ActionLabel: View {
-    let title: String
+    let title: LocalizedStringKey
 
     var body: some View {
         Text(title)
@@ -458,7 +459,7 @@ struct OrderSplitView: View {
             try await store.splitOrder(recordIDs: Array(chosen))
             dismiss()
         } catch {
-            errorText = "拆开失败：\(error.localizedDescription)"
+            errorText = L("拆开失败：\(error.localizedDescription)")
         }
     }
 }
@@ -502,7 +503,7 @@ struct OrderMergeView: View {
                     ForEach(candidates) { candidate in
                         OrderPickRow(
                             row: candidate, chosen: chosen.contains(candidate.id),
-                            hint: mode == .order && LedgerBackend.likelySameOrder(row.record, candidate.record) ? "可能是同一单" : nil
+                            hint: mode == .order && LedgerBackend.likelySameOrder(row.record, candidate.record) ? L("可能是同一单") : nil
                         ) { toggle(candidate.id) }
                     }
                 }
@@ -555,7 +556,7 @@ struct OrderMergeView: View {
             }
             dismiss()
         } catch {
-            errorText = "合并失败：\(error.localizedDescription)"
+            errorText = L("合并失败：\(error.localizedDescription)")
         }
     }
 }

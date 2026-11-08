@@ -66,10 +66,10 @@ final class HomeTopBarView: UIView, UITextFieldDelegate {
     private let circleGlass = GlassControls.capsule(GlassControls.glass(interactive: false))
     /// 搜索左边的「+」：搜索时并进右边的圆，停稳后去掉玻璃效果（叠在圆下面）
     private let addGlass = GlassControls.capsule(GlassControls.glass())
-    private let addButton = GlassControls.iconButton("plus", label: "记一笔")
-    private let searchButton = GlassControls.iconButton("magnifyingglass", label: "搜索流水")
-    private let closeButton = GlassControls.iconButton("xmark", label: "关闭搜索")
-    private let scopeButton = UIButton(configuration: GlassControls.pillConfiguration("全部"))
+    private let addButton = GlassControls.iconButton("plus", label: L("记一笔"))
+    private let searchButton = GlassControls.iconButton("magnifyingglass", label: L("搜索流水"))
+    private let closeButton = GlassControls.iconButton("xmark", label: L("关闭搜索"))
+    private let scopeButton = UIButton(configuration: GlassControls.pillConfiguration(L("全部")))
     private let fieldIcon = UIImageView(image: UIImage(
         systemName: "magnifyingglass",
         withConfiguration: UIImage.SymbolConfiguration(pointSize: 17, weight: .medium)
@@ -77,7 +77,7 @@ final class HomeTopBarView: UIView, UITextFieldDelegate {
     private let textField = UITextField()
 
     private(set) var isSearching = false
-    private var scopeTitle = "全部"
+    private var scopeTitle = L("全部")
     /// 上一次展开开始的时间：还没停稳时合上要从半路接着走
     private var lastMorph: CFTimeInterval = 0
 
@@ -89,7 +89,7 @@ final class HomeTopBarView: UIView, UITextFieldDelegate {
         let metrics = UIFontMetrics(forTextStyle: .largeTitle)
         titleLabel.font = metrics.scaledFont(for: UIFont.systemFont(ofSize: 34, weight: .bold))
         titleLabel.adjustsFontForContentSizeCategory = true
-        titleLabel.text = "首页"
+        titleLabel.text = L("首页")
         titleLabel.textColor = .label
         titleLabel.accessibilityTraits = .header
         addSubview(titleLabel)
@@ -116,9 +116,9 @@ final class HomeTopBarView: UIView, UITextFieldDelegate {
         closeButton.addAction(UIAction { [weak self] _ in self?.setSearching(false) }, for: .primaryActionTriggered)
         scopeButton.showsMenuAsPrimaryAction = true
         scopeButton.menu = GlassControls.deferredMenu { [weak self] in self?.scopeMenu() ?? [] }
-        scopeButton.accessibilityLabel = "范围"
+        scopeButton.accessibilityLabel = L("范围")
 
-        textField.placeholder = "商户、备注、金额、尾号"
+        textField.placeholder = L("商户、备注、金额、尾号")
         textField.font = UIFont.preferredFont(forTextStyle: .body)
         textField.adjustsFontForContentSizeCategory = true
         textField.textColor = .label

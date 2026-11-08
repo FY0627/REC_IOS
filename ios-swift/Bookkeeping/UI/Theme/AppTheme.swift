@@ -14,18 +14,18 @@ enum ThemeColor: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .blue: "蓝色"
-        case .indigo: "靛蓝"
-        case .purple: "紫色"
-        case .pink: "粉色"
-        case .red: "红色"
-        case .orange: "橙色"
-        case .green: "绿色"
-        case .mint: "薄荷"
-        case .teal: "水鸭"
-        case .cyan: "青色"
-        case .brown: "棕色"
-        case .graphite: "石墨"
+        case .blue: L("蓝色")
+        case .indigo: L("靛蓝")
+        case .purple: L("紫色")
+        case .pink: L("粉色")
+        case .red: L("红色")
+        case .orange: L("橙色")
+        case .green: L("绿色")
+        case .mint: L("薄荷")
+        case .teal: L("水鸭")
+        case .cyan: L("青色")
+        case .brown: L("棕色")
+        case .graphite: L("石墨")
         }
     }
 
@@ -57,7 +57,7 @@ enum ThemeColor: String, CaseIterable, Identifiable {
 
     static func color(stored: String) -> Color { Color(uiColor: uiColor(stored: stored)) }
 
-    static func title(stored: String) -> String { ThemeColor(rawValue: stored)?.title ?? "自定义" }
+    static func title(stored: String) -> String { ThemeColor(rawValue: stored)?.title ?? L("自定义") }
 
     static func stored(custom color: Color) -> String { String(format: "#%06X", color.hex) }
 

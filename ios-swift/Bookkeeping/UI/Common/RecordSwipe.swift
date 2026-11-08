@@ -17,7 +17,7 @@ struct RecordSwipeState {
 extension RecordRow {
     /// 删除确认菜单上的说明
     var deleteWarning: String {
-        record.transferGroupID == nil ? "删除后不能恢复" : "只删除这一边，另一边的账户还留着这笔。删除后不能恢复"
+        record.transferGroupID == nil ? L("删除后不能恢复") : L("只删除这一边，另一边的账户还留着这笔。删除后不能恢复")
     }
 }
 
@@ -43,7 +43,7 @@ final class RecordDeleteMenuButton: UIButton {
         button.showsMenuAsPrimaryAction = true
         button.menu = UIMenu(children: [
             UIMenu(title: row.deleteWarning, options: .displayInline, children: [
-                UIAction(title: "删除这笔流水", image: UIImage(systemName: "trash"), attributes: .destructive) { _ in onDelete() }
+                UIAction(title: L("删除这笔流水"), image: UIImage(systemName: "trash"), attributes: .destructive) { _ in onDelete() }
             ])
         ])
         view.addSubview(button)

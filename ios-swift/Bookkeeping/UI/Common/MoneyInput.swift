@@ -89,11 +89,11 @@ struct OpeningBalanceRow: View {
             .buttonStyle(.borderless)
             .fixedSize()
             .accessibilityLabel(input.isDebt ? "欠款" : "余额")
-            TextField(input.placeholder(currency, empty: emptyPlaceholder), text: $input.text)
+            TextField(input.placeholder(currency, empty: emptyPlaceholder.loc), text: $input.text)
                 .keyboardType(.decimalPad)
                 .multilineTextAlignment(.trailing)
                 .font(.body.monospacedDigit())
-                .accessibilityLabel("\(currency.chineseName)\(placeholderTitle)")
+                .accessibilityLabel(currency.localizedName + placeholderTitle.loc)
         }
         if case .invalid = input.value(currency) {
             Text("金额格式不对，例如 1234.56").font(.footnote).foregroundStyle(.red)
@@ -106,9 +106,9 @@ struct InputProblem: Equatable {
     let title: String
     var message = ""
 
-    /// 金额格式不对：「金额填得不对」「实际扣款填得不对」
+    /// 金额格式不对：「金额填得不对」「实际扣款填得不对」。`field` 是简体中文的名称，按选的语言换
     static func amount(_ field: String, _ currency: CurrencyCode) -> InputProblem {
-        InputProblem(title: "\(field)填得不对", message: MoneyInput.invalidAmountMessage(currency))
+        InputProblem(title: L("\(field.loc)填得不对"), message: MoneyInput.invalidAmountMessage(currency))
     }
 }
 
@@ -135,7 +135,7 @@ extension MoneyInput {
     /// 金额填得不对时的提示，按币种写例子
     static func invalidAmountMessage(_ currency: CurrencyCode) -> String {
         currency.minorUnitExponent == 0
-            ? "请填写大于 0 的整数金额，\(currency.chineseName)没有小数，例如 1500"
-            : "请填写大于 0 的金额，例如 38.50"
+            ? L("请填写大于 0 的整数金额，\(currency.localizedName)没有小数，例如 1500")
+            : L("请填写大于 0 的金额，例如 38.50")
     }
 }

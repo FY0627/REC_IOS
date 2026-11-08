@@ -33,7 +33,7 @@ struct CategoryManagerView: View {
             } header: {
                 // 放在分组标题的位置：上下只留一点空隙（单独占一个分组时上下各空一大段）
                 Picker("类型", selection: $type) {
-                    ForEach(CategoryType.allCases, id: \.self) { Text($0.displayName).tag($0) }
+                    ForEach(CategoryType.allCases, id: \.self) { Text($0.displayName.loc).tag($0) }
                 }
                 .pickerStyle(.segmented)
                 .textCase(nil)
@@ -56,7 +56,7 @@ struct CategoryManagerView: View {
             try await action()
             errorText = nil
         } catch {
-            errorText = "操作失败：\(error.localizedDescription)"
+            errorText = L("操作失败：\(error.localizedDescription)")
         }
     }
 }
@@ -68,7 +68,7 @@ private struct CategoryManagerRow: View {
     var body: some View {
         HStack(spacing: 12) {
             CategoryIcon(symbol: category.symbol)
-            Text(category.name).foregroundStyle(category.hidden ? Color.secondary : Color.primary)
+            Text(category.localizedName).foregroundStyle(category.hidden ? Color.secondary : Color.primary)
             Spacer()
             if category.hidden {
                 Text("已隐藏").font(.footnote).foregroundStyle(.secondary)
@@ -162,19 +162,19 @@ private struct CategoryDetailView: View {
                 Section { Text(errorText).foregroundStyle(.red) }
             }
         }
-        .navigationTitle(category.name)
+        .navigationTitle(category.localizedName)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
                 Button("保存", systemImage: "checkmark") {
                     Task { await run { try await store.updateCategory(id: category.id, name: name, symbol: symbol) } }
                 }
-                .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty || (name == category.name && symbol == category.symbol))
+                .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty || (name == category.localizedName && symbol == category.symbol))
             }
         }
         .onAppear {
             guard !loaded else { return }
-            name = category.name
+            name = category.localizedName
             symbol = category.symbol
             loaded = true
         }
@@ -200,8 +200,8 @@ private struct CategoryDetailView: View {
     /// 可以改记到的分类：同一类型，除了它自己和它的小类；小类名称前写上大类
     private func deleteTargets(_ category: LedgerCategory) -> [DeleteTarget] {
         store.categoryTree.nodes(category.type).filter { $0.id != category.id }.flatMap { node in
-            [DeleteTarget(id: node.id, name: node.category.name)]
-                + node.children.filter { $0.id != category.id }.map { DeleteTarget(id: $0.id, name: "\(node.category.name) · \($0.name)") }
+            [DeleteTarget(id: node.id, name: node.category.localizedName)]
+                + node.children.filter { $0.id != category.id }.map { DeleteTarget(id: $0.id, name: "\(node.category.localizedName) · \($0.localizedName)") }
         }
     }
 
@@ -215,7 +215,7 @@ private struct CategoryDetailView: View {
             try await store.deleteCategory(id: category.id, moveRecordsTo: target)
             dismiss()
         } catch {
-            errorText = "删除失败：\(error.localizedDescription)"
+            errorText = L("删除失败：\(error.localizedDescription)")
         }
     }
 
@@ -224,7 +224,7 @@ private struct CategoryDetailView: View {
             try await action()
             errorText = nil
         } catch {
-            errorText = "操作失败：\(error.localizedDescription)"
+            errorText = L("操作失败：\(error.localizedDescription)")
         }
     }
 }
@@ -245,7 +245,7 @@ private struct CategoryTargetList: View {
     var body: some View {
         List {
             if allowNone {
-                Button(noneTitle) {
+                Button(noneTitle.loc) {
                     choose(nil)
                     dismiss()
                 }
@@ -257,7 +257,7 @@ private struct CategoryTargetList: View {
                 }
             }
         }
-        .navigationTitle(title)
+        .navigationTitle(title.loc)
         .navigationBarTitleDisplayMode(.inline)
     }
 
@@ -268,7 +268,7 @@ private struct CategoryTargetList: View {
         } label: {
             HStack(spacing: 12) {
                 CategoryIcon(symbol: category.symbol)
-                Text(category.name).foregroundStyle(Color.primary)
+                Text(category.localizedName).foregroundStyle(Color.primary)
             }
             .padding(.leading, indent ? 28 : 0)
         }
@@ -316,7 +316,7 @@ struct NewCategorySheet: View {
             try await store.addCategory(CategoryDraft(type: type, parentID: parentID, name: name, symbol: symbol))
             dismiss()
         } catch {
-            errorText = "保存失败：\(error.localizedDescription)"
+            errorText = L("保存失败：\(error.localizedDescription)")
         }
     }
 }

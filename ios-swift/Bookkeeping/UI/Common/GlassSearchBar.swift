@@ -17,7 +17,7 @@ struct GlassSearchBar: View {
             HStack(spacing: 10) {
                 HStack(spacing: 8) {
                     Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                    TextField(prompt, text: $text)
+                    TextField(prompt.loc, text: $text)
                         .focused($focused)
                         .submitLabel(.search)
                         .autocorrectionDisabled()

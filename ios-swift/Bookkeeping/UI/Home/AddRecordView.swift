@@ -97,7 +97,7 @@ struct AddRecordView: View {
                 }
                 Section {
                     Picker("类型", selection: $type) {
-                        ForEach(EntryType.allCases, id: \.self) { Text($0.displayName).tag($0) }
+                        ForEach(EntryType.allCases, id: \.self) { Text($0.displayName.loc).tag($0) }
                     }
                     .pickerStyle(.segmented)
                     TextField(MoneyInput.placeholder(currency), text: $amountText)
@@ -118,7 +118,7 @@ struct AddRecordView: View {
                                 settlementText = ""
                             }
                         )) {
-                            ForEach(account.currencies, id: \.self) { Text($0.chineseName).tag($0) }
+                            ForEach(account.currencies, id: \.self) { Text($0.localizedName).tag($0) }
                         }
                     }
                     if let charge = chargeCurrency(accountID) {
@@ -128,7 +128,7 @@ struct AddRecordView: View {
                         Picker("转到", selection: $toAccountID) {
                             Text("请选择").tag(String?.none)
                             ForEach(transferTargets) { account in
-                                Text(account.id == accountID ? "\(account.displayTitle)（换汇）" : account.displayTitle)
+                                Text(account.id == accountID ? L("\(account.localizedTitle)（换汇）") : account.localizedTitle)
                                     .tag(String?.some(account.id))
                             }
                         }
@@ -225,13 +225,13 @@ struct AddRecordView: View {
         let holding = list.filter { account in currency.map { account.currencies.contains($0) } ?? true }
         let others = list.filter { account in !holding.contains(where: { $0.id == account.id }) }
         if holding.isEmpty || others.isEmpty {
-            ForEach(list) { Text($0.displayTitle).tag(String?.some($0.id)) }
+            ForEach(list) { Text($0.localizedTitle).tag(String?.some($0.id)) }
         } else {
             Section {
-                ForEach(holding) { Text($0.displayTitle).tag(String?.some($0.id)) }
+                ForEach(holding) { Text($0.localizedTitle).tag(String?.some($0.id)) }
             }
-            Section("没有\(currency?.chineseName ?? "")，按账户的主币种记") {
-                ForEach(others) { Text("\($0.displayTitle)（\($0.currency.chineseName)）").tag(String?.some($0.id)) }
+            Section("没有\(currency?.localizedName ?? "")，按账户的主币种记") {
+                ForEach(others) { Text("\($0.localizedTitle)（\($0.currency.localizedName)）").tag(String?.some($0.id)) }
             }
         }
     }
@@ -239,8 +239,8 @@ struct AddRecordView: View {
     /// 实际扣款（入账）：空着时提示按汇率大概多少
     private func settlementRow(_ title: String, _ charge: CurrencyCode, text: Binding<String>, estimate: RecordCharge?) -> some View {
         HStack {
-            Text("\(title)（\(charge.chineseName)）")
-            TextField(estimate?.amountMinor.map { "约 " + Fmt.money($0, charge) } ?? "按汇率估算", text: text)
+            Text(L("\(title.loc)（\(charge.localizedName)）"))
+            TextField(estimate?.amountMinor.map { L("约 \(Fmt.money($0, charge))") } ?? L("按汇率估算"), text: text)
                 .keyboardType(charge.minorUnitExponent == 0 ? .numberPad : .decimalPad)
                 .multilineTextAlignment(.trailing)
                 .font(.body.monospacedDigit())
@@ -268,7 +268,7 @@ struct AddRecordView: View {
 
     private var similarMessage: String {
         guard let row = similar.first else { return "" }
-        return "\(Fmt.dateTime(row.record.effectiveAt))「\(row.title)」\(row.amountText(inAccount: true))，同一个账户、同样的金额。"
+        return L("\(Fmt.dateTime(row.record.effectiveAt))「\(row.title)」\(row.amountText(inAccount: true))，同一个账户、同样的金额。")
     }
 
     /// 实际扣款（入账）：空着是 nil（按汇率估算）；格式不对时弹窗提示并返回 false
@@ -292,7 +292,7 @@ struct AddRecordView: View {
         var toAmount: Int64?
         if type == .transfer {
             guard let transferTarget, let toCurrency else {
-                problem = InputProblem(title: "没选转到哪个账户")
+                problem = InputProblem(title: L("没选转到哪个账户"))
                 return nil
             }
             let side = TransferSideFields.resolve(
@@ -326,8 +326,8 @@ struct AddRecordView: View {
         }
         let summary = await store.ingestScreenshots(images)
         var parts = summary.isEmpty ? [] : [summary]
-        if unreadable > 0 { parts.append("\(unreadable) 张打不开") }
-        screenshotResult = parts.isEmpty ? "没有认出付款" : parts.joined(separator: "，")
+        if unreadable > 0 { parts.append(L("\(unreadable) 张打不开")) }
+        screenshotResult = parts.isEmpty ? L("没有认出付款") : parts.joined(separator: L("，"))
     }
 
     /// 先查一下是不是已经记过
@@ -349,7 +349,7 @@ struct AddRecordView: View {
             try await store.addRecord(entry)
             dismiss()
         } catch {
-            problem = InputProblem(title: "保存失败", message: error.localizedDescription)
+            problem = InputProblem(title: L("保存失败"), message: error.localizedDescription)
         }
     }
 }
