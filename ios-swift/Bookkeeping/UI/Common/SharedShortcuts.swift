@@ -10,7 +10,7 @@ enum SharedShortcuts {
     static var available: Bool { Bundle.main.bundleIdentifier == bundleID }
 
     /// iOS 27 用的「自动记账」：自带 App 通知触发（银行 App 由用户选，短信也走这里）和电子邮件触发，来源 = 自动
-    static let bankMessage27 = URL(string: "https://www.icloud.com/shortcuts/c6bec568572348c795b6e625585a4564")!
+    static let bankMessage27 = URL(string: "https://www.icloud.com/shortcuts/45fcd3946e3748cda1b2a509aab94dff")!
     /// iOS 26 用的「自动记账」：自带信息触发和电子邮件触发，来源 = 自动
     static let bankMessage26 = URL(string: "https://www.icloud.com/shortcuts/4b6174be756e4b21b6a00e0f3fdb5c95")!
     static var bankMessage: URL {
