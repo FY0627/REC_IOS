@@ -7,6 +7,7 @@ struct DataExportView: View {
     @Environment(LedgerStore.self) private var store
     @State private var file: URL?
     @State private var summary: DataExportSummary?
+    @State private var faceImages = 0
     @State private var errorText: String?
 
     var body: some View {
@@ -18,6 +19,8 @@ struct DataExportView: View {
                     }
                     LabeledContent("流水", value: L("\(summary.records) 笔"))
                     LabeledContent("账户", value: L("\(summary.accounts) 个"))
+                    LabeledContent("卡面图片", value: L("\(faceImages) 张"))
+                    LabeledContent("设置") { Image(systemName: "checkmark") }
                 } else if let errorText {
                     Text(errorText).foregroundStyle(.red)
                 } else {
@@ -34,6 +37,7 @@ struct DataExportView: View {
         do {
             let result = try await store.exportData()
             summary = result.summary
+            faceImages = result.faceImages
             file = result.url
         } catch {
             errorText = L("导出失败：\(error.localizedDescription)")

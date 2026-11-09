@@ -453,7 +453,8 @@ final class LedgerStore {
     // MARK: 导出、导入（ADR 0019）
 
     /// 导出全部数据：一个 zip 写在临时目录，给分享菜单用。上一次导出的先删掉，临时目录系统也会自己清理
-    func exportData() async throws -> (url: URL, summary: DataExportSummary) {
+    /// 导出全部数据；`faceImages`：带上了几张卡面图片（设置总是带上）
+    func exportData() async throws -> (url: URL, summary: DataExportSummary, faceImages: Int) {
         guard let backend else { throw BackendError.notFound }
         let day = Date().formatted(Date.ISO8601FormatStyle(timeZone: .current).year().month().day())
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("export", isDirectory: true)
@@ -461,8 +462,9 @@ final class LedgerStore {
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         let url = root.appendingPathComponent(L("REC 数据 \(day).zip"))
         var extras = await Task.detached(priority: .userInitiated) { Self.faceImageFiles() }.value
+        let faceImages = extras.count
         extras[BackupExtras.settingsName] = try AppSettingsBackup.current().encoded()
-        return (url, try await backend.exportData(to: url, extras: extras))
+        return (url, try await backend.exportData(to: url, extras: extras), faceImages)
     }
 
     /// 这台手机上的卡面图片，按 zip 里的路径（`BackupExtras.faceImagePath`）。不要在主线程调用

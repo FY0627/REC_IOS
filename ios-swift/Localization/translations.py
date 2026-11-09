@@ -672,6 +672,7 @@ t("导入", "匯入", "Import")
 t("账本", "帳本", "Ledger")
 t("卡面图片", "卡面圖片", "Card Images")
 t("卡面图片 %lld 张", "卡面圖片 %lld 張", P("%lld Card Image", "%lld Card Images"))
+t("%lld 张", "%lld 張", P("%lld", "%lld"))
 t("设置", "設定", "Settings")
 
 # MARK: 汇率、截图记账的设置说明
