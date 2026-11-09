@@ -2,15 +2,20 @@ import SwiftUI
 import UniformTypeIdentifiers
 import BKBackend
 
-/// 导入数据（「我的 › 隐私与数据」，ADR 0019）：选一个「导出数据」得到的 zip，先看里面有什么，再选增量或覆盖（`BackupImport`）。
-/// 覆盖要在按钮弹出的小菜单里再点一下。导入前自动把现在的数据存一份，可以撤销上次导入
+/// 导入数据（「我的 › 隐私与数据」，ADR 0019）：选一个「导出数据」得到的 zip，先看里面有什么，勾选导入哪几样
+/// （账本、卡面图片、设置，默认全选），账本再选增量或覆盖（`BackupImport`）。
+/// 覆盖要在按钮弹出的小菜单里再点一下。导入账本前自动把现在的数据存一份，可以撤销上次导入
 struct DataImportView: View {
     @Environment(LedgerStore.self) private var store
     @State private var picking = false
     @State private var archive: Data?
     @State private var fileName = ""
     @State private var info: BackupInfo?
+    @State private var includeLedger = true
+    @State private var includeFaces = true
+    @State private var includeSettings = true
     @State private var result: ImportSummary?
+    @State private var restored: [LocalizedStringKey] = []
     @State private var undone = false
     @State private var canUndo = false
     @State private var busy = false
@@ -23,7 +28,7 @@ struct DataImportView: View {
                     Label(archive == nil ? "选择文件" : "换一个文件", systemImage: "doc.zipper")
                 }
             }
-            if let info, archive != nil, result == nil {
+            if let info, archive != nil, result == nil, restored.isEmpty {
                 Section("「\(fileName)」里有") {
                     LabeledContent("流水", value: L("\(info.records) 笔"))
                     LabeledContent("账户", value: L("\(info.accounts) 个"))
@@ -31,21 +36,46 @@ struct DataImportView: View {
                         LabeledContent("最晚一笔", value: Fmt.dateTime(last))
                     }
                 }
-                Section {
-                    Button { Task { await run(.merge) } } label: {
-                        Label("增量导入", systemImage: "plus.square.on.square")
-                    }
-                    Menu {
-                        Button(role: .destructive) { Task { await run(.replace) } } label: {
-                            Label("删掉现在的数据，全部换成导入的", systemImage: "trash")
+                if info.faceImages > 0 || info.hasSettings {
+                    Section("导入") {
+                        Toggle(isOn: $includeLedger) { Label("账本", systemImage: "list.bullet.rectangle") }
+                        if info.faceImages > 0 {
+                            Toggle(isOn: $includeFaces) { Label(L("卡面图片 \(info.faceImages) 张"), systemImage: "photo") }
                         }
-                    } label: {
-                        Label("覆盖导入", systemImage: "arrow.triangle.2.circlepath")
+                        if info.hasSettings {
+                            Toggle(isOn: $includeSettings) { Label("设置", systemImage: "gearshape") }
+                        }
+                    }
+                }
+                Section {
+                    if includeLedger {
+                        Button { Task { await run(.merge) } } label: {
+                            Label("增量导入", systemImage: "plus.square.on.square")
+                        }
+                        Menu {
+                            Button(role: .destructive) { Task { await run(.replace) } } label: {
+                                Label("删掉现在的数据，全部换成导入的", systemImage: "trash")
+                            }
+                        } label: {
+                            Label("覆盖导入", systemImage: "arrow.triangle.2.circlepath")
+                        }
+                    } else {
+                        Button { Task { await run(nil) } } label: {
+                            Label("导入", systemImage: "square.and.arrow.down")
+                        }
+                        .disabled(!faces(info) && !settings(info))
+                    }
+                }
+            }
+            if !restored.isEmpty {
+                Section("导入完了") {
+                    ForEach(restored.indices, id: \.self) { i in
+                        Label(restored[i], systemImage: "checkmark")
                     }
                 }
             }
             if let result {
-                Section("导入完了") {
+                Section(restored.isEmpty ? LocalizedStringKey("导入完了") : "账本") {
                     if result.mode == .merge {
                         LabeledContent("加了流水", value: L("\(result.records) 笔"))
                         LabeledContent("本来就有的流水", value: L("\(result.existingRecords) 笔"))
@@ -103,7 +133,11 @@ struct DataImportView: View {
             info = try await store.backupInfo(archive: data)
             archive = data
             fileName = url.lastPathComponent
+            includeLedger = true
+            includeFaces = true
+            includeSettings = true
             result = nil
+            restored = []
             undone = false
             errorText = nil
         } catch {
@@ -113,12 +147,19 @@ struct DataImportView: View {
         }
     }
 
-    private func run(_ mode: ImportMode) async {
-        guard let archive else { return }
+    private func faces(_ info: BackupInfo) -> Bool { includeFaces && info.faceImages > 0 }
+    private func settings(_ info: BackupInfo) -> Bool { includeSettings && info.hasSettings }
+
+    private func run(_ mode: ImportMode?) async {
+        guard let archive, let info else { return }
         busy = true
         defer { busy = false }
         do {
-            result = try await store.importBackup(archive: archive, mode: mode)
+            let faces = faces(info), settings = settings(info)
+            result = try await store.importBackup(archive: archive, ledger: mode, faceImages: faces, settings: settings)
+            restored = []
+            if faces { restored.append("卡面图片") }
+            if settings { restored.append("设置") }
             canUndo = store.canUndoImport
             undone = false
             errorText = nil
@@ -133,6 +174,7 @@ struct DataImportView: View {
         do {
             try await store.undoImport()
             result = nil
+            restored = []
             undone = true
             canUndo = store.canUndoImport
             errorText = nil

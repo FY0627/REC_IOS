@@ -16,11 +16,17 @@ public struct BackupInfo: Hashable, Sendable {
     public var accounts: Int
     /// 最晚一笔流水的时间：看得出是哪天的备份
     public var lastRecordAt: Date?
+    /// 带了几张卡面图片（以前的备份没有）
+    public var faceImages: Int
+    /// 带了「我的」里的设置（以前的备份没有）
+    public var hasSettings: Bool
 
-    public init(records: Int, accounts: Int, lastRecordAt: Date?) {
+    public init(records: Int, accounts: Int, lastRecordAt: Date?, faceImages: Int = 0, hasSettings: Bool = false) {
         self.records = records
         self.accounts = accounts
         self.lastRecordAt = lastRecordAt
+        self.faceImages = faceImages
+        self.hasSettings = hasSettings
     }
 }
 
@@ -50,7 +56,7 @@ public struct ImportSummary: Hashable, Sendable {
 ///   - 流水：同一个编号，或者换成这里的账户、通知编号之后去重键一样（同一条通知记出来的同一笔）就是同一笔；
 ///   - 初始余额、学到的分类、识别模板、某天的汇率、设置：这里已经有的不变。
 ///   配对的转帐、合成一单只剩一笔的（另一笔这里本来就有）不再算配对、合单。
-/// - 卡面图片不在备份里：图片不在这台手机上的（`keepFaceImage` 为 false），清掉图片标识，卡面用颜色。
+/// - 卡面图片在 zip 里另外放（`BackupExtras`），App 先存好再导入；图片不在这台手机上的（`keepFaceImage` 为 false），清掉图片标识，卡面用颜色。
 enum BackupImport {
     typealias Row = [String: SQLValue]
 

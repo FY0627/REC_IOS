@@ -18,7 +18,7 @@ public struct DataExportSummary: Hashable, Sendable {
 /// 导出全部数据：一个 zip（`ZipStore`），里面一个文件夹，放每种数据一个 CSV（Numbers、Excel 都能打开），
 /// 和一份完整的数据库副本（`backupName`，「导入数据」读的就是它，见 `BackupImport`）。ADR 0019。
 ///
-/// - 卡面图片不导出（太大）；数据库副本里还留着图片的标识，导入时图片不在这台手机上就清掉；
+/// - 账本以外的文件（卡面图片、「我的」里的设置，`BackupExtras`）由 App 给，放在同一个文件夹里；
 /// - CSV 开头带 BOM，Excel 才认得出是 UTF-8 的中文；换行用 CRLF；
 /// - 金额按币种的小数位、不加千位分隔，表格里能直接加减；流水的金额流入为正、流出为负；
 /// - 时间是手机所在时区的「年-月-日 时:分:秒」；
@@ -27,13 +27,18 @@ enum DataExport {
     /// zip 里的数据库副本
     static let backupName = "备份（导入用）.sqlite"
 
-    /// 打成 zip：`folderName` 是 zip 里那个文件夹的名字。不放说明文件
-    static func archive(_ db: SQLiteConnection, folderName: String, calendar: Calendar, now: Date) throws -> (data: Data, summary: DataExportSummary) {
+    /// 打成 zip：`folderName` 是 zip 里那个文件夹的名字，`extras` 是账本以外的文件（文件夹里的路径 → 内容）。不放说明文件
+    static func archive(
+        _ db: SQLiteConnection, folderName: String, extras: [String: Data] = [:], calendar: Calendar, now: Date
+    ) throws -> (data: Data, summary: DataExportSummary) {
         var entries: [ZipStore.Entry] = []
         let summary = try tables(db, calendar: calendar) { name, text in
             entries.append(ZipStore.Entry(name: "\(folderName)/\(name)", data: Data(text.utf8)))
         }
         entries.append(ZipStore.Entry(name: "\(folderName)/\(backupName)", data: try databaseCopy(db)))
+        for (path, data) in extras.sorted(by: { $0.key < $1.key }) {
+            entries.append(ZipStore.Entry(name: "\(folderName)/\(path)", data: data))
+        }
         return (ZipStore.archive(entries, modified: now, calendar: calendar), summary)
     }
 

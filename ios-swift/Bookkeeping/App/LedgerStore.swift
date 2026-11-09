@@ -460,7 +460,34 @@ final class LedgerStore {
         try? FileManager.default.removeItem(at: root)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         let url = root.appendingPathComponent(L("REC 数据 \(day).zip"))
-        return (url, try await backend.exportData(to: url))
+        var extras = await Task.detached(priority: .userInitiated) { Self.faceImageFiles() }.value
+        extras[BackupExtras.settingsName] = try AppSettingsBackup.current().encoded()
+        return (url, try await backend.exportData(to: url, extras: extras))
+    }
+
+    /// 这台手机上的卡面图片，按 zip 里的路径（`BackupExtras.faceImagePath`）。不要在主线程调用
+    nonisolated private static func faceImageFiles() -> [String: Data] {
+        let folder = CardFaceImages.fileURL("x").deletingLastPathComponent()
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: folder.path)) ?? []
+        var files: [String: Data] = [:]
+        for name in names where name.hasSuffix(".jpg") {
+            let id = String(name.dropLast(4))
+            if let data = try? Data(contentsOf: CardFaceImages.fileURL(id)) { files[BackupExtras.faceImagePath(id)] = data }
+        }
+        return files
+    }
+
+    /// 把备份里的卡面图片存到这台手机上（同一个标识已经有了就不动）。不要在主线程调用
+    nonisolated private static func saveFaceImages(_ images: [String: Data]) throws {
+        for (id, data) in images {
+            let url = CardFaceImages.fileURL(id)
+            guard !FileManager.default.fileExists(atPath: url.path) else { continue }
+            try FileManager.default.createDirectory(
+                at: url.deletingLastPathComponent(), withIntermediateDirectories: true,
+                attributes: [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication]
+            )
+            try data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+        }
     }
 
     /// 导入前自动存的现在的数据（撤销导入用）；每次导入换成新的一份，撤销后删掉
@@ -480,12 +507,24 @@ final class LedgerStore {
         return try await backend.backupInfo(archive: archive)
     }
 
-    /// 先把现在的数据存一份（撤销用），再导入
-    func importBackup(archive: Data, mode: ImportMode) async throws -> ImportSummary {
+    /// 导入选中的几样：卡面图片先存好（导入账本时卡面才认得出图片），账本导入前先把现在的数据存一份（撤销用），设置最后写回。
+    /// `ledger` 是 nil 时不动账本
+    func importBackup(archive: Data, ledger mode: ImportMode?, faceImages: Bool, settings: Bool) async throws -> ImportSummary? {
         guard let backend else { throw BackendError.notFound }
-        try await backend.saveDatabaseCopy(to: Self.undoCopyURL)
-        let summary = try await backend.importBackup(archive: archive, mode: mode, keepFaceImage: Self.faceImageExists)
-        await adoptLedgerRates()
+        let extras = try BackupExtras.files(in: archive)
+        if faceImages {
+            let images = BackupExtras.faceImages(extras)
+            try await Task.detached(priority: .userInitiated) { try Self.saveFaceImages(images) }.value
+        }
+        var summary: ImportSummary?
+        if let mode {
+            try await backend.saveDatabaseCopy(to: Self.undoCopyURL)
+            summary = try await backend.importBackup(archive: archive, mode: mode, keepFaceImage: Self.faceImageExists)
+            await adoptLedgerRates()
+        }
+        if settings, let data = extras[BackupExtras.settingsName], let backup = AppSettingsBackup.decode(data) {
+            await backup.apply()
+        }
         await refresh()
         return summary
     }

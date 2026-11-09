@@ -91,4 +91,54 @@ final class DataExportTests: XCTestCase {
         XCTAssertEqual(DataExport.escape(#"说"好""#), #""说""好""""#)
         XCTAssertEqual(DataExport.escape("两\n行"), "\"两\n行\"")
     }
+
+    func testExtrasTravelWithTheBackup() async throws {
+        let backend = try LedgerBackend.inMemory(calendar: ParserSampleTests.calendar, clock: { ParserSampleTests.reference })
+        let photo = Data([0xFF, 0xD8, 0xFF, 0x01, 0x02])
+        let settings = Data(#"{"primaryCurrency":"HKD"}"#.utf8)
+        let url = temporaryURL("REC 数据 2026-10-20.zip")
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        _ = try await backend.exportData(to: url, extras: [
+            BackupExtras.faceImagePath("A1B2"): photo,
+            BackupExtras.settingsName: settings,
+        ])
+
+        let zip = try Data(contentsOf: url)
+        let names = try ZipStore.entries(zip).map(\.name)
+        XCTAssertTrue(names.contains("REC 数据 2026-10-20/卡面图片/A1B2.jpg"))
+        XCTAssertTrue(names.contains("REC 数据 2026-10-20/设置.json"))
+
+        let files = try BackupExtras.files(in: zip)
+        XCTAssertEqual(Set(files.keys), ["卡面图片/A1B2.jpg", "设置.json"], "CSV 和数据库副本不算")
+        XCTAssertEqual(BackupExtras.faceImages(files), ["A1B2": photo])
+        XCTAssertEqual(files[BackupExtras.settingsName], settings)
+
+        let info = try await backend.backupInfo(archive: zip)
+        XCTAssertEqual(info.faceImages, 1)
+        XCTAssertTrue(info.hasSettings)
+    }
+
+    func testFaceImagesIgnoreOddNames() {
+        let files: [String: Data] = [
+            "卡面图片/ok.jpg": Data([1]),
+            "卡面图片/../evil.jpg": Data([2]),
+            "卡面图片/sub/x.jpg": Data([3]),
+            "卡面图片/note.txt": Data([4]),
+        ]
+        XCTAssertEqual(Array(BackupExtras.faceImages(files).keys), ["ok"])
+    }
+
+    func testOldBackupHasNoExtras() async throws {
+        let backend = try LedgerBackend.inMemory(calendar: ParserSampleTests.calendar, clock: { ParserSampleTests.reference })
+        let url = temporaryURL("REC 数据.zip")
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        _ = try await backend.exportData(to: url)
+        let zip = try Data(contentsOf: url)
+        XCTAssertTrue(try BackupExtras.files(in: zip).isEmpty)
+        let info = try await backend.backupInfo(archive: zip)
+        XCTAssertEqual(info.faceImages, 0)
+        XCTAssertFalse(info.hasSettings)
+    }
 }

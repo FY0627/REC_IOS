@@ -668,6 +668,11 @@ t("撤销上次导入", "撤銷上次匯入", "Undo Last Import")
 t("读不了这个文件", "讀不了這個檔案", "This file can’t be read")
 t("这个文件来自更新版本的 REC，先更新 App", "這個檔案來自較新版本的 REC，請先更新 App", "This file is from a newer version of REC. Update the app first.")
 t("导入失败：%@", "匯入失敗：%@", "Couldn’t import: %@")
+t("导入", "匯入", "Import")
+t("账本", "帳本", "Ledger")
+t("卡面图片", "卡面圖片", "Card Images")
+t("卡面图片 %lld 张", "卡面圖片 %lld 張", P("%lld Card Image", "%lld Card Images"))
+t("设置", "設定", "Settings")
 
 # MARK: 汇率、截图记账的设置说明
 

@@ -2,7 +2,7 @@ import SwiftUI
 import BKBackend
 
 /// 导出数据（「我的 › 隐私与数据」，ADR 0019）：打开就把全部数据打成一个 zip（`DataExport`）——每种数据一个 CSV，
-/// 加一份能导回来的数据库副本——点一下用系统的分享菜单存到「文件」或发出去。卡面图片不导出。文件只在这台手机上生成，App 不联网
+/// 加一份能导回来的数据库副本、卡面图片和「我的」里的设置——点一下用系统的分享菜单存到「文件」或发出去。文件只在这台手机上生成，App 不联网
 struct DataExportView: View {
     @Environment(LedgerStore.self) private var store
     @State private var file: URL?

@@ -298,13 +298,14 @@ public final class LedgerBackend: Sendable {
 
     // MARK: 导出、导入（ADR 0019）
 
-    /// 把全部数据导出成一个 zip（`DataExport`）写到 `url`；zip 里的文件夹和文件同名（去掉 .zip）。在数据库队列上生成和写文件，不占主线程
-    public func exportData(to url: URL) async throws -> DataExportSummary {
+    /// 把全部数据导出成一个 zip（`DataExport`）写到 `url`；zip 里的文件夹和文件同名（去掉 .zip）。
+    /// `extras`：账本以外的文件（卡面图片、设置，`BackupExtras`）。在数据库队列上生成和写文件，不占主线程
+    public func exportData(to url: URL, extras: [String: Data] = [:]) async throws -> DataExportSummary {
         let calendar = calendar
         let now = clock()
         return try await database.read { db in
             let folder = url.deletingPathExtension().lastPathComponent
-            let result = try DataExport.archive(db, folderName: folder, calendar: calendar, now: now)
+            let result = try DataExport.archive(db, folderName: folder, extras: extras, calendar: calendar, now: now)
             try result.data.write(to: url, options: .atomic)
             return result.summary
         }
@@ -315,7 +316,11 @@ public final class LedgerBackend: Sendable {
         try await database.read { _ in
             let work = Self.workFile()
             defer { try? FileManager.default.removeItem(at: work) }
-            return try BackupImport.info(try BackupImport.open(archive: archive, work: work))
+            var info = try BackupImport.info(try BackupImport.open(archive: archive, work: work))
+            let extras = try BackupExtras.files(in: archive)
+            info.faceImages = BackupExtras.faceImages(extras).count
+            info.hasSettings = extras[BackupExtras.settingsName] != nil
+            return info
         }
     }
 
