@@ -8,24 +8,22 @@ import BKBackend
 /// 共享的快捷指令按 App 标识找「导入汇率」动作。别人用自己的 Apple ID 侧载时标识后面是他的签名团队，
 /// 链接里的动作对不上：这时不给链接，改成自己搭（复制汇率地址，两个动作）。
 struct ExchangeRateGuideView: View {
-    /// 共享的快捷指令「导入汇率」：下载 `ExchangeRateFeed.url` 的汇率，交给 App 动作「导入汇率」，用户不用自己搭
-    static let shortcutURL = URL(string: "https://www.icloud.com/shortcuts/22f748b09286411b98d5af7ac8b5cff7")!
-    /// 做这份共享链接时装的 App 的标识（包名 + 签名团队后缀）；换签名账号、改包名后要重新做链接，再改这两处
-    static let shortcutBundleID = "com.example.bookkeepingApp.swift.99VRUR76S7"
-
     @Environment(\.openURL) private var openURL
     @State private var copied = false
 
-    /// 装的就是做共享链接的那个 App：链接里的「导入汇率」认得它
-    private var sharedShortcutWorks: Bool { Bundle.main.bundleIdentifier == Self.shortcutBundleID }
-    private var steps: [LocalizedStringKey] { sharedShortcutWorks ? Self.sharedSteps : Self.manualSteps }
+    /// 装的是 TestFlight / App Store 的 App：链接里的「导入汇率」认得它
+    private var sharedShortcutWorks: Bool { SharedShortcuts.available }
+    private var needsAutomation: Bool {
+        if #available(iOS 27, *) { return false }
+        return true
+    }
 
     var body: some View {
         List {
             // 和系统设置一样的普通行，不用大按钮
             Section {
                 if sharedShortcutWorks {
-                    Button("添加快捷指令「导入汇率」", systemImage: "plus.square.on.square") { leave(to: Self.shortcutURL) }
+                    Button("添加快捷指令", systemImage: "plus.square.on.square") { leave(to: SharedShortcuts.exchangeRates) }
                 } else {
                     Button(copied ? "已复制汇率地址" : "复制汇率地址", systemImage: copied ? "checkmark" : "doc.on.doc") {
                         UIPasteboard.general.string = ExchangeRateFeed.url.absoluteString
@@ -37,12 +35,21 @@ struct ExchangeRateGuideView: View {
                 }
             }
 
-            Section {
-                ForEach(Array(steps.enumerated()), id: \.offset) { index, step in
-                    StepRow(number: index + 1, text: step)
+            if sharedShortcutWorks {
+                // iOS 27 的快捷指令自带每天定时运行，不用再建自动化
+                if needsAutomation {
+                    Section {
+                        Text(Self.sharedLine)
+                    }
                 }
-            } header: {
-                Text("\(steps.count) 步完成")
+            } else {
+                Section {
+                    ForEach(Array(Self.manualSteps.enumerated()), id: \.offset) { index, step in
+                        StepRow(number: index + 1, text: step)
+                    }
+                } header: {
+                    Text("\(Self.manualSteps.count) 步完成")
+                }
             }
         }
         .navigationTitle("用快捷指令更新汇率")
@@ -57,11 +64,7 @@ struct ExchangeRateGuideView: View {
         }
     }
 
-    static let sharedSteps: [LocalizedStringKey] = [
-        "点上面 **添加快捷指令**，在打开的页面点 **添加快捷指令**。它会下载最新汇率，交给 REC 导入。",
-        "点 **打开快捷指令**，在底部选 **自动化**，点右上角 **+**，选 **App** → **REC** → 勾选 **已打开**，选 **立即运行**，点 **下一步**。",
-        "在列表里选刚添加的 **导入汇率**。以后每次打开 App，汇率都会自动更新。",
-    ]
+    static let sharedLine: LocalizedStringKey = "在 **自动化** 里点 **+**，选 **App › REC › 已打开**，**立即运行** **汇率导入**。"
 
     /// 自己侧载的 App 用不了共享链接：自己搭这两个动作
     static let manualSteps: [LocalizedStringKey] = [

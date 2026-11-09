@@ -10,30 +10,48 @@ import BKModel
 /// 不按关键词或尾号筛选：繁体（銀行）、英文银行写法各不相同，「信息包含」又只能填一个词。
 /// 由 App 判断是不是动账通知：认出尾号（固定写法，或正文里出现已添加的卡的尾号）才入账；
 /// 不是动账通知的短信不保存。
-/// iOS 不允许 App 创建、导入或查询快捷指令自动化，这里只给出最少的手动步骤。
-/// 只放设置步骤。
+/// iOS 不允许 App 创建、导入或查询快捷指令自动化，自动化（触发条件）只能用户自己建。
+/// iOS 27、TestFlight / App Store 装的：共享的快捷指令「自动记账」自带触发条件，点一下添加，再选银行 App，不列步骤；
+/// iOS 26（快捷指令不带触发条件）和自己侧载的（用不了共享链接）照旧列出最少的手动步骤。
 struct AutoSetupGuideView: View {
     /// 作为添加流程的最后一步出现时，右上角显示「完成」
     var onDone: (() -> Void)?
 
     @Environment(\.openURL) private var openURL
 
+    private var useShared: Bool {
+        if #available(iOS 27, *) { return SharedShortcuts.available }
+        return false
+    }
+
     var body: some View {
         List {
-            Section {
-                Button("打开快捷指令", systemImage: "arrow.up.forward.app") {
-                    if let url = URL(string: "shortcuts://") { openURL(url) }
+            if useShared {
+                Section {
+                    Button("添加快捷指令", systemImage: "plus.square.on.square") { openURL(SharedShortcuts.bankMessage) }
+                    Button("打开快捷指令", systemImage: "arrow.up.forward.app") {
+                        if let url = URL(string: "shortcuts://") { openURL(url) }
+                    }
                 }
-            } footer: {
-                Text("只需设置一次，之后添加的卡不用再设置。")
-            }
+                Section {
+                    Text(Self.sharedLine)
+                }
+            } else {
+                Section {
+                    Button("打开快捷指令", systemImage: "arrow.up.forward.app") {
+                        if let url = URL(string: "shortcuts://") { openURL(url) }
+                    }
+                } footer: {
+                    Text("只需设置一次，之后添加的卡不用再设置。")
+                }
 
-            Section {
-                ForEach(Array(Self.smsSteps.enumerated()), id: \.offset) { index, step in
-                    StepRow(number: index + 1, text: step)
+                Section {
+                    ForEach(Array(Self.smsSteps.enumerated()), id: \.offset) { index, step in
+                        StepRow(number: index + 1, text: step)
+                    }
+                } header: {
+                    Text("5 步完成")
                 }
-            } header: {
-                Text("5 步完成")
             }
         }
         .navigationTitle("设置自动记账")
@@ -48,6 +66,8 @@ struct AutoSetupGuideView: View {
         // 添加银行卡后紧接着出现时不显示返回（卡已经保存，返回会回到已提交的表单）
         .navigationBarBackButtonHidden(onDone != nil)
     }
+
+    static let sharedLine: LocalizedStringKey = "添加后打开 **自动记账**，在 **App 通知** 里选银行 App。"
 
     static let smsSteps: [LocalizedStringKey] = [
         "点上面 **打开快捷指令**，在底部选 **自动化**，点右上角 **+**，选 **信息**，条件都不填。",

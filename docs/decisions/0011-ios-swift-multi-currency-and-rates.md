@@ -32,10 +32,10 @@
   （触发条件「每天特定时间」或「打开日常记账时」）：先用快捷指令自带的「获取 URL 内容」下载
   `https://open.er-api.com/v6/latest/USD`（ExchangeRate-API 的免密钥公开接口，每日更新，覆盖 160 多个币种），
   再交给「导入汇率」。联网的是快捷指令，App 只在本机解析并缓存最近一次结果。
-- 这两步做成共享的快捷指令「导入汇率」（iCloud 链接写在 `ExchangeRateGuideView.shortcutURL`），用户点一下添加，
+- 这两步做成共享的快捷指令「导入汇率」（iCloud 链接写在 `SharedShortcuts.exchangeRates`），用户点一下添加，
   不用自己搭动作、粘贴地址；自动化（打开 App 时运行它）仍要用户自己建，快捷指令不能共享自动化。
   共享的快捷指令按 App 标识找「导入汇率」动作，标识里带签名团队的后缀（现在是 `com.example.bookkeepingApp.swift.99VRUR76S7`）：
-  换签名账号、改包名后要用新装的 App 重新做一份共享链接（改 `shortcutURL` 和 `shortcutBundleID`）。
+  换签名账号、改包名后要用新装的 App 重新做一份共享链接（改 `SharedShortcuts`）。
   别人用自己的 Apple ID 侧载时标识后缀是他自己的团队，链接里的动作对不上：App 比较自己的标识，对不上就不给链接，
   改成自己搭（复制汇率地址，「获取 URL 内容」→「导入汇率」）。用付费开发者账号签名、经 TestFlight / App Store 分发时
   所有人的标识相同，一份链接对所有人有效。

@@ -678,6 +678,16 @@ t("设置", "設定", "Settings")
 # MARK: 汇率、截图记账的设置说明
 
 t("添加快捷指令「导入汇率」", "加入捷徑「匯入匯率」", "Add the “Import Rates” Shortcut")
+t("添加快捷指令", "加入捷徑", "Add Shortcut")
+t("添加后打开 **自动记账**，在 **App 通知** 里选银行 App。",
+  "加入後打開 **自动记账**，在 **App 通知** 裡選銀行 App。",
+  "After adding it, open **自动记账** and choose your bank apps under **App Notification**.")
+t("在 **设置 › 辅助功能 › 触控 › 轻点背面 › 轻点两下** 里选 **记录付款截图**。",
+  "在 **設定 › 輔助使用 › 觸控 › 背面輕點 › 點兩下** 裡選 **记录付款截图**。",
+  "In **Settings › Accessibility › Touch › Back Tap › Double Tap**, choose **记录付款截图**.")
+t("在 **自动化** 里点 **+**，选 **App › REC › 已打开**，**立即运行** **汇率导入**。",
+  "在 **自動化** 裡點 **+**，選 **App › REC › 已打開**，**立即執行** **汇率导入**。",
+  "In **Automation**, tap **+**, choose **App › REC › Is Opened**, set **Run Immediately**, and pick **汇率导入**.")
 t("已复制汇率地址", "已拷貝匯率網址", "Rate Address Copied")
 t("复制汇率地址", "拷貝匯率網址", "Copy Rate Address")
 t("%lld 步完成", "%lld 個步驟", P("%lld Step", "%lld Steps"))

@@ -6651,6 +6651,50 @@
         }
       }
     },
+    "在 **自动化** 里点 **+**，选 **App › REC › 已打开**，**立即运行** **汇率导入**。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In **Automation**, tap **+**, choose **App › REC › Is Opened**, set **Run Immediately**, and pick **汇率导入**."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在 **自动化** 里点 **+**，选 **App › REC › 已打开**，**立即运行** **汇率导入**。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在 **自動化** 裡點 **+**，選 **App › REC › 已打開**，**立即執行** **汇率导入**。"
+          }
+        }
+      }
+    },
+    "在 **设置 › 辅助功能 › 触控 › 轻点背面 › 轻点两下** 里选 **记录付款截图**。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In **Settings › Accessibility › Touch › Back Tap › Double Tap**, choose **记录付款截图**."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在 **设置 › 辅助功能 › 触控 › 轻点背面 › 轻点两下** 里选 **记录付款截图**。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在 **設定 › 輔助使用 › 觸控 › 背面輕點 › 點兩下** 裡選 **记录付款截图**。"
+          }
+        }
+      }
+    },
     "在列表里选刚添加的 **导入汇率**。以后每次打开 App，汇率都会自动更新。" : {
       "localizations" : {
         "en" : {
@@ -13045,6 +13089,28 @@
         }
       }
     },
+    "添加后打开 **自动记账**，在 **App 通知** 里选银行 App。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "After adding it, open **自动记账** and choose your bank apps under **App Notification**."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "添加后打开 **自动记账**，在 **App 通知** 里选银行 App。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "加入後打開 **自动记账**，在 **App 通知** 裡選銀行 App。"
+          }
+        }
+      }
+    },
     "添加大类" : {
       "localizations" : {
         "en" : {
@@ -13085,6 +13151,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "新增子分類"
+          }
+        }
+      }
+    },
+    "添加快捷指令" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add Shortcut"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "添加快捷指令"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "加入捷徑"
           }
         }
       }
