@@ -107,6 +107,9 @@ final class WalletController: UIViewController, UIScrollViewDelegate, UIGestureR
     /// 按卡包顺序
     private var cards: [StackCardView] = []
     private var headerHeight: CGFloat = 0
+    /// 标题区 SwiftUI 实际排出来的高度。宿主比内容高时内容在里面居中、整块往下偏，所以按它定宿主的高度；
+    /// 还没排出来时用 `sizeThatFits` 算的。内容一变它就报新的高度（`WalletHeader.heightChanged`），再排一次
+    private var renderedHeaderHeight: CGFloat?
 
     /// 打开的卡在卡包里的位置
     private var selectedIndex: Int?
@@ -210,6 +213,7 @@ final class WalletController: UIViewController, UIScrollViewDelegate, UIGestureR
 
     override func viewIsAppearing(_ animated: Bool) {
         super.viewIsAppearing(animated)
+        settleAtTop(animated: false)
         // 第一次放进窗口后才读得到状态栏高度
         view.setNeedsLayout()
     }
@@ -231,7 +235,30 @@ final class WalletController: UIViewController, UIScrollViewDelegate, UIGestureR
     }
 
     private func makeHeader() -> WalletHeader {
-        WalletHeader(count: activeCount, store: store, rates: rates, addAccount: { [weak self] in self?.actions.addAccount() })
+        WalletHeader(
+            count: activeCount, store: store, rates: rates,
+            addAccount: { [weak self] in self?.actions.addAccount() },
+            heightChanged: { [weak self] height in self?.headerRendered(height) }
+        )
+    }
+
+    /// 标题区排出来的高度变了：和宿主的高度不一样时重新排（内容的高度不随宿主变，不会来回改）
+    private func headerRendered(_ height: CGFloat) {
+        let height = height.rounded(.up)
+        guard height > 0, height != renderedHeaderHeight else { return }
+        renderedHeaderHeight = height
+        if PerfFlags.shared.showAlignmentGuides { AlignmentDebug.shared.assetRenderedHeight = height }
+        if height != headerHeight { view.setNeedsLayout() }
+    }
+
+    /// 卡包停在顶部以下（往下拉开了一截）、手指没在拖、也不在回弹时，回到顶部。
+    /// 例如回弹途中点开一张卡，卡包停在拉开的位置，返回后一直停在那里：「资产」留在原位，下面的内容整块偏下
+    private func settleAtTop(animated: Bool) {
+        // 转场途中不动：卡片的位置跟着卡包的滚动位置
+        guard selectedIndex == nil, transitionCards.isEmpty, !stackScroll.isTracking, !stackScroll.isDecelerating else { return }
+        let top = -stackScroll.contentInset.top
+        guard stackScroll.contentOffset.y < top - 0.5 else { return }
+        stackScroll.setContentOffset(CGPoint(x: 0, y: top), animated: animated)
     }
 
     // MARK: 数据
@@ -385,7 +412,12 @@ final class WalletController: UIViewController, UIScrollViewDelegate, UIGestureR
         }
         detailList.setTopInset(safeTop)
 
-        headerHeight = headerHost.sizeThatFits(in: CGSize(width: contentWidth, height: .greatestFiniteMagnitude)).height.rounded(.up)
+        let fitted = headerHost.sizeThatFits(in: CGSize(width: contentWidth, height: .greatestFiniteMagnitude)).height.rounded(.up)
+        headerHeight = renderedHeaderHeight ?? fitted
+        if PerfFlags.shared.showAlignmentGuides {
+            AlignmentDebug.shared.assetFittedHeight = fitted
+            AlignmentDebug.shared.assetRenderedHeight = renderedHeaderHeight ?? 0
+        }
         place(headerHost.view, CGRect(x: inset, y: 0, width: contentWidth, height: headerHeight))
         placeTitle()
         let layout = stackLayout
@@ -405,6 +437,15 @@ final class WalletController: UIViewController, UIScrollViewDelegate, UIGestureR
         }
         placeCards()
         updateCardElements(layout)
+        settleAtTop(animated: false)
+        recordScrolled()
+    }
+
+    /// 对齐参考线打开时记下卡包拉开了多少（`AlignmentGuides` 显示）
+    private func recordScrolled() {
+        guard PerfFlags.shared.showAlignmentGuides else { return }
+        let scrolled = stackScroll.contentOffset.y + stackScroll.contentInset.top
+        if AlignmentDebug.shared.assetScrolled != scrolled { AlignmentDebug.shared.assetScrolled = scrolled }
     }
 
     /// 用 bounds 和 center 摆放：视图可能带着变换（标题区淡出时上移），这时不能直接设 frame
@@ -493,11 +534,13 @@ final class WalletController: UIViewController, UIScrollViewDelegate, UIGestureR
         guard token == motionToken else { return }
         transitionCards = []
         cullCards()
+        settleAtTop(animated: true)
     }
 
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
         placeTitle()
         placeCards(only: [.resting, .below])
+        recordScrolled()
     }
 
     /// 再点一次标签栏的「资产」：卡包滚回顶部（和其他标签页的系统行为一样）。卡包是 UIKit 的滚动区，系统不会替它滚
