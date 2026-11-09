@@ -6651,28 +6651,6 @@
         }
       }
     },
-    "在 **自动化** 里点 **+**，选 **App › REC › 已打开**，**立即运行** **汇率导入**。" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "In **Automation**, tap **+**, choose **App › REC › Is Opened**, set **Run Immediately**, and pick **汇率导入**."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在 **自动化** 里点 **+**，选 **App › REC › 已打开**，**立即运行** **汇率导入**。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在 **自動化** 裡點 **+**，選 **App › REC › 已打開**，**立即執行** **汇率导入**。"
-          }
-        }
-      }
-    },
     "在 **设置 › 辅助功能 › 触控 › 轻点背面 › 轻点两下** 里选 **记录付款截图**。" : {
       "localizations" : {
         "en" : {
@@ -13089,24 +13067,24 @@
         }
       }
     },
-    "添加后打开 **自动记账**，在 **App 通知** 里选银行 App。" : {
+    "添加后打开 **自动记账**，在 **App 通知** 里选银行 App；银行 App 记得打开通知。" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "After adding it, open **自动记账** and choose your bank apps under **App Notification**."
+            "value" : "After adding it, open **自动记账** and choose your bank apps under **App Notification**. Make sure notifications are on for those bank apps."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "添加后打开 **自动记账**，在 **App 通知** 里选银行 App。"
+            "value" : "添加后打开 **自动记账**，在 **App 通知** 里选银行 App；银行 App 记得打开通知。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "加入後打開 **自动记账**，在 **App 通知** 裡選銀行 App。"
+            "value" : "加入後打開 **自动记账**，在 **App 通知** 裡選銀行 App；銀行 App 記得打開通知。"
           }
         }
       }

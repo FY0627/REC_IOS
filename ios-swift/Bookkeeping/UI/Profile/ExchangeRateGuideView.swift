@@ -13,10 +13,6 @@ struct ExchangeRateGuideView: View {
 
     /// 装的是 TestFlight / App Store 的 App：链接里的「导入汇率」认得它
     private var sharedShortcutWorks: Bool { SharedShortcuts.available }
-    private var needsAutomation: Bool {
-        if #available(iOS 27, *) { return false }
-        return true
-    }
 
     var body: some View {
         List {
@@ -35,14 +31,7 @@ struct ExchangeRateGuideView: View {
                 }
             }
 
-            if sharedShortcutWorks {
-                // iOS 27 的快捷指令自带每天定时运行，不用再建自动化
-                if needsAutomation {
-                    Section {
-                        Text(Self.sharedLine)
-                    }
-                }
-            } else {
+            if !sharedShortcutWorks {
                 Section {
                     ForEach(Array(Self.manualSteps.enumerated()), id: \.offset) { index, step in
                         StepRow(number: index + 1, text: step)
@@ -63,8 +52,6 @@ struct ExchangeRateGuideView: View {
             openURL(url)
         }
     }
-
-    static let sharedLine: LocalizedStringKey = "在 **自动化** 里点 **+**，选 **App › REC › 已打开**，**立即运行** **汇率导入**。"
 
     /// 自己侧载的 App 用不了共享链接：自己搭这两个动作
     static let manualSteps: [LocalizedStringKey] = [

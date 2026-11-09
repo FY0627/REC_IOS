@@ -11,16 +11,17 @@ import BKModel
 /// 由 App 判断是不是动账通知：认出尾号（固定写法，或正文里出现已添加的卡的尾号）才入账；
 /// 不是动账通知的短信不保存。
 /// iOS 不允许 App 创建、导入或查询快捷指令自动化，自动化（触发条件）只能用户自己建。
-/// iOS 27、TestFlight / App Store 装的：共享的快捷指令「自动记账」自带触发条件，点一下添加，再选银行 App，不列步骤；
-/// iOS 26（快捷指令不带触发条件）和自己侧载的（用不了共享链接）照旧列出最少的手动步骤。
+/// TestFlight / App Store 装的：共享的快捷指令「自动记账」自带触发条件，点一下添加，不列步骤；
+/// iOS 27 用 App 通知触发，要选银行 App；iOS 26 用信息触发，添加就能用。自己侧载的（用不了共享链接）照旧列出最少的手动步骤。
 struct AutoSetupGuideView: View {
     /// 作为添加流程的最后一步出现时，右上角显示「完成」
     var onDone: (() -> Void)?
 
     @Environment(\.openURL) private var openURL
 
-    private var useShared: Bool {
-        if #available(iOS 27, *) { return SharedShortcuts.available }
+    private var useShared: Bool { SharedShortcuts.available }
+    private var choosesApps: Bool {
+        if #available(iOS 27, *) { return true }
         return false
     }
 
@@ -33,8 +34,10 @@ struct AutoSetupGuideView: View {
                         if let url = URL(string: "shortcuts://") { openURL(url) }
                     }
                 }
-                Section {
-                    Text(Self.sharedLine)
+                if choosesApps {
+                    Section {
+                        Text(Self.sharedLine)
+                    }
                 }
             } else {
                 Section {
@@ -67,7 +70,7 @@ struct AutoSetupGuideView: View {
         .navigationBarBackButtonHidden(onDone != nil)
     }
 
-    static let sharedLine: LocalizedStringKey = "添加后打开 **自动记账**，在 **App 通知** 里选银行 App。"
+    static let sharedLine: LocalizedStringKey = "添加后打开 **自动记账**，在 **App 通知** 里选银行 App；银行 App 记得打开通知。"
 
     static let smsSteps: [LocalizedStringKey] = [
         "点上面 **打开快捷指令**，在底部选 **自动化**，点右上角 **+**，选 **信息**，条件都不填。",
