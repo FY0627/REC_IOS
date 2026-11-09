@@ -333,6 +333,7 @@ struct PerformanceSettingsView: View {
             }
             Section {
                 Toggle("显示帧率与内存", isOn: $flags.showMetrics)
+                Toggle("对齐参考线", isOn: $flags.showAlignmentGuides)
             }
             // 签名工具会改 Bundle ID；扩展的要以 App 的开头才认得是一家（ADR 0020）
             Section("通知扩展") {

@@ -121,6 +121,11 @@ struct RootView: View {
             }
         }
         .overlay {
+            if PerfFlags.shared.showAlignmentGuides {
+                AlignmentGuides()
+            }
+        }
+        .overlay {
             if case .failed(let message) = store.state {
                 StorageErrorView(message: message) { Task { await store.retryStart() } }
             }

@@ -342,14 +342,17 @@ private struct CategoryStatsView: View {
                     }
                 }
             }
-            Section("每一笔") {
-                ForEach(rows) { row in
-                    NavigationLink {
-                        RecordPage(row: row)
-                    } label: {
-                        RecordRowView(row: row)
+            // 每一笔和首页一样按天分组，行里只写时间
+            ForEach(RecordDay.group(rows), id: \.day) { day in
+                Section(day.title) {
+                    ForEach(day.rows) { row in
+                        NavigationLink {
+                            RecordPage(row: row)
+                        } label: {
+                            RecordRowView(row: row, timeOnly: true)
+                        }
+                        .recordSwipe(row, state: $swipe)
                     }
-                    .recordSwipe(row, state: $swipe)
                 }
             }
         }

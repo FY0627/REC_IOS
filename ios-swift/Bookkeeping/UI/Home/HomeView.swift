@@ -129,7 +129,7 @@ struct HomeView: View {
         if store.homeRows.isEmpty {
             Section("流水") { emptyState }
         } else {
-            ForEach(Self.group(store.homeRows), id: \.day) { group in
+            ForEach(RecordDay.group(store.homeRows), id: \.day) { group in
                 Section(group.title) {
                     ForEach(group.rows) { row in
                         recordLink(row)
@@ -165,7 +165,7 @@ struct HomeView: View {
                 ProgressView().frame(maxWidth: .infinity)
             }
         } else {
-            ForEach(Self.group(results), id: \.day) { group in
+            ForEach(RecordDay.group(results), id: \.day) { group in
                 Section(group.title) {
                     ForEach(group.rows) { row in
                         recordLink(row)
@@ -266,30 +266,5 @@ struct HomeView: View {
 
     private var emptyState: some View {
         ContentUnavailableView("还没有流水", systemImage: "list.bullet.rectangle")
-    }
-
-    struct DayGroup {
-        let day: Date
-        let title: String
-        let rows: [RecordRow]
-    }
-
-    static func group(_ rows: [RecordRow]) -> [DayGroup] {
-        let calendar = Calendar.current
-        let now = Date()
-        var groups: [DayGroup] = []
-        var currentDay: Date?
-        var bucket: [RecordRow] = []
-        for row in rows {
-            let day = calendar.startOfDay(for: row.record.effectiveAt)
-            if day != currentDay, let currentDay {
-                groups.append(DayGroup(day: currentDay, title: Fmt.day(currentDay, now: now), rows: bucket))
-                bucket = []
-            }
-            currentDay = day
-            bucket.append(row)
-        }
-        if let currentDay { groups.append(DayGroup(day: currentDay, title: Fmt.day(currentDay, now: now), rows: bucket)) }
-        return groups
     }
 }

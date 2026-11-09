@@ -31,16 +31,20 @@ final class WalletDetailModel {
 /// 流水行左滑露出「编辑」「删除」，用系统的滑动按钮，和首页一模一样（右滑是返回卡包，在 `WalletController`）。
 /// 所以列表是 `UITableView`：collection view 只有自适应高度的列表布局才有系统的滑动按钮，table view 的行高可以事先量好。
 /// 滑动按钮贴着格子右边，所以列表和卡片一样宽；每笔流水单独一组，行之间的空隙是组尾，按钮才和这一行一样高。
+/// 流水和首页一样按收到的那天分组：每天前面一组是日期（`RecordDayHeader`），行里只写时间。
 @MainActor
 final class WalletDetailList: NSObject, UITableViewDelegate {
     enum Section: Hashable {
         case card, summary, empty
+        /// 这一天的日期
+        case day(Date)
         case record(String)
     }
 
     enum Item: Hashable {
         case card
         case summary
+        case day(Date)
         case record(String)
         /// 「暂无流水」
         case empty
@@ -70,6 +74,8 @@ final class WalletDetailList: NSObject, UITableViewDelegate {
     private var recordRowHeight: CGFloat?
     /// 「暂无流水」的高度；宽度或系统字号变了清空
     private var emptyHeight: CGFloat?
+    /// 日期那一格的高度（只有一行字）；宽度或系统字号变了清空
+    private var dayHeight: CGFloat?
     private var account: Account?
     private var rows: [RecordRow] = []
     private var rowsByID: [String: RecordRow] = [:]
@@ -126,6 +132,7 @@ final class WalletDetailList: NSObject, UITableViewDelegate {
 
         tableView.register(CardSlotCell.self, forCellReuseIdentifier: "card")
         tableView.register(HostingCell.self, forCellReuseIdentifier: "summary")
+        tableView.register(HostingCell.self, forCellReuseIdentifier: "day")
         tableView.register(HostingCell.self, forCellReuseIdentifier: "record")
         tableView.register(HostingCell.self, forCellReuseIdentifier: "empty")
         dataSource = RecordDataSource(tableView: tableView) { [weak self] _, indexPath, item in
@@ -146,11 +153,15 @@ final class WalletDetailList: NSObject, UITableViewDelegate {
             let cell = hostingCell("summary", at: indexPath)
             if account != nil { cell.show(summaryView(), parent: parent) }
             return cell
+        case .day(let day):
+            let cell = hostingCell("day", at: indexPath)
+            cell.show(RecordDayHeader(title: Fmt.day(day)), parent: parent)
+            return cell
         case .record(let id):
             let cell = hostingCell("record", at: indexPath)
             guard let row = rowsByID[id] else { return cell }
             cell.show(
-                RecordRowView(row: row, showAccount: false, boxed: true)
+                RecordRowView(row: row, showAccount: false, boxed: true, timeOnly: true)
                     .accessibilityAction(named: "编辑") { [weak self] in self?.editRecord(id) }
                     .accessibilityAction(named: "删除") { [weak self, weak cell] in
                         // 读屏不用滑开这一行，这时没有「删除」按钮，菜单从这一行弹出
@@ -188,6 +199,9 @@ final class WalletDetailList: NSObject, UITableViewDelegate {
             return AppLayout.detailTop + AppLayout.cardHeight(parent.view.bounds.width) + 8
         case .summary:
             return summaryHeight
+        case .day:
+            if dayHeight == nil { dayHeight = measure(RecordDayHeader(title: Fmt.day(Date())), width: width) }
+            return dayHeight ?? 1
         case .record(let id):
             return rowHeight(rowsByID[id], width: width)
         case .empty:
@@ -219,6 +233,7 @@ final class WalletDetailList: NSObject, UITableViewDelegate {
     func invalidateSizes() {
         recordRowHeight = nil
         emptyHeight = nil
+        dayHeight = nil
         updateSummaryHeight()
         refreshHeights()
     }
@@ -237,7 +252,7 @@ final class WalletDetailList: NSObject, UITableViewDelegate {
     private func rowHeight(_ row: RecordRow?, width: CGFloat) -> CGFloat {
         guard let row else { return 1 }
         if let height = recordRowHeight { return height }
-        let height = measure(RecordRowView(row: row, showAccount: false, boxed: true), width: width)
+        let height = measure(RecordRowView(row: row, showAccount: false, boxed: true, timeOnly: true), width: width)
         recordRowHeight = height
         return height
     }
@@ -459,7 +474,15 @@ final class WalletDetailList: NSObject, UITableViewDelegate {
                 snapshot.appendSections([.empty])
                 snapshot.appendItems([.empty], toSection: .empty)
             }
+            // 流水按时间从新到旧排，每天第一笔前面放日期。同一天只放一次（分组的标识不能重复）
+            let calendar = Calendar.current
+            var days = Set<Date>()
             for row in rows {
+                let day = calendar.startOfDay(for: row.record.effectiveAt)
+                if days.insert(day).inserted {
+                    snapshot.appendSections([.day(day)])
+                    snapshot.appendItems([.day(day)], toSection: .day(day))
+                }
                 snapshot.appendSections([.record(row.id)])
                 snapshot.appendItems([.record(row.id)], toSection: .record(row.id))
             }

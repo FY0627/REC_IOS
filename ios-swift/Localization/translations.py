@@ -402,7 +402,6 @@ t("合计", "合計", "Total")
 t("笔数", "筆數", "Transactions")
 t("%lld 笔", "%lld 筆", P("%lld", "%lld"))
 t("小类", "子分類", "Subcategories")
-t("每一笔", "每一筆", "Transactions")
 
 # MARK: 添加账户
 

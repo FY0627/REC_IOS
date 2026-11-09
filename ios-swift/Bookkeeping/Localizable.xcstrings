@@ -11855,28 +11855,6 @@
         }
       }
     },
-    "每一笔" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Transactions"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "每一笔"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "每一筆"
-          }
-        }
-      }
-    },
     "民生银行" : {
       "localizations" : {
         "en" : {

@@ -15,7 +15,7 @@ ios-swift/
 │   ├── App/                       入口、共享服务 AppServices、界面状态 LedgerStore
 │   ├── Intents/                   App Intent「记录银行动账通知」「记录付款截图」、AccountEntity、AppShortcuts
 │   ├── UI/                        Shell（系统 TabView）、Home、Assets（卡包与已停用卡包、详情转场、卡片信息、卡面编辑、管理银行卡）、Stats、Profile、Pending
-│   ├── Diagnostics/               单变量性能开关、帧率/内存指标
+│   ├── Diagnostics/               单变量性能开关、帧率/内存指标、对齐参考线
 │   ├── AppIcon*.icon/             App 图标和「我的 › 图标」里选的两个备用图标（Icon Composer 格式：分层、Liquid Glass，见下面「App 图标」）
 │   └── Assets.xcassets
 ├── Packages/BKCore/               纯 Swift 业务核心（无 UI 依赖）

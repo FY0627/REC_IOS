@@ -29,6 +29,8 @@ final class PerfFlags {
     var holdHighRefresh: Bool { didSet { defaults.set(holdHighRefresh, forKey: "perf.holdHighRefresh") } }
     /// 屏幕角落的帧率 / 内存调试指标
     var showMetrics: Bool { didSet { defaults.set(showMetrics, forKey: "perf.showMetrics") } }
+    /// 对齐参考线（`AlignmentGuides`）：查资产页的「合计」和首页、统计的第一组对不对齐
+    var showAlignmentGuides: Bool { didSet { defaults.set(showAlignmentGuides, forKey: "perf.showAlignmentGuides") } }
 
     private init() {
         cardShadows = UserDefaults.standard.object(forKey: "perf.cardShadows") as? Bool ?? true
@@ -40,6 +42,7 @@ final class PerfFlags {
         settleSprings = UserDefaults.standard.object(forKey: "perf.settleSprings") as? Bool ?? true
         holdHighRefresh = UserDefaults.standard.object(forKey: "perf.holdHighRefresh") as? Bool ?? true
         showMetrics = UserDefaults.standard.object(forKey: "perf.showMetrics") as? Bool ?? false
+        showAlignmentGuides = UserDefaults.standard.object(forKey: "perf.showAlignmentGuides") as? Bool ?? false
     }
 
     func resetToDefaults() {
@@ -52,6 +55,7 @@ final class PerfFlags {
         settleSprings = true
         holdHighRefresh = true
         showMetrics = false
+        showAlignmentGuides = false
     }
 
     /// 当前开关组合的简短描述，录屏对照时显示在调试指标里

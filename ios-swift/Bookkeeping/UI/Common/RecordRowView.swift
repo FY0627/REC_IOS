@@ -96,6 +96,50 @@ struct RecordRowView: View {
     }
 }
 
+/// 流水按收到的那天分组：首页、统计里一个分类的每一笔、卡片详情都这样排。
+/// 分组标题写「今天」「昨天」「11月8日 周六」，每一笔只写时间（`RecordRowView(timeOnly: true)`）
+struct RecordDay {
+    let day: Date
+    let title: String
+    let rows: [RecordRow]
+
+    /// 流水已经按时间从新到旧排好
+    static func group(_ rows: [RecordRow], now: Date = Date()) -> [RecordDay] {
+        let calendar = Calendar.current
+        var groups: [RecordDay] = []
+        var currentDay: Date?
+        var bucket: [RecordRow] = []
+        for row in rows {
+            let day = calendar.startOfDay(for: row.record.effectiveAt)
+            if day != currentDay, let currentDay {
+                groups.append(RecordDay(day: currentDay, title: Fmt.day(currentDay, now: now), rows: bucket))
+                bucket = []
+            }
+            currentDay = day
+            bucket.append(row)
+        }
+        if let currentDay { groups.append(RecordDay(day: currentDay, title: Fmt.day(currentDay, now: now), rows: bucket)) }
+        return groups
+    }
+}
+
+/// 卡片详情里每天的流水上面的日期，字和首页的分组标题一样；左边和流水行里的图标对齐
+struct RecordDayHeader: View {
+    let title: String
+
+    var body: some View {
+        Text(title)
+            .font(.headline)
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 14)
+            .padding(.top, 12)
+            .padding(.bottom, 8)
+            .accessibilityAddTraits(.isHeader)
+    }
+}
+
 /// 以面板方式打开流水详情（没有导航栈的页面使用）。
 struct RecordDetailSheet: View {
     let recordID: String
