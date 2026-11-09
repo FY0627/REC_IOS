@@ -483,6 +483,28 @@ public struct MonthStats: Hashable, Sendable {
         }
 
         public var id: String { categoryID ?? "uncategorized" }
+
+        /// 一组分类（统计页的支出分类、收入分类，或一个大类下面的小类）各占多少，整数百分比，和 `totals` 一一对应。
+        /// 只在金额大于 0 的分类之间分：退款比支出多的分类金额是负数（例如只有退款、返现的分类，或者买的那笔不在这段时间里），
+        /// 不算占比（nil），也不从别的分类的分母里扣，否则别的分类会超过 100%。
+        /// 按最大余数法取整，加起来正好 100；金额都不大于 0 时都是 nil
+        public static func percentages(_ totals: [CategoryTotal]) -> [Int?] {
+            let sum = totals.reduce(Int64(0)) { $0 + max(0, $1.amountMinor) }
+            guard sum > 0 else { return totals.map { _ in nil } }
+            var result: [Int?] = totals.map { $0.amountMinor > 0 ? Int($0.amountMinor * 100 / sum) : nil }
+            let remainders = totals.indices.filter { totals[$0].amountMinor > 0 }.map { (index: $0, rest: totals[$0].amountMinor * 100 % sum) }
+            var left = 100 - result.reduce(0) { $0 + ($1 ?? 0) }
+            // 余数大的先补 1；一样大时金额大的、排在前面的先补
+            for item in remainders.sorted(by: {
+                if $0.rest != $1.rest { return $0.rest > $1.rest }
+                if totals[$0.index].amountMinor != totals[$1.index].amountMinor { return totals[$0.index].amountMinor > totals[$1.index].amountMinor }
+                return $0.index < $1.index
+            }) where left > 0 {
+                result[item.index] = (result[item.index] ?? 0) + 1
+                left -= 1
+            }
+            return result
+        }
     }
 
     public struct KindTotal: Hashable, Sendable {

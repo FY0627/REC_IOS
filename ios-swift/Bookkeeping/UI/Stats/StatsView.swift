@@ -204,7 +204,7 @@ struct StatsView: View {
             if let total {
                 categorySections(Breakdown(
                     currency: currency, expense: total.expenseCategories, income: total.incomeCategories,
-                    expenseTotal: total.expenseMinor, incomeTotal: total.incomeMinor, onlyCurrency: false
+                    onlyCurrency: false
                 ))
             }
         }
@@ -228,7 +228,7 @@ struct StatsView: View {
         }
         categorySections(Breakdown(
             currency: t.currency, expense: t.expenseCategories, income: t.incomeCategories,
-            expenseTotal: t.netExpenseMinor, incomeTotal: t.incomeMinor, accountID: accountID
+            accountID: accountID
         ))
     }
 
@@ -237,8 +237,6 @@ struct StatsView: View {
         let currency: CurrencyCode
         let expense: [MonthStats.CategoryTotal]
         let income: [MonthStats.CategoryTotal]
-        let expenseTotal: Int64
-        let incomeTotal: Int64
         var accountID: String?
         var onlyCurrency = true
     }
@@ -247,18 +245,20 @@ struct StatsView: View {
     private func categorySections(_ b: Breakdown) -> some View {
         if !b.expense.isEmpty {
             Section("支出分类") {
-                categoryRows(b.expense, type: .expense, total: b.expenseTotal, b)
+                categoryRows(b.expense, type: .expense, b)
             }
         }
         if !b.income.isEmpty {
             Section("收入分类") {
-                categoryRows(b.income, type: .income, total: b.incomeTotal, b)
+                categoryRows(b.income, type: .income, b)
             }
         }
     }
 
-    private func categoryRows(_ totals: [MonthStats.CategoryTotal], type: EntryType, total: Int64, _ b: Breakdown) -> some View {
+    /// 占比在这一组分类之间分，加起来 100%（`CategoryTotal.percentages`）
+    private func categoryRows(_ totals: [MonthStats.CategoryTotal], type: EntryType, _ b: Breakdown) -> some View {
         let maxAmount = max(1, totals.map(\.amountMinor).max() ?? 1)
+        let percents = Dictionary(zip(totals.map(\.id), MonthStats.CategoryTotal.percentages(totals)), uniquingKeysWith: { first, _ in first })
         return ForEach(totals) { item in
             NavigationLink {
                 CategoryStatsView(
@@ -266,7 +266,7 @@ struct StatsView: View {
                     from: range.from, to: range.to
                 )
             } label: {
-                CategoryTotalRow(item: item, currency: b.currency, maxAmount: maxAmount, total: total)
+                CategoryTotalRow(item: item, currency: b.currency, maxAmount: maxAmount, percent: percents[item.id] ?? nil)
             }
         }
     }
@@ -277,7 +277,8 @@ private struct CategoryTotalRow: View {
     let item: MonthStats.CategoryTotal
     let currency: CurrencyCode
     let maxAmount: Int64
-    let total: Int64
+    /// 在同一组分类里占多少（整数百分比）；退款比支出多、金额不大于 0 的没有
+    let percent: Int?
 
     var body: some View {
         HStack(spacing: 12) {
@@ -285,8 +286,8 @@ private struct CategoryTotalRow: View {
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
                     Text(item.name.loc).lineLimit(1)
-                    if total > 0, item.amountMinor > 0 {
-                        Text(percent).font(.footnote).foregroundStyle(.secondary).monospacedDigit()
+                    if let percent {
+                        Text(verbatim: percent == 0 ? "<1%" : "\(percent)%").font(.footnote).foregroundStyle(.secondary).monospacedDigit()
                     }
                     Spacer()
                     Text(Fmt.money(item.amountMinor, currency)).monospacedDigit()
@@ -300,11 +301,6 @@ private struct CategoryTotalRow: View {
         }
         .padding(.vertical, 2)
         .accessibilityElement(children: .combine)
-    }
-
-    private var percent: String {
-        let value = Double(item.amountMinor) / Double(total) * 100
-        return value < 1 ? "<1%" : "\(Int(value.rounded()))%"
     }
 }
 
@@ -332,12 +328,13 @@ private struct CategoryStatsView: View {
             if item.children.count > 1 || (item.children.first.map { $0.categoryID != item.categoryID } ?? false) {
                 Section("小类") {
                     let maxAmount = max(1, item.children.map(\.amountMinor).max() ?? 1)
-                    ForEach(item.children) { child in
+                    let percents = MonthStats.CategoryTotal.percentages(item.children)
+                    ForEach(Array(item.children.enumerated()), id: \.element.id) { index, child in
                         CategoryTotalRow(
                             item: child.categoryID == item.categoryID ? MonthStats.CategoryTotal(
                                 categoryID: child.categoryID, name: L("不细分"), symbol: child.symbol, amountMinor: child.amountMinor, count: child.count
                             ) : child,
-                            currency: currency, maxAmount: maxAmount, total: item.amountMinor
+                            currency: currency, maxAmount: maxAmount, percent: percents[index]
                         )
                     }
                 }

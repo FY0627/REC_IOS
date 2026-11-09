@@ -540,6 +540,33 @@ final class LedgerTypeTests: XCTestCase {
         XCTAssertEqual(filtered.count, 2, "按大类查包括它的小类")
     }
 
+    /// 统计页的占比：只在金额大于 0 的分类之间分，加起来正好 100
+    func testCategoryPercentagesAddUpToHundred() async throws {
+        func shares(_ amounts: [Int64]) -> [Int?] {
+            MonthStats.CategoryTotal.percentages(amounts.map { .init(categoryID: nil, name: "", symbol: "", amountMinor: $0, count: 1) })
+        }
+        XCTAssertEqual(shares([500, 300, 200]), [50, 30, 20])
+        XCTAssertEqual(shares([1, 1, 1]), [34, 33, 33], "取整后补给余数大的，一样大时补给前面的")
+        XCTAssertEqual(shares([688_00, 100_00, -150_00]), [87, 13, nil], "只有退款的分类不算占比，也不从分母里扣")
+        XCTAssertEqual(shares([99_999, 1]), [100, 0], "太小的是 0（显示 <1%）")
+        XCTAssertEqual(shares([-5_00, 0]), [nil, nil])
+        XCTAssertEqual(shares([]), [])
+
+        // 退款记在这段时间里没有支出的分类：以前用支出减退款做分母，花得最多的分类占 128%
+        let backend = try makeBackend()
+        let cash = try await backend.addAccount(.pocket(name: "现金", type: .cash, currency: .cny, paletteID: "ocean"))
+        let rent = try await category(backend, "房租")
+        let clothes = try await category(backend, "衣着")
+        try await backend.addRecord(ManualEntry(type: .expense, accountID: cash.id, amountMinor: 688_00, currency: .cny, categoryID: rent.id, time: now))
+        try await backend.addRecord(ManualEntry(type: .expense, accountID: cash.id, amountMinor: 150_00, currency: .cny, categoryID: clothes.id, isRefund: true, time: now))
+        let stats = try await backend.monthStats(year: 2026, month: 10)
+        let cny = try XCTUnwrap(stats.currencies.first)
+        XCTAssertEqual(cny.netExpenseMinor, 538_00)
+        let percents = MonthStats.CategoryTotal.percentages(cny.expenseCategories)
+        XCTAssertEqual(percents.compactMap { $0 }.reduce(0, +), 100)
+        XCTAssertEqual(percents.compactMap { $0 }, [100])
+    }
+
     func testEditingTypeChangesKindAndKeepsCategoryConsistent() async throws {
         let backend = try makeBackend()
         try await addAccount(backend, last4: "0427")
