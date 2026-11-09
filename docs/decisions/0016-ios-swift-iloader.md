@@ -1,6 +1,6 @@
 # 0016 iOS Swift 版改用 iLoader 签名安装
 
-- 状态：已采纳（替换 [ADR 0009](0009-ios-swift-ci-sideloadly.md) 里的签名安装工具，构建流程不变）
+- 状态：已采纳（替换 [ADR 0009](0009-ios-swift-ci-sideloadly.md) 里的签名安装工具，构建流程不变）；安装方式已由 [ADR 0023](0023-ios-swift-testflight.md) 的 TestFlight 取代，侧载仍可用
 - 日期：2026-10-31
 
 ## 背景

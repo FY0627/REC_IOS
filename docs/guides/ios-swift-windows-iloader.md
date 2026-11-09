@@ -35,7 +35,7 @@
 ## 4. 导入 IPA
 
 1. 在 iLoader 里选择导入 IPA（官方功能名是「Import any IPA」），选中第 1 步下载的 `.ipa`。
-2. **以后每次安装都用同一个 Apple 账户，不要改 Bundle ID**（默认是 `com.example.bookkeepingApp.swift`），
+2. **以后每次安装都用同一个 Apple 账户，不要改 Bundle ID**（默认是 `com.fy0627.rec`），
    否则会被当成另一个 App：数据不能保留，快捷指令里的动作引用也会失效。
 
 ## 5. 在 iPhone 上允许运行

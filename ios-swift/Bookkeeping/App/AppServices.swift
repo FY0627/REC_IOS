@@ -9,8 +9,8 @@ import BKBackend
 final class AppServices: Sendable {
     static let shared = AppServices()
 
-    static let logger = Logger(subsystem: "com.example.bookkeepingApp.swift", category: "ledger")
-    static let signposter = OSSignposter(subsystem: "com.example.bookkeepingApp.swift", category: .pointsOfInterest)
+    static let logger = Logger(subsystem: "com.fy0627.rec", category: "ledger")
+    static let signposter = OSSignposter(subsystem: "com.fy0627.rec", category: .pointsOfInterest)
 
     enum OpenError: LocalizedError {
         /// 设备开机后尚未解锁过：数据文件仍被系统加密，暂时无法读写

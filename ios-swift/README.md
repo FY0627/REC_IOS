@@ -44,6 +44,9 @@ ios-swift/
 
 推送 `ios-swift` 分支或在 Actions 页面手动运行（可选指定 Xcode 路径）。
 
+上传到 TestFlight 是另一个工作流 [`.github/workflows/ios-swift-testflight.yml`](../.github/workflows/ios-swift-testflight.yml)，只能手动运行：
+用 App Store Connect API 密钥自动签名、归档，直接上传（[`ci/archive-upload.sh`](ci/archive-upload.sh)，ADR 0023）。
+
 ## 本地（Windows）运行核心测试
 
 没有 Mac 也可以用 Docker 在 Linux 上跑 `BKCore` 的全部测试（SwiftUI 部分只能在 CI 编译）：
@@ -206,7 +209,7 @@ docker run --rm -v "<仓库>/ios-swift/Packages/BKCore:/pkg" -w /pkg bk-swift sw
 
 ## 安装到 iPhone
 
-见 [Windows + iLoader 安装指南](../docs/guides/ios-swift-windows-iloader.md) 与 [真机验收清单](../docs/guides/ios-swift-device-checklist.md)。
+用 TestFlight 安装（ADR 0023）；不用付费账号时见 [Windows + iLoader 安装指南](../docs/guides/ios-swift-windows-iloader.md)。验收见 [真机验收清单](../docs/guides/ios-swift-device-checklist.md)。
 
 ## 自动记账
 

@@ -7,7 +7,7 @@ trap 'echo "::error title=IPAVerification::package-ipa.sh 第 $LINENO 行命令�
 
 OUT="${1:?output dir}"
 APP="$OUT/derived-app/Build/Products/Release-iphoneos/Bookkeeping.app"
-EXPECTED_BUNDLE_ID="com.example.bookkeepingApp.swift"
+EXPECTED_BUNDLE_ID="com.fy0627.rec"
 REPORT="$OUT/ipa-verification.txt"
 mkdir -p "$OUT/ipa" "$OUT/stage"
 : > "$REPORT"
@@ -69,6 +69,9 @@ ok "动态依赖仅为系统库$( [[ -d "$APP/Frameworks" ]] && echo '与内置 
 
 [[ -f "$APP/Assets.car" ]] || fail "缺少 Assets.car（资源目录未编译）"
 ok "资源 Assets.car"
+
+[[ -f "$APP/PrivacyInfo.xcprivacy" ]] || fail "缺少隐私清单 PrivacyInfo.xcprivacy（App Store Connect 收上传时检查）"
+ok "隐私清单 PrivacyInfo.xcprivacy"
 
 INTENTS="$APP/Metadata.appintents"
 [[ -d "$INTENTS" ]] || fail "缺少 Metadata.appintents：App Intents 元数据未生成，快捷指令将找不到动作"
