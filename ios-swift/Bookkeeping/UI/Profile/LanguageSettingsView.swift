@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 「我的 › 语言」：跟随系统、简体中文、繁體中文（台灣）、English，选中的在右边打勾（ADR 0022）。
+/// 「我的 › 语言」：跟随系统、简体中文、繁體中文、English，选中的在右边打勾（ADR 0022）。
 /// 选了马上换：整个界面按新语言重建，回到「我的」（`BookkeepingApp`）
 struct LanguageSettingsView: View {
     @AppStorage(AppLanguage.key) private var language = AppLanguage.system.rawValue

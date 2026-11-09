@@ -64,6 +64,7 @@ final class LedgerStore {
             backend = opened
             // 更新前只缓存了最新一份汇率：放进按天保存的汇率表（已有就跳过）
             if let cached = ExchangeRateStore.cached() { _ = try? await opened.saveExchangeRates(cached) }
+            await adoptLedgerRates()
             // 更新前手选的分类：回放一遍，学习不从零开始（只做一次）
             try? await opened.seedCategoryLearning()
             await refresh()
@@ -484,8 +485,18 @@ final class LedgerStore {
         guard let backend else { throw BackendError.notFound }
         try await backend.saveDatabaseCopy(to: Self.undoCopyURL)
         let summary = try await backend.importBackup(archive: archive, mode: mode, keepFaceImage: Self.faceImageExists)
+        await adoptLedgerRates()
         await refresh()
         return summary
+    }
+
+    /// 账本里的汇率比本机缓存的新（或本机还没有）：换成账本里的。
+    /// 最新汇率缓存在本机设置里，不在备份里：新装（换了 Bundle ID）后导入备份，卡包和净资产不至于没有汇率可换算
+    private func adoptLedgerRates() async {
+        guard let latest = try? await backend?.latestExchangeRates() else { return }
+        if let cached = ExchangeRateStore.cached(), cached.fetchedAt >= latest.fetchedAt { return }
+        ExchangeRateStore.save(latest)
+        NotificationCenter.default.post(name: .exchangeRatesDidChange, object: nil)
     }
 
     /// 撤销上次导入：换回导入前存的那份

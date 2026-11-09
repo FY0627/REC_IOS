@@ -1070,6 +1070,17 @@ public enum RateDAO {
         try db.query("SELECT day, base, updated_at FROM exchange_rate_days ORDER BY day", []) { (day: $0.string(0), base: $0.string(1), updatedAt: $0.date(2)) }
     }
 
+    /// 最近一天的完整汇率表（下载时间最晚的那天）；一天都没有时是 nil
+    public static func latest(_ db: SQLiteConnection) throws -> ExchangeRates? {
+        guard let info = try db.queryOne(
+            "SELECT day, base, updated_at, fetched_at FROM exchange_rate_days ORDER BY day DESC LIMIT 1", [],
+            { (day: $0.string(0), base: $0.string(1), updatedAt: $0.date(2), fetchedAt: $0.date(3)) }
+        ) else { return nil }
+        var table = try rates(db, day: info.day)
+        table.removeValue(forKey: info.base)
+        return ExchangeRates(base: CurrencyCode(info.base), rates: table, updatedAt: info.updatedAt, fetchedAt: info.fetchedAt)
+    }
+
     /// 某天全部币种的汇率（1 个基准可兑换的数量）
     public static func rates(_ db: SQLiteConnection, day: String) throws -> [String: Double] {
         var table: [String: Double] = [:]

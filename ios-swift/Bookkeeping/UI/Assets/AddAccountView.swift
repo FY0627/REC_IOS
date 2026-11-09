@@ -315,12 +315,13 @@ struct AddAccountView: View {
             extraCurrencies: Array(currencies.dropFirst()), extraOpeningBalances: openings.filter { $0.key != currency }
         )
         do {
-            let alreadyAutomated = store.automationVerified
+            // 一个自动化覆盖所有卡：只有第一张卡、自动化还没收到过东西时才带去设置，之后加卡不再弹（「我的 › 自动记账」随时能看）
+            let firstCard = !store.accounts.contains { $0.cardType.isCard }
+            let showGuide = firstCard && !store.automationVerified
             let account = try await store.addAccount(draft)
             await applyPhoto(to: account)
             errorText = nil
-            // 自动化已经在工作：一个自动化覆盖所有卡，新卡不用再设置
-            if alreadyAutomated { dismiss() } else { created = account }
+            if showGuide { created = account } else { dismiss() }
         } catch BackendError.invalidAccount(let reason) {
             switch reason {
             case .duplicateAccount: errorText = L("已经添加过这张卡（同一银行、同一尾号、同一卡类型）。")

@@ -1198,6 +1198,11 @@ public final class LedgerBackend: Sendable {
         return try await database.write { try RateDAO.save($0, day: day, rates: rates) }
     }
 
+    /// 账本里最近一天的汇率表。本机还没导入过汇率（例如新装后导入了备份）时，界面用它换算
+    public func latestExchangeRates() async throws -> ExchangeRates? {
+        try await database.read { try RateDAO.latest($0) }
+    }
+
     // MARK: 统计
 
     /// 一个月的统计。`convertTo`：再把所有币种换算成这个币种合计（首页的本月支出、收入、结余）

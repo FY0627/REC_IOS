@@ -179,6 +179,18 @@ final class DatabaseTests: XCTestCase {
         newer.rates["CNY"] = 7.3
         XCTAssertTrue(try db.writeSync { try RateDAO.save($0, day: "2026-10-24", rates: newer) }, "同一天更晚的下载覆盖")
         XCTAssertEqual(try db.readSync { try RateDAO.rates($0, day: "2026-10-24") }["CNY"], 7.3)
+
+        XCTAssertTrue(try db.writeSync { try RateDAO.save($0, day: "2026-10-20", rates: rates) })
+        let latest = try XCTUnwrap(try db.readSync { try RateDAO.latest($0) }, "最近一天：按日期，不按写入顺序")
+        XCTAssertEqual(latest.base, .usd)
+        XCTAssertEqual(latest.rates, ["CNY": 7.3, "HKD": 7.8])
+        XCTAssertEqual(latest.fetchedAt, newer.fetchedAt)
+        XCTAssertEqual(latest.convert(1000, from: .usd, to: .cny), 7300)
+    }
+
+    func testLatestRatesIsNilWithoutAnyDay() throws {
+        let db = try Database(path: tempPath())
+        XCTAssertNil(try db.readSync { try RateDAO.latest($0) })
     }
 
     func testMigrationFromVersion7AddsCategoriesAndBackfillsAutomaticOnes() throws {

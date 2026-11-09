@@ -2,7 +2,7 @@ import SwiftUI
 import ObjectiveC
 import BKModel
 
-/// App 的显示语言：跟随系统，或者在「我的 › 语言」里选的简体中文、繁體中文（台灣）、English（ADR 0022）。
+/// App 的显示语言：跟随系统，或者在「我的 › 语言」里选的简体中文、繁體中文、English（ADR 0022）。
 ///
 /// 选的语言写在 App 自己的 `AppleLanguages` 里，和系统「设置 › REC › 语言」是同一个值：下次打开 App 时
 /// 系统直接按它加载，日期、系统按钮也跟着变。当时就换：界面文字按选的语言查（`L`、`.loc`、根视图的 `locale`），
@@ -25,7 +25,7 @@ enum AppLanguage: String, CaseIterable, Identifiable {
         switch self {
         case .system: L("跟随系统")
         case .zhHans: "简体中文"
-        case .zhHant: "繁體中文（台灣）"
+        case .zhHant: "繁體中文"
         case .english: "English"
         }
     }
