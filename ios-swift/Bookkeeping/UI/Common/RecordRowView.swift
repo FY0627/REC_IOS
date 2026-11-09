@@ -282,7 +282,13 @@ struct RecordDetailView: View {
                 }
             }
             if let related = detail.related {
-                Section(r.isRefund ? "原交易" : "关联的交易") { link(related) }
+                Section(r.isRefund ? "原交易" : "关联的交易") {
+                    link(related)
+                    // 关联错了：两笔都留着，退款的分类不变
+                    if r.isRefund {
+                        Button { Task { await unlinkRefund() } } label: { ActionLabel(title: "取消关联") }
+                    }
+                }
             }
             if !detail.orderMembers.isEmpty {
                 Section {
@@ -391,6 +397,16 @@ struct RecordDetailView: View {
             saveError = nil
         } catch {
             saveError = L("拆开失败：\(error.localizedDescription)")
+        }
+    }
+
+    private func unlinkRefund() async {
+        do {
+            try await store.unlinkRefund(recordID)
+            await reload()
+            saveError = nil
+        } catch {
+            saveError = L("取消关联失败：\(error.localizedDescription)")
         }
     }
 
@@ -511,12 +527,14 @@ struct OrderSplitView: View {
 /// 合并：
 /// - 一单用了几张卡：选同一单的其他几笔，合成一单。离得近、别的卡付的标上「可能是同一单」，只是提示，不自动合并；
 /// - 合成转帐：这一笔支出（收入）和别的账户的一笔收入（支出）合成一笔转帐，例如微信提现到银行卡，只选一笔。
-///   支出、收入（不是退款）才能选，在上面的分段控件里换
+///   支出、收入（不是退款）才能选，在上面的分段控件里换；
+/// - 退款：退款关联到原交易（只选一笔），支出关联它的退款（可以选几笔，分几次退的）。两笔都留着，
+///   原交易下面写「已退」，退款跟着原交易的分类。退款只有这一种，不显示分段控件
 struct OrderMergeView: View {
     let row: RecordRow
     @Environment(LedgerStore.self) private var store
     @Environment(\.dismiss) private var dismiss
-    @State private var mode = Mode.order
+    @State private var mode: Mode
     @State private var candidates: [RecordRow] = []
     @State private var chosen: Set<String> = []
     @State private var loaded = false
@@ -525,24 +543,48 @@ struct OrderMergeView: View {
     enum Mode: Hashable {
         case order
         case transfer
+        /// 退款和原交易关联
+        case refund
     }
+
+    init(row: RecordRow) {
+        self.row = row
+        _mode = State(initialValue: row.record.isRefund ? .refund : .order)
+    }
+
+    /// 这一笔能怎么合：退款只能关联到原交易；支出（流出）可以合成一单、合成转帐、关联它的退款；收入合成一单、合成转帐
+    private var modes: [Mode] {
+        let r = row.record
+        if r.isRefund { return [.refund] }
+        var modes: [Mode] = [.order]
+        if r.canMergeIntoTransfer { modes.append(.transfer) }
+        if r.entryType == .expense, r.direction == .outflow { modes.append(.refund) }
+        return modes
+    }
+
+    private var isRefund: Bool { row.record.isRefund }
 
     var body: some View {
         NavigationStack {
             List {
-                if row.record.canMergeIntoTransfer {
+                if modes.count > 1 {
                     Section {
                         Picker("合并成", selection: $mode) {
-                            Text("一单").tag(Mode.order)
-                            Text("转帐").tag(Mode.transfer)
+                            ForEach(modes, id: \.self) { mode in
+                                switch mode {
+                                case .order: Text("一单").tag(mode)
+                                case .transfer: Text("转帐").tag(mode)
+                                case .refund: Text("退款").tag(mode)
+                                }
+                            }
                         }
                         .pickerStyle(.segmented)
                     }
                 }
                 Section("这一笔") { RecordRowView(row: row) }
-                Section(mode == .order ? "同一单的其他几笔" : "转帐的另一边") {
+                Section(candidatesTitle) {
                     if loaded, candidates.isEmpty {
-                        Text(mode == .order ? "前后一天里没有可以合并的记录" : "前后三天里没有可以合成转帐的记录").foregroundStyle(.secondary)
+                        Text(emptyText).foregroundStyle(.secondary)
                     }
                     ForEach(candidates) { candidate in
                         OrderPickRow(
@@ -555,7 +597,7 @@ struct OrderMergeView: View {
                     Section { Text(errorText).foregroundStyle(.red) }
                 }
             }
-            .navigationTitle(mode == .order ? "合成一单" : "合成转帐")
+            .navigationTitle(navigationTitle)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("取消", systemImage: "xmark") { dismiss() } }
@@ -568,21 +610,52 @@ struct OrderMergeView: View {
                 loaded = false
                 chosen = []
                 errorText = nil
-                if mode == .order {
+                switch mode {
+                case .order:
                     candidates = await store.orderCandidates(recordID: row.id)
-                } else {
+                case .transfer:
                     candidates = await store.transferMergeCandidates(recordID: row.id)
+                case .refund:
+                    candidates = await store.refundLinkCandidates(recordID: row.id)
+                    // 已经关联了原交易的退款：先选上它，换一笔就是改关联
+                    if isRefund, let origin = row.record.relatedRecordID, candidates.contains(where: { $0.id == origin }) {
+                        chosen = [origin]
+                    }
                 }
                 loaded = true
             }
         }
     }
 
-    /// 合成一单可以选几笔；转帐的另一边只有一笔，选了别的就换成它
+    private var navigationTitle: LocalizedStringKey {
+        switch mode {
+        case .order: "合成一单"
+        case .transfer: "合成转帐"
+        case .refund: "关联退款"
+        }
+    }
+
+    private var candidatesTitle: LocalizedStringKey {
+        switch mode {
+        case .order: "同一单的其他几笔"
+        case .transfer: "转帐的另一边"
+        case .refund: isRefund ? "原交易" : "这笔的退款"
+        }
+    }
+
+    private var emptyText: LocalizedStringKey {
+        switch mode {
+        case .order: "前后一天里没有可以合并的记录"
+        case .transfer: "前后三天里没有可以合成转帐的记录"
+        case .refund: isRefund ? "之前半年里没有金额够退这笔的支出" : "之后半年里没有还没关联的退款"
+        }
+    }
+
+    /// 合成一单、关联几笔退款可以选几笔；转帐的另一边、退款的原交易只有一笔，选了别的就换成它
     private func toggle(_ id: String) {
         if chosen.contains(id) {
             chosen.remove(id)
-        } else if mode == .transfer {
+        } else if mode == .transfer || (mode == .refund && isRefund) {
             chosen = [id]
         } else {
             chosen.insert(id)
@@ -597,6 +670,13 @@ struct OrderMergeView: View {
             case .transfer:
                 guard let other = chosen.first else { return }
                 try await store.mergeTransfer(recordID: row.id, with: other)
+            case .refund:
+                if isRefund {
+                    guard let origin = chosen.first else { return }
+                    try await store.linkRefunds([row.id], to: origin)
+                } else {
+                    try await store.linkRefunds(candidates.map(\.id).filter(chosen.contains), to: row.id)
+                }
             }
             dismiss()
         } catch {

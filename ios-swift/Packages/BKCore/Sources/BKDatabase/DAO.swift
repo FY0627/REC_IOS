@@ -711,6 +711,28 @@ public enum RecordDAO {
         try db.run("UPDATE records SET related_record_id = ? WHERE id = ?", [relatedID, id])
     }
 
+    public static func clearRelated(_ db: SQLiteConnection, id: String) throws {
+        try db.run("UPDATE records SET related_record_id = NULL WHERE id = ?", [id])
+    }
+
+    /// 手动关联退款的候选：时间范围内已入账、同一币种的支出。`refunds` 为 false 时是原交易（流出，金额不小于 `amount`），
+    /// 为 true 时是还没关联到别的交易的退款（流入，金额不大于 `amount`）。新的在前
+    public static func refundLinkRows(
+        _ db: SQLiteConnection, refunds: Bool, currency: CurrencyCode, amount: Int64, from: Date, to: Date, excluding id: String, limit: Int = 300
+    ) throws -> [RecordRow] {
+        let side = refunds
+            ? "r.direction = 'inflow' AND r.related_record_id IS NULL AND r.amount_minor <= ?"
+            : "r.direction = 'outflow' AND r.amount_minor >= ?"
+        return try db.query(
+            """
+            SELECT \(rowColumns) \(rowFrom) WHERE r.status = 'posted' AND \(entryTypeSQL) = 'expense' AND \(side)
+              AND r.currency = ? AND r.effective_at >= ? AND r.effective_at <= ? AND r.id <> ?
+            ORDER BY r.effective_at DESC LIMIT ?
+            """,
+            [amount, currency.rawValue, from, to, id, limit], mapRow
+        )
+    }
+
     public static func setStatus(_ db: SQLiteConnection, id: String, status: SettlementStatus) throws {
         try db.run("UPDATE records SET status = ? WHERE id = ?", [status.rawValue, id])
     }

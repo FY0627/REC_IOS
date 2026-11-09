@@ -116,6 +116,66 @@ final class LedgerTypeTests: XCTestCase {
         XCTAssertEqual(cny.expenseCategories.first { $0.categoryID == clothes.id }?.amountMinor, 59_00)
     }
 
+    /// 自己记的退款（或者通知没写商户、找不到唯一原交易的）可以手动关联到原交易，两边都能发起，也能取消
+    func testRefundCanBeLinkedToOriginalByHand() async throws {
+        let backend = try makeBackend()
+        let cash = try await backend.addAccount(.pocket(name: "现金", type: .cash, currency: .cny, paletteID: "ocean"))
+        let wallet = try await backend.addAccount(.pocket(name: "零钱", type: .wallet, currency: .cny, paletteID: "ocean"))
+        let clothes = try await category(backend, "衣着")
+        let earlier = now.addingTimeInterval(-3 * 86_400)
+        try await backend.addRecord(ManualEntry(type: .expense, accountID: cash.id, amountMinor: 99_00, currency: .cny, categoryID: clothes.id, time: earlier))
+        try await backend.addRecord(ManualEntry(type: .expense, accountID: cash.id, amountMinor: 20_00, currency: .cny, time: earlier))
+        try await backend.addRecord(ManualEntry(type: .expense, accountID: wallet.id, amountMinor: 40_00, currency: .cny, isRefund: true, time: now))
+        let rows = try await backend.records()
+        let original = try XCTUnwrap(rows.first { $0.record.amountMinor == 99_00 })
+        let refund = try XCTUnwrap(rows.first { $0.record.isRefund })
+        XCTAssertNil(refund.record.relatedRecordID, "自己记的退款不会自动关联")
+
+        // 从退款这边找原交易：金额够退的支出，退到别的账户也算；20 元的不够退 40 元
+        let origins = try await backend.refundLinkCandidates(recordID: refund.id)
+        XCTAssertEqual(origins.map(\.id), [original.id])
+        try await backend.linkRefunds([refund.id], to: original.id)
+        var detail = try await backend.recordDetail(id: original.id)
+        XCTAssertEqual(detail.refunds.map(\.id), [refund.id])
+        XCTAssertEqual(detail.row.refundedMinor, 40_00, "原交易下面写已退")
+        detail = try await backend.recordDetail(id: refund.id)
+        XCTAssertEqual(detail.related?.id, original.id)
+        XCTAssertEqual(detail.row.category?.id, clothes.id, "退款跟着原交易的分类")
+        let stats = try await backend.monthStats(year: 2026, month: 10)
+        XCTAssertEqual(stats.currencies.first?.expenseCategories.first { $0.categoryID == clothes.id }?.amountMinor, 59_00, "统计里从同一个分类减掉")
+
+        // 关联好的退款不再出现在原交易那边的候选里；取消后又出现
+        var refunds = try await backend.refundLinkCandidates(recordID: original.id)
+        XCTAssertTrue(refunds.isEmpty)
+        try await backend.unlinkRefund(refund.id)
+        detail = try await backend.recordDetail(id: original.id)
+        XCTAssertTrue(detail.refunds.isEmpty)
+        XCTAssertNil(detail.row.refundedMinor)
+        refunds = try await backend.refundLinkCandidates(recordID: original.id)
+        XCTAssertEqual(refunds.map(\.id), [refund.id])
+
+        // 从支出这边关联退款
+        try await backend.linkRefunds(refunds.map(\.id), to: original.id)
+        detail = try await backend.recordDetail(id: refund.id)
+        XCTAssertEqual(detail.related?.id, original.id)
+
+        // 收入不能当原交易，支出不能当退款
+        try await backend.addRecord(ManualEntry(type: .income, accountID: cash.id, amountMinor: 500_00, currency: .cny, time: earlier))
+        let income = try await backend.records().first { $0.record.entryType == .income }
+        do {
+            try await backend.linkRefunds([refund.id], to: try XCTUnwrap(income).id)
+            XCTFail("收入不能当原交易")
+        } catch {
+            XCTAssertEqual(error as? BackendError, .invalidRefund)
+        }
+        do {
+            try await backend.linkRefunds([original.id], to: original.id)
+            XCTFail("支出不能当退款")
+        } catch {
+            XCTAssertEqual(error as? BackendError, .invalidRefund)
+        }
+    }
+
     func testUnconfirmedTransferIsCategorizedOrConfirmedAsOwn() async throws {
         let backend = try makeBackend()
         try await addAccount(backend, last4: "0427")

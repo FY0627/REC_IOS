@@ -28,6 +28,8 @@ public enum BackendError: Error, Equatable, Sendable {
     case invalidTransfer
     /// 合成一单至少要两笔，而且都是已入账的同一币种的支出（或收入）
     case invalidOrder
+    /// 只有已入账的退款能关联到已入账的同一币种的支出（不是退款）
+    case invalidRefund
 }
 
 /// App 界面与 App Intent 共用的业务入口。
@@ -849,6 +851,64 @@ public final class LedgerBackend: Sendable {
             }
             try RecordDAO.leaveOrderGroup(db, ids: recordIDs)
             for group in groups { try RecordDAO.clearOrderGroupIfAlone(db, group: group) }
+        }
+    }
+
+    // MARK: 退款关联到原交易
+
+    /// 手动关联退款的候选。这一笔是退款：之前半年里同一币种、金额不小于它的支出（原交易）；
+    /// 这一笔是支出：之后半年里同一币种、金额不大于它、还没关联到别的交易的退款。
+    /// 退款常常退回别的账户（例如用卡付的退到余额），所以不限账户；同一个账户的在前，再按交易对方一样的、时间离得近的排
+    public func refundLinkCandidates(recordID: String) async throws -> [RecordRow] {
+        let calendar = calendar
+        return try await database.read { db in
+            guard let row = try RecordDAO.findRow(db, id: recordID) else { throw BackendError.notFound }
+            let r = row.record
+            guard r.status == .posted, r.entryType == .expense else { return [] }
+            let window: TimeInterval = 180 * 86_400
+            let day: TimeInterval = 86_400
+            // 前后多留一天：通知的时间和真正交易的时间可能差一点
+            let rows = r.isRefund
+                ? try RecordDAO.refundLinkRows(
+                    db, refunds: false, currency: r.currency, amount: r.amountMinor,
+                    from: r.effectiveAt.addingTimeInterval(-window), to: r.effectiveAt.addingTimeInterval(day), excluding: r.id
+                )
+                : try RecordDAO.refundLinkRows(
+                    db, refunds: true, currency: r.currency, amount: r.amountMinor,
+                    from: r.effectiveAt.addingTimeInterval(-day), to: r.effectiveAt.addingTimeInterval(window), excluding: r.id
+                )
+            func rank(_ other: RecordRow) -> (Int, Int, TimeInterval) {
+                let sameParty = r.counterparty != nil && other.record.counterparty == r.counterparty
+                return (other.record.accountID == r.accountID ? 0 : 1, sameParty ? 0 : 1, abs(other.record.effectiveAt.timeIntervalSince(r.effectiveAt)))
+            }
+            let sorted = rows.sorted { rank($0) < rank($1) }
+            return try Self.decorate(Array(sorted.prefix(30)), db: db, calendar: calendar)
+        }
+    }
+
+    /// 把退款关联到原交易：原交易下面写「已退」，退款跟着原交易的分类（统计时从同一个分类里减掉）。
+    /// 两笔都留着，各自的金额、时间、账户不变。退款原来关联到别的交易的，改成关联到这一笔
+    public func linkRefunds(_ refundIDs: [String], to originID: String) async throws {
+        try await database.write { db in
+            guard let origin = try RecordDAO.find(db, id: originID) else { throw BackendError.notFound }
+            guard origin.status == .posted, origin.entryType == .expense, origin.direction == .outflow else { throw BackendError.invalidRefund }
+            for id in refundIDs {
+                guard let refund = try RecordDAO.find(db, id: id) else { throw BackendError.notFound }
+                guard refund.status == .posted, refund.isRefund, refund.currency == origin.currency else { throw BackendError.invalidRefund }
+                try RecordDAO.setRelated(db, id: id, relatedID: originID)
+            }
+            if let category = origin.categoryID, !refundIDs.isEmpty {
+                try RecordDAO.setCategory(db, ids: refundIDs, categoryID: category)
+            }
+        }
+    }
+
+    /// 取消退款和原交易的关联：两笔都留着，退款的分类不变
+    public func unlinkRefund(_ refundID: String) async throws {
+        try await database.write { db in
+            guard let refund = try RecordDAO.find(db, id: refundID) else { throw BackendError.notFound }
+            guard refund.isRefund else { throw BackendError.invalidRefund }
+            try RecordDAO.clearRelated(db, id: refundID)
         }
     }
 

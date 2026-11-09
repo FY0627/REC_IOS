@@ -360,6 +360,22 @@ final class LedgerStore {
         await refresh()
     }
 
+    // MARK: 退款关联到原交易
+
+    func refundLinkCandidates(recordID: String) async -> [RecordRow] {
+        (try? await backend?.refundLinkCandidates(recordID: recordID)) ?? []
+    }
+
+    func linkRefunds(_ refundIDs: [String], to originID: String) async throws {
+        try await backend?.linkRefunds(refundIDs, to: originID)
+        await refresh()
+    }
+
+    func unlinkRefund(_ refundID: String) async throws {
+        try await backend?.unlinkRefund(refundID)
+        await refresh()
+    }
+
     // MARK: 一笔支出和另一个账户的一笔收入合成转帐
 
     func transferMergeCandidates(recordID: String) async -> [RecordRow] {
