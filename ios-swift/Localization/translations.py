@@ -682,6 +682,13 @@ t("添加快捷指令", "加入捷徑", "Add Shortcut")
 t("添加后打开 **自动记账**，在 **App 通知** 里选银行 App；银行 App 记得打开通知。",
   "加入後打開 **自动记账**，在 **App 通知** 裡選銀行 App；銀行 App 記得打開通知。",
   "After adding it, open **自动记账** and choose your bank apps under **App Notification**. Make sure notifications are on for those bank apps.")
+t("点 **添加快捷指令**。", "點 **加入捷徑**。", "Tap **Add Shortcut**.")
+t("点 **打开快捷指令** → **自动化** → **+** → **信息**，条件不填，选 **立即运行** → **下一步** → **自动记账**。",
+  "點 **打開「捷徑」** → **自動化** → **+** → **訊息**，條件不填，選 **立即執行** → **下一步** → **自动记账**。",
+  "Tap **Open Shortcuts** → **Automation** → **+** → **Message**. Leave the conditions empty, choose **Run Immediately** → **Next** → **自动记账**.")
+t("再建一个 **电子邮件** 自动化：**主题** 包含 **你**，其余同上。",
+  "再建一個 **電子郵件** 自動化：**主旨** 包含 **你**，其餘同上。",
+  "Create one more **Email** automation: **Subject** contains **你**, the rest as above.")
 t("在 **设置 › 辅助功能 › 触控 › 轻点背面 › 轻点两下** 里选 **记录付款截图**。",
   "在 **設定 › 輔助使用 › 觸控 › 背面輕點 › 點兩下** 裡選 **记录付款截图**。",
   "In **Settings › Accessibility › Touch › Back Tap › Double Tap**, choose **记录付款截图**.")

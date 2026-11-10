@@ -3777,6 +3777,28 @@
         }
       }
     },
+    "再建一个 **电子邮件** 自动化：**主题** 包含 **你**，其余同上。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Create one more **Email** automation: **Subject** contains **你**, the rest as above."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "再建一个 **电子邮件** 自动化：**主题** 包含 **你**，其余同上。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "再建一個 **電子郵件** 自動化：**主旨** 包含 **你**，其餘同上。"
+          }
+        }
+      }
+    },
     "再添加 **导入汇率**，确认 **汇率数据** 显示为 **URL 的内容**（没有就点它选上），点 **完成**。" : {
       "localizations" : {
         "en" : {
@@ -13551,6 +13573,28 @@
         }
       }
     },
+    "点 **打开快捷指令** → **自动化** → **+** → **信息**，条件不填，选 **立即运行** → **下一步** → **自动记账**。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tap **Open Shortcuts** → **Automation** → **+** → **Message**. Leave the conditions empty, choose **Run Immediately** → **Next** → **自动记账**."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "点 **打开快捷指令** → **自动化** → **+** → **信息**，条件不填，选 **立即运行** → **下一步** → **自动记账**。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "點 **打開「捷徑」** → **自動化** → **+** → **訊息**，條件不填，選 **立即執行** → **下一步** → **自动记账**。"
+          }
+        }
+      }
+    },
     "点 **打开快捷指令**，在底部选 **自动化**，点右上角 **+**，选 **App** → **REC** → 勾选 **已打开**，选 **立即运行**，点 **下一步**。" : {
       "localizations" : {
         "en" : {
@@ -13591,6 +13635,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "點 **新增空白自動化** → **加入動作**，搜尋 **取得 URL 的內容** 並加入，把網址貼進去。"
+          }
+        }
+      }
+    },
+    "点 **添加快捷指令**。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tap **Add Shortcut**."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "点 **添加快捷指令**。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "點 **加入捷徑**。"
           }
         }
       }

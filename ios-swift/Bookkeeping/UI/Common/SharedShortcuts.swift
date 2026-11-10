@@ -1,7 +1,8 @@
 import Foundation
 
 /// 共享的快捷指令（iCloud 链接，ADR 0023）：点一下添加，不用自己搭动作。
-/// 快捷指令自己带触发条件（链接里一起带过去），不用再另建自动化。「App 通知」触发 iOS 27 才有，自动记账分两个链接。
+/// iOS 27 的快捷指令自己带触发条件（链接里一起带过去），不用再另建自动化；iOS 26 打不开 iOS 27 做的链接，
+/// 自动化也和快捷指令分开、带不过去，自动记账分两个链接，iOS 26 的要用户自己建自动化。
 /// 链接里的动作按 App 标识找 REC，只认 TestFlight / App Store 装的 `com.fy0627.rec`；
 /// 自己侧载的 App 标识后面带签名团队，对不上，设置页改成自己搭的步骤。
 /// 换了快捷指令的内容或名字，要用 TestFlight 装的 App 重新做链接，再改这里（页面上的一句话也写着名字）
@@ -11,8 +12,8 @@ enum SharedShortcuts {
 
     /// iOS 27 用的「自动记账」：自带 App 通知触发（银行 App 由用户选，短信也走这里）和电子邮件触发，来源 = 自动
     static let bankMessage27 = URL(string: "https://www.icloud.com/shortcuts/45fcd3946e3748cda1b2a509aab94dff")!
-    /// iOS 26 用的「自动记账」：自带信息触发和电子邮件触发，来源 = 自动
-    static let bankMessage26 = URL(string: "https://www.icloud.com/shortcuts/4b6174be756e4b21b6a00e0f3fdb5c95")!
+    /// iOS 26 用的「自动记账」：只有动作（记录银行动账通知，来源 = 自动），不带触发条件，自动化由用户建
+    static let bankMessage26 = URL(string: "https://www.icloud.com/shortcuts/06c0d81542244813b1bcbb50e6a4a437")!
     static var bankMessage: URL {
         if #available(iOS 27, *) { return bankMessage27 }
         return bankMessage26
