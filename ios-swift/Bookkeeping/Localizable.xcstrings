@@ -13771,46 +13771,46 @@
         }
       }
     },
-    "照上一步再建两个，**信息包含** 分别填 **。** 和 **】**。" : {
+    "照上一步再建三个，**信息包含** 分别填 **。**、**，**、**】**。" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Repeat the previous step twice, with **Message Contains** set to **。** and **】**."
+            "value" : "Repeat the previous step three times, with **Message Contains** set to **。**, **，** and **】**."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "照上一步再建两个，**信息包含** 分别填 **。** 和 **】**。"
+            "value" : "照上一步再建三个，**信息包含** 分别填 **。**、**，**、**】**。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "照上一步再建兩個，**訊息包含** 分別填 **。** 和 **】**。"
+            "value" : "照上一步再建三個，**訊息包含** 分別填 **。**、**，**、**】**。"
           }
         }
       }
     },
-    "照上两步再建两个，**信息包含** 分别填 **。** 和 **】**。" : {
+    "照上两步再建三个，**信息包含** 分别填 **。**、**，**、**】**。" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Repeat the two steps above twice, with **Message Contains** set to **。** and **】**."
+            "value" : "Repeat the two steps above three times, with **Message Contains** set to **。**, **，** and **】**."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "照上两步再建两个，**信息包含** 分别填 **。** 和 **】**。"
+            "value" : "照上两步再建三个，**信息包含** 分别填 **。**、**，**、**】**。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "照上兩步再建兩個，**訊息包含** 分別填 **。** 和 **】**。"
+            "value" : "照上兩步再建三個，**訊息包含** 分別填 **。**、**，**、**】**。"
           }
         }
       }

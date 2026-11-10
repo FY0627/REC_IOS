@@ -685,9 +685,9 @@ t("点 **添加快捷指令**。", "點 **加入捷徑**。", "Tap **Add Shortcu
 t("点 **打开快捷指令** → **自动化** → **+** → **信息**，**信息包含** 填一个 **空格**，选 **立即运行** → **下一步** → **自动记账**。",
   "點 **打開「捷徑」** → **自動化** → **+** → **訊息**，**訊息包含** 填一個 **空格**，選 **立即執行** → **下一步** → **自动记账**。",
   "Tap **Open Shortcuts** → **Automation** → **+** → **Message**. Set **Message Contains** to a **space**, choose **Run Immediately** → **Next** → **自动记账**.")
-t("照上一步再建两个，**信息包含** 分别填 **。** 和 **】**。",
-  "照上一步再建兩個，**訊息包含** 分別填 **。** 和 **】**。",
-  "Repeat the previous step twice, with **Message Contains** set to **。** and **】**.")
+t("照上一步再建三个，**信息包含** 分别填 **。**、**，**、**】**。",
+  "照上一步再建三個，**訊息包含** 分別填 **。**、**，**、**】**。",
+  "Repeat the previous step three times, with **Message Contains** set to **。**, **，** and **】**.")
 t("再建三个 **电子邮件** 自动化，**主题包含** 分别填 **空格**、**你**、**您**，其余同第 2 步。",
   "再建三個 **電子郵件** 自動化，**主旨包含** 分別填 **空格**、**你**、**您**，其餘同第 2 步。",
   "Create three **Email** automations with **Subject Contains** set to a **space**, **你** and **您**; the rest as in step 2.")
@@ -697,9 +697,9 @@ t("点 **打开快捷指令** → **自动化** → **+** → **信息**，**信
 t("添加操作 **记录银行动账通知**，**通知内容** 选 **快捷指令输入**，**来源** 选 **自动**，点 **完成**。",
   "加入動作 **記錄銀行帳戶異動通知**，**通知內容** 選 **捷徑輸入**，**來源** 選 **自動**，點 **完成**。",
   "Add the action **Record Bank Alert**, set **Content** to **Shortcut Input**, **Source** to **Automatic**, and tap **Done**.")
-t("照上两步再建两个，**信息包含** 分别填 **。** 和 **】**。",
-  "照上兩步再建兩個，**訊息包含** 分別填 **。** 和 **】**。",
-  "Repeat the two steps above twice, with **Message Contains** set to **。** and **】**.")
+t("照上两步再建三个，**信息包含** 分别填 **。**、**，**、**】**。",
+  "照上兩步再建三個，**訊息包含** 分別填 **。**、**，**、**】**。",
+  "Repeat the two steps above three times, with **Message Contains** set to **。**, **，** and **】**.")
 t("再建三个 **电子邮件** 自动化，**主题包含** 分别填 **空格**、**你**、**您**，其余同第 1、2 步。",
   "再建三個 **電子郵件** 自動化，**主旨包含** 分別填 **空格**、**你**、**您**，其餘同第 1、2 步。",
   "Create three **Email** automations with **Subject Contains** set to a **space**, **你** and **您**; the rest as in steps 1–2.")
