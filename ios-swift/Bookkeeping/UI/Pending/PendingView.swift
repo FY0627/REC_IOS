@@ -6,7 +6,8 @@ import BKModel
 /// 选错了可以换。最可能的几个分类排在面板上面，这个商户选过的预先选好（`CategorySuggestions`）；
 /// 没确认对方的转账在面板里选「转给自己」（不算收支）或直接选分类（算转给别人）。
 /// 列表里每笔只是一行，不在每一行里放分类格子（旧流水升级后可能有几百笔待分类）。
-/// 下面是「通知待处理」：只能「确认系统给出的候选」或「忽略」，不能借此手动编辑金额、方向、时间。
+/// 下面是「通知待处理」：只能「确认系统给出的候选」或「忽略」，不能借此手动编辑金额、时间。
+/// 通知没写是支出还是收入的（「无法确定资金方向」），由用户选「记为支出」或「记为收入」再记入。
 /// 认不准的写法可以用这条通知「做成识别模板」，之后同样写法的通知按模板识别。
 /// 从卡片详情进入时只列出与这张卡有关的项（候选里有这张卡，或通知尾号与它相同）。
 struct PendingView: View {
@@ -40,8 +41,8 @@ struct PendingView: View {
                         Text(account == nil ? "没有待处理的通知" : "这张卡没有待处理的账单").foregroundStyle(.secondary)
                     }
                     ForEach(shown) { item in
-                        PendingItemCard(item: item, accounts: store.accounts.filter { $0.isCard || $0.cardType == .wallet }) { accountID in
-                            await run { try await store.confirmPending(id: item.id, accountID: accountID) }
+                        PendingItemCard(item: item, accounts: store.accounts.filter { $0.isCard || $0.cardType == .wallet }) { accountID, direction in
+                            await run { try await store.confirmPending(id: item.id, accountID: accountID, direction: direction) }
                         } ignore: {
                             await run { try await store.ignorePending(id: item.id) }
                         } makeTemplate: {
@@ -272,7 +273,8 @@ struct CategorizeForm: View {
 private struct PendingItemCard: View {
     let item: PendingItem
     let accounts: [Account]
-    let confirm: (String) async -> Void
+    /// 记入这个账户；通知没写方向的（「无法确定资金方向」）带上用户选的方向
+    let confirm: (String, FlowDirection?) async -> Void
     let ignore: () async -> Void
     let makeTemplate: () -> Void
 
@@ -308,16 +310,39 @@ private struct PendingItemCard: View {
                 // 通知里没认出尾号，或尾号对不上任何卡：选一张卡记入
                 Menu {
                     ForEach(accounts) { account in
-                        Button(account.localizedTitle) { Task { await confirm(account.id) } }
+                        Button(account.localizedTitle) { Task { await confirm(account.id, nil) } }
                     }
                 } label: {
                     Label("选择账户记入", systemImage: "creditcard")
                 }
             }
+            if item.reason == .uncertainKind, item.draft?.direction == nil, item.draft != nil, !directionTargets.isEmpty {
+                // 通知没写是支出还是收入：选了方向才能记入。候选只有一个账户时直接记，否则再选账户
+                ForEach([FlowDirection.outflow, .inflow], id: \.self) { direction in
+                    let title: LocalizedStringKey = direction == .outflow ? "记为支出" : "记为收入"
+                    let symbol = direction == .outflow ? "arrow.up.circle" : "arrow.down.circle"
+                    if directionTargets.count == 1 {
+                        Button {
+                            Task { await confirm(directionTargets[0].id, direction) }
+                        } label: {
+                            Label(direction == .outflow ? "记为支出，记入 \(directionTargets[0].localizedTitle)" : "记为收入，记入 \(directionTargets[0].localizedTitle)", systemImage: symbol)
+                        }
+                        .buttonStyle(.borderless)
+                    } else {
+                        Menu {
+                            ForEach(directionTargets) { account in
+                                Button(account.localizedTitle) { Task { await confirm(account.id, direction) } }
+                            }
+                        } label: {
+                            Label(title, systemImage: symbol)
+                        }
+                    }
+                }
+            }
             if item.reason.allowsConfirmation, item.draft != nil {
                 ForEach(candidates) { account in
                     Button {
-                        Task { await confirm(account.id) }
+                        Task { await confirm(account.id, nil) }
                     } label: {
                         Label(item.reason == .possibleDuplicate ? "不是重复，记入 \(account.localizedTitle)" : "记入 \(account.localizedTitle)", systemImage: "checkmark.circle")
                     }
@@ -346,6 +371,11 @@ private struct PendingItemCard: View {
             return accounts.filter { $0.isCard && $0.matches(tail: tail) }
         }
         return accounts.filter { item.candidateAccountIDs.contains($0.id) }
+    }
+
+    /// 选方向后可以记入的账户：系统给了候选就只有候选，没有就是全部账户
+    private var directionTargets: [Account] {
+        candidates.isEmpty ? accounts : candidates
     }
 
     private func draftSummary(_ d: EventDraft) -> String {

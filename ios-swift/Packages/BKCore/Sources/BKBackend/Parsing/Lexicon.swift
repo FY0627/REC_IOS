@@ -52,6 +52,12 @@ enum Lexicon {
     static let includedFee = Rx(#"含\s*(?:手续费|费用|服务费)|including (?:a )?fee|incl\.? fee"#)
     /// 数字后面紧跟这些字，说明它不是金额（笔数、期数、天数、百分比……）
     static let nonAmountSuffix = Rx(#"^\s*(?:笔|次|期|天|日|个月|月|年|%|％|分钟|小时|岁|位|张|号|人|件|points?\b|x\b)"#)
+    /// 数字是一段范围的开头（「1-9月补缴」「3至5天」）：后面那个数带着上面的单位，这个数也不是金额
+    static let rangeStart = Rx(#"^\s?[-~～–—至到]\s?\d+(?:\.\d+)?\s*(?:笔|次|期|天|日|个月|月|年|%|％|分钟|小时|岁|位|张|号|人|件)"#)
+    /// 金额前面的币种符号（「JP¥」「CN¥」「HK$」「€」）：认「只有名称和金额」的通知时用
+    static let symbolBeforeAmount = Rx(#"(?:[A-Z]{2,3})?[¥$€£₩₹₱฿]\s?$"#, caseInsensitive: false)
+    /// 名称里不该有的：数字和断句的标点。有了就是一句话，不是名称
+    static let notAName = Rx(#"[\d。！？!?；;]"#)
 
     // MARK: 交易性质（离金额最近的关键词优先）
 

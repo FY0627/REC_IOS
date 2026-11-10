@@ -67,6 +67,8 @@ final class LedgerStore {
             await adoptLedgerRates()
             // 更新前手选的分类：回放一遍，学习不从零开始（只做一次）
             try? await opened.seedCategoryLearning()
+            // 更新后读法变了：还没处理的待处理按新读法重读一遍（每个版本的读法只做一次）
+            try? await opened.rereadPending()
             await refresh()
             _ = try? await backend?.purgeExpiredRawContent()
         } catch {
@@ -231,8 +233,8 @@ final class LedgerStore {
         (try? await backend?.openPendingItems()) ?? []
     }
 
-    func confirmPending(id: String, accountID: String) async throws {
-        try await backend?.confirmPending(id: id, accountID: accountID)
+    func confirmPending(id: String, accountID: String, direction: FlowDirection? = nil) async throws {
+        try await backend?.confirmPending(id: id, accountID: accountID, direction: direction)
         await refresh()
     }
 

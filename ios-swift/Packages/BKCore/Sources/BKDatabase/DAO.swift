@@ -883,6 +883,35 @@ public enum IngestDAO {
         }
     }
 
+    /// 读法比 `version` 旧、整条都还在待处理的通知，从早到晚：有正文，没有流水入账或合并，也没有记入、忽略过的待处理项。
+    /// 手动记的和截图不算
+    public static func staleWithOpenPending(_ db: SQLiteConnection, below version: Int) throws -> [IngestLogEntry] {
+        try db.query(
+            """
+            SELECT \(logColumns) FROM ingests WHERE parser_version < ? AND source NOT IN ('manual', 'screenshot') AND raw_text IS NOT NULL
+              AND id IN (SELECT ingest_id FROM pending_items WHERE status = 'open')
+              AND id NOT IN (SELECT ingest_id FROM pending_items WHERE status <> 'open')
+              AND id NOT IN (SELECT ingest_id FROM records)
+              AND id NOT IN (SELECT ingest_id FROM record_evidence)
+            ORDER BY processed_at, id
+            """,
+            [version], mapLog
+        )
+    }
+
+    public static func setParserVersion(_ db: SQLiteConnection, id: String, _ version: Int, clearRaw: Bool) throws {
+        try db.run("UPDATE ingests SET parser_version = ? WHERE id = ?", [version, id])
+        if clearRaw { try db.run("UPDATE ingests SET raw_text = NULL WHERE id = ?", [id]) }
+    }
+
+    /// 重读后发现不是动账通知：清掉正文，只留指纹（同一条再交过来仍然认得出）
+    public static func discard(_ db: SQLiteConnection, id: String, classification: MessageClassification, detail: String, parserVersion: Int) throws {
+        try db.run(
+            "UPDATE ingests SET classification = ?, outcome = ?, detail = ?, raw_text = NULL, raw_purge_after = NULL, parser_version = ? WHERE id = ?",
+            [classification.rawValue, IngestOutcome.filtered.rawValue, detail, parserVersion, id]
+        )
+    }
+
     /// 清理到期的原始内容：只清空正文，保留指纹（用于幂等去重）和处理结果。
     @discardableResult
     public static func purgeRaw(_ db: SQLiteConnection, now: Date) throws -> Int {
@@ -953,6 +982,20 @@ public enum PendingDAO {
             "UPDATE pending_items SET status = 'ignored', resolved_at = ? WHERE ingest_id = ? AND status = 'open' AND reason = ? AND part_index / 2 <> ?",
             [date, ingestID, PendingReason.ambiguousAmount.rawValue, part / 2]
         )
+    }
+
+    /// 这条通知最早的一个待处理项是什么时候放进来的
+    public static func firstCreatedAt(_ db: SQLiteConnection, ingestID: String) throws -> Date? {
+        try db.queryOne("SELECT MIN(created_at) FROM pending_items WHERE ingest_id = ?", [ingestID]) { $0.optionalDate(0) } ?? nil
+    }
+
+    public static func setCreatedAt(_ db: SQLiteConnection, ingestID: String, _ date: Date) throws {
+        try db.run("UPDATE pending_items SET created_at = ? WHERE ingest_id = ?", [date, ingestID])
+    }
+
+    /// 删掉这条通知的全部待处理项（按新读法重读之前）
+    public static func deleteAll(_ db: SQLiteConnection, ingestID: String) throws {
+        try db.run("DELETE FROM pending_items WHERE ingest_id = ?", [ingestID])
     }
 
     /// 给这条通知新增一笔时用的序号：比已有的待处理和流水都大，偶数（奇数留给拆出的手续费）

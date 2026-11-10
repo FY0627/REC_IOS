@@ -1027,15 +1027,22 @@ public final class LedgerBackend: Sendable {
         }
     }
 
-    /// 确认系统给出的候选。不能借此修改金额、方向、时间等字段。
-    public func confirmPending(id: String, accountID: String) async throws {
+    /// 确认系统给出的候选。不能借此修改金额、时间等字段。
+    /// 通知没写是支出还是收入（`uncertainKind`）时由用户选 `direction`；通知写了方向的不能改
+    public func confirmPending(id: String, accountID: String, direction: FlowDirection? = nil) async throws {
         let now = clock()
         let calendar = calendar
         let newID = newID
         try await database.write { db in
             guard let item = try PendingDAO.find(db, id: id) else { throw BackendError.notFound }
             guard item.status == .open else { throw BackendError.alreadyResolved }
-            guard item.reason.allowsConfirmation, let draft = item.draft else { throw BackendError.confirmationNotAllowed }
+            guard var draft = item.draft else { throw BackendError.confirmationNotAllowed }
+            if item.reason == .uncertainKind {
+                guard let direction, draft.direction == nil else { throw BackendError.confirmationNotAllowed }
+                draft.direction = direction
+            } else {
+                guard item.reason.allowsConfirmation else { throw BackendError.confirmationNotAllowed }
+            }
             let accounts = try AccountDAO.all(db)
             guard let account = accounts.first(where: { $0.id == accountID }) else { throw BackendError.notFound }
             let allowed: Bool
@@ -1063,6 +1070,23 @@ public final class LedgerBackend: Sendable {
             }
         }
     }
+
+    /// 读法更新后，还没处理的待处理项按新读法重读一遍（`IngestEngine.rereadPending`）。每个版本的读法只做一次，返回重读的通知条数
+    @discardableResult
+    public func rereadPending() async throws -> Int {
+        let now = clock()
+        let calendar = calendar
+        let newID = newID
+        return try await database.write { db in
+            let version = String(MessageParser.version)
+            guard try SettingsDAO.get(db, Self.pendingRereadKey) != version else { return 0 }
+            let count = try IngestEngine(db: db, now: now, calendar: calendar, newID: newID).rereadPending()
+            try SettingsDAO.set(db, Self.pendingRereadKey, version)
+            return count
+        }
+    }
+
+    static let pendingRereadKey = "pending_reread_parser_version"
 
     public func ignorePending(id: String) async throws {
         let now = clock()

@@ -1417,6 +1417,173 @@ final class IngestTests: XCTestCase {
         let open = try await backend.pendingCount()
         XCTAssertEqual(open, 0, "同一条通知里的其他候选金额自动忽略")
     }
+
+    // MARK: Apple 钱包的通知、系统写的币种、聊天消息、待处理里选方向
+
+    func parse(_ text: String) -> ParsedMessage {
+        MessageParser.parse(MessageContext(text: text, source: .auto, sender: nil, subject: nil, referenceDate: now, calendar: calendar))
+    }
+
+    let walletNotice = "招商银行股份有限公司\nJP¥3,000"
+
+    func testWalletNoticeIsAnExpenseInItsOwnCurrency() async throws {
+        let backend = try makeBackend()
+        let card = try await addAccount(backend, last4: "0002")
+        for (index, text) in [walletNotice, "招商银行股份有限公司 / JP¥3,000", "招商银行股份有限公司 JP¥3,000"].enumerated() {
+            let result = try await backend.ingest(IngestRequest(text: text, source: .auto, receivedAt: now.addingTimeInterval(Double(index) * 3600)))
+            XCTAssertEqual(result.pendingCount, 1, text + "：" + result.summary)
+        }
+        let items = try await backend.openPendingItems()
+        XCTAssertEqual(items.count, 3)
+        for item in items {
+            XCTAssertEqual(item.reason, .missingCardTail, "方向认出来了，只差选卡")
+            XCTAssertEqual(item.candidateAccountIDs, [card.id], "名称里有招商银行：这张卡是候选")
+            XCTAssertEqual(item.draft?.direction, .outflow)
+            XCTAssertEqual(item.draft?.kind, .purchase)
+            XCTAssertEqual(item.draft?.amount.currencyCandidates, [.jpy])
+            XCTAssertNil(item.draft?.counterparty, "发卡行不是商户")
+        }
+        try await backend.confirmPending(id: items[0].id, accountID: card.id)
+        let rows = try await backend.records(accountID: card.id)
+        let r = try XCTUnwrap(rows.first?.record)
+        XCTAssertEqual(r.amountMinor, 3000, "日元没有小数，「3,000」是三千")
+        XCTAssertEqual(r.currency, .jpy)
+        XCTAssertEqual(r.direction, .outflow)
+    }
+
+    func testWalletNoticeWithMerchantAndUnknownNames() async throws {
+        let backend = try makeBackend()
+        try await addAccount(backend, bank: "ccb", bankName: "建设银行", last4: "0005")
+        let merchant = try await backend.ingest(IngestRequest(text: "e通卡充值\nCN¥10.00\n银联储蓄卡", source: .auto))
+        XCTAssertEqual(merchant.pendingCount, 1, merchant.summary)
+        let draft = try await backend.openPendingItems().first?.draft
+        XCTAssertEqual(draft?.counterparty, "e通卡充值")
+        XCTAssertEqual(draft?.direction, .outflow)
+        XCTAssertEqual(draft?.amount.currencyCandidates, [.cny])
+        // 只写「¥」、名称也看不出是银行的：聊天里也会这样写，不留
+        let chat = try await backend.ingest(IngestRequest(text: "阿翔\n¥200", source: .auto))
+        XCTAssertEqual(chat.classification, .noFinancialContent)
+        // 名称里写了性质的照原来的读法
+        let parsed = parse("退款 JP¥3,000")
+        XCTAssertEqual(parsed.events.first?.draft.direction, .inflow)
+        XCTAssertFalse(parsed.nameAndAmountOnly)
+    }
+
+    func testSystemCurrencyPrefixes() {
+        let cases: [(String, CurrencyCode)] = [
+            ("JP¥3,000", .jpy), ("CN¥10.00", .cny), ("HK$25.00", .hkd), ("US$8.00", .usd),
+            ("CA$5.00", CurrencyCode("CAD")), ("AU$5.00", CurrencyCode("AUD")), ("A$5.00", CurrencyCode("AUD")), ("NT$120", CurrencyCode("TWD")),
+        ]
+        for (amount, currency) in cases {
+            let draft = parse("您尾号0427的储蓄卡消费\(amount)").events.first?.draft
+            XCTAssertEqual(draft?.amount.currencyCandidates, [currency], amount)
+            XCTAssertEqual(draft?.amount.preferredCurrency, currency, amount)
+        }
+    }
+
+    func testChatAboutMonthRangeIsNotATransaction() async throws {
+        let backend = try makeBackend()
+        try await addAccount(backend, last4: "0427")
+        let text = "扣除了10月医社保和1-9月补缴部分"
+        XCTAssertTrue(parse(text).events.isEmpty, "「1-9月」的 1 不是金额")
+        for chat in [text, "工资到了，扣除了10月医社保和1-9月补缴部分", "补扣了3至5天的", "上次聚餐扣除你的那份还剩50"] {
+            let result = try await backend.ingest(IngestRequest(text: chat, source: .auto))
+            XCTAssertEqual(result.classification, .noFinancialContent, chat)
+        }
+        let pending = try await backend.pendingCount()
+        XCTAssertEqual(pending, 0)
+        let log = try await backend.ingestLog()
+        XCTAssertTrue(log.isEmpty, "聊天消息不保存")
+    }
+
+    func testUncertainDirectionCanBeChosenInPending() async throws {
+        let backend = try makeBackend()
+        let account = try await addAccount(backend, last4: "0427")
+        let text = "【招商银行】您尾号0427的储蓄卡10月24日14:30人民币38.00元。"
+        _ = try await backend.ingest(IngestRequest(text: text, source: .sms, sender: "95555"))
+        let first = try await backend.openPendingItems().first
+        let item = try XCTUnwrap(first)
+        XCTAssertEqual(item.reason, .uncertainKind)
+        XCTAssertEqual(item.candidateAccountIDs, [account.id])
+        do {
+            try await backend.confirmPending(id: item.id, accountID: account.id)
+            XCTFail("没选方向不能记入")
+        } catch BackendError.confirmationNotAllowed {}
+        try await backend.confirmPending(id: item.id, accountID: account.id, direction: .inflow)
+        let rows = try await backend.records(accountID: account.id)
+        let r = try XCTUnwrap(rows.first?.record)
+        XCTAssertEqual(r.direction, .inflow)
+        XCTAssertEqual(r.amountMinor, 38_00)
+        XCTAssertEqual(r.kind, .other)
+        let open = try await backend.pendingCount()
+        XCTAssertEqual(open, 0)
+    }
+
+    func testChosenDirectionDoesNotOverrideWhatTheNoticeSays() async throws {
+        let backend = try makeBackend()
+        let account = try await addAccount(backend, last4: "0427")
+        _ = try await backend.ingest(IngestRequest(text: "您的账户10月24日消费20.00元", source: .sms))
+        let item = try await backend.openPendingItems()[0]
+        try await backend.confirmPending(id: item.id, accountID: account.id, direction: .inflow)
+        let rows = try await backend.records(accountID: account.id)
+        XCTAssertEqual(rows.first?.record.direction, .outflow, "通知写了消费，选的方向不算")
+    }
+
+    /// 旧读法留下的待处理：一条输入和它的待处理项，读法版本是旧的
+    func insertOldPending(_ database: Database, id: String, text: String, reason: PendingReason, draft: EventDraft, status: PendingStatus = .open) async throws {
+        let now = self.now
+        try await database.write { db in
+            try IngestDAO.insert(
+                db, id: id, fingerprint: "old-" + id, request: IngestRequest(text: text, source: .auto), processedAt: now.addingTimeInterval(-3600), rawText: text,
+                rawPurgeAfter: nil, classification: .transaction, outcome: .pending, detail: "", parserVersion: MessageParser.version - 1
+            )
+            try PendingDAO.insert(db, id: "p-" + id, ingestID: id, partIndex: 0, reason: reason, draft: draft, candidates: [], duplicateOf: nil, now: now.addingTimeInterval(-3600))
+            if status != .open { _ = try PendingDAO.resolve(db, id: "p-" + id, status: status, at: now) }
+        }
+    }
+
+    func oldDraft(_ digits: String, currencies: [CurrencyCode], direction: FlowDirection?) -> EventDraft {
+        EventDraft(
+            amount: AmountText(digits: digits, currencyCandidates: currencies, preferredCurrency: currencies.first), direction: direction, kind: .other, status: .posted,
+            counterparty: nil, cardTail: nil, counterpartyTail: nil, transactionTime: nil, bankReference: nil, balanceAfter: nil, includedFee: nil,
+            isSplitFee: false, partIndex: 0, bankHint: nil, evidenceSnippet: ""
+        )
+    }
+
+    func testOpenPendingIsRereadAfterParserUpdate() async throws {
+        let database = try Database.inMemory()
+        let now = self.now
+        let backend = LedgerBackend(database: database, calendar: calendar, clock: { now })
+        let card = try await addAccount(backend, last4: "0002")
+        // 旧读法：钱包通知读成了人民币、方向不明；聊天消息读成了 1 块钱的支出
+        try await insertOldPending(database, id: "wallet", text: walletNotice, reason: .uncertainKind, draft: oldDraft("3,000", currencies: [.cny, .jpy], direction: nil))
+        try await insertOldPending(database, id: "chat", text: "扣除了10月医社保和1-9月补缴部分", reason: .missingCardTail, draft: oldDraft("1", currencies: [], direction: .outflow))
+        // 用户已经忽略过的不动
+        try await insertOldPending(database, id: "ignored", text: walletNotice + " ", reason: .uncertainKind, draft: oldDraft("3,000", currencies: [.cny, .jpy], direction: nil), status: .ignored)
+
+        let count = try await backend.rereadPending()
+        XCTAssertEqual(count, 2)
+        let items = try await backend.openPendingItems()
+        XCTAssertEqual(items.count, 1, "聊天消息不再待处理")
+        let item = try XCTUnwrap(items.first)
+        XCTAssertEqual(item.ingestID, "wallet")
+        XCTAssertEqual(item.reason, .missingCardTail)
+        XCTAssertEqual(item.draft?.direction, .outflow)
+        XCTAssertEqual(item.draft?.amount.currencyCandidates, [.jpy])
+        XCTAssertEqual(item.candidateAccountIDs, [card.id])
+        XCTAssertEqual(item.createdAt, now.addingTimeInterval(-3600), "留在列表里原来的位置")
+        let log = try await backend.ingestLog()
+        XCTAssertNil(log.first { $0.id == "chat" }?.rawText, "不是动账通知的正文清掉")
+        XCTAssertEqual(log.first { $0.id == "chat" }?.classification, .noFinancialContent)
+        XCTAssertNotNil(log.first { $0.id == "ignored" }?.rawText)
+
+        let again = try await backend.rereadPending()
+        XCTAssertEqual(again, 0, "每个版本的读法只重读一次")
+        try await backend.confirmPending(id: item.id, accountID: card.id)
+        let rows = try await backend.records(accountID: card.id)
+        XCTAssertEqual(rows.first?.record.currency, .jpy)
+        XCTAssertEqual(rows.first?.record.processedAt, now.addingTimeInterval(-3600), "处理时间还是当初收到的时候")
+    }
 }
 
 final class ClockBox: @unchecked Sendable {

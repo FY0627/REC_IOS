@@ -53,11 +53,14 @@ public struct ParsedMessage: Sendable {
     public var bankSignature: Bool
     /// 有【署名】，但不是银行或电子钱包的署名
     public var nonBankSignature: Bool
+    /// 整条通知只有名称和一个带币种符号的金额（Apple 钱包的交易通知「招商银行股份有限公司 JP¥3,000」），读成了一笔支出
+    public var nameAndAmountOnly = false
 }
 
 /// 规则解析器：纯函数，不访问数据库，不依赖网络。
 public enum MessageParser {
-    public static let version = 6
+    /// 读法变了就加 1：还没处理的待处理项按新读法重读一遍（`IngestEngine.rereadPending`）
+    public static let version = 7
 
     // MARK: 识别用正则
 
@@ -171,11 +174,12 @@ public enum MessageParser {
         var firstTime: WallClock?
         var references: [Mention<String>] = []
         var hasAmount = false
+        var nameAndAmountOnly = false
         func result(_ classification: MessageClassification, _ events: [ParsedEvent] = [], _ balances: [ParsedBalance] = []) -> ParsedMessage {
             ParsedMessage(
                 classification: classification, events: events, balances: balances, bankHint: bankHint, walletHint: walletHint, cleanedText: cleaned, cardTails: foundTails,
                 firstTime: firstTime, onlyReference: references.count == 1 ? references[0].value : nil, hasAmount: hasAmount,
-                bankSignature: bankSignature, nonBankSignature: nonBankSignature
+                bankSignature: bankSignature, nonBankSignature: nonBankSignature, nameAndAmountOnly: nameAndAmountOnly && !events.isEmpty
             )
         }
 
@@ -292,7 +296,7 @@ public enum MessageParser {
             let prefixCurrency = CurrencyTokens.prefix(in: before)
             let suffixCurrency = CurrencyTokens.suffix(in: after)
             let hasCurrency = prefixCurrency != nil || suffixCurrency != nil
-            if !hasCurrency, Lexicon.nonAmountSuffix.test(after) { continue }
+            if !hasCurrency, Lexicon.nonAmountSuffix.test(after) || Lexicon.rangeStart.test(after) { continue }
             // 粘在字母上的数字是编号（交易号 DB59HV、车牌 3AA33），写了币种的除外（USD10、CNY1）
             if !hasCurrency, before.last?.isGluedToNumber == true || after.first?.isGluedToNumber == true { continue }
 
@@ -357,6 +361,12 @@ public enum MessageParser {
         }
         amounts = distinctAmounts
         hasAmount = !amounts.isEmpty
+
+        // Apple 钱包的交易通知只有名称（发卡行、卡或商户）和金额，没有「消费」「支出」这样的字：是用卡付的一笔。
+        // 支付宝、微信支付的通知不这样读（「微信支付 ¥20.00」说不清是付还是收）
+        let bareNames = walletHint == nil && tails.isEmpty && times.isEmpty && amounts.count == 1 ? Self.namesBesideAmount(amounts[0].range, in: ns) : nil
+        // 名称像银行或卡的是付款的卡，其余的是商户
+        let bareMerchant = bareNames?.first { !Lexicon.bankSignature.test($0) && !Lexicon.bankish.test($0) }
 
         let summaryValue = Lexicon.summaryField.first(ns).flatMap { $0.group(1, in: ns)?.trimmingCharacters(in: .whitespaces) }
 
@@ -429,6 +439,12 @@ public enum MessageParser {
                 detection.status = .failed
             }
             if detection.direction == nil, detection.kind == .other, amount.negative { detection.direction = .outflow }
+            // 只有名称和金额（Apple 钱包的交易通知）：名称里没有说性质的字时，是用卡付的一笔
+            if let bareNames, detection.uncertain, detection.direction == nil,
+               !Lexicon.kindRules.contains(where: { rule in bareNames.contains { rule.rx.test($0) } }) {
+                detection = KindDetection(kind: .purchase, direction: .outflow, status: detection.status, uncertain: false)
+                nameAndAmountOnly = true
+            }
             // 交易失败时钱没有动，说不清性质也不用问用户
             if detection.status == .failed, detection.direction == nil {
                 detection.direction = .outflow
@@ -437,7 +453,7 @@ public enum MessageParser {
 
             let (tail, otherTail) = nearestTail(before: amount.range.location, sentence: amount.sentence)
             let time = nearestTime(before: amount.range.location, sentence: amount.sentence)
-            let counterparty = extractCounterparty(sentence: timeless.substring(with: sentenceRange), summary: summaryValue)
+            let counterparty = extractCounterparty(sentence: timeless.substring(with: sentenceRange), summary: summaryValue) ?? (nameAndAmountOnly ? bareMerchant : nil)
             let reference = references.first { $0.range.location >= sentenceRange.location && $0.range.location < sentenceRange.location + sentenceRange.length }?.value
                 ?? (singleTransaction && references.count == 1 ? references[0].value : nil)
 
@@ -557,6 +573,18 @@ public enum MessageParser {
     private static func signatures(in text: String) -> [String] {
         let ns = NSString(string: text)
         return Lexicon.signature.matches(ns).compactMap { $0.group(1, in: ns) ?? $0.group(2, in: ns) }
+    }
+
+    /// 整条通知除了这个带币种符号的金额，只剩一两个名称（「招商银行股份有限公司 / JP¥3,000」「e通卡充值\nCN¥10.00\n银联储蓄卡」）：返回这些名称。
+    /// 名称不到 2 个字、超过 40 个字、里面有数字或断句的标点，或者金额前面没有币种符号，都不算
+    private static func namesBesideAmount(_ amount: NSRange, in ns: NSString) -> [String]? {
+        let before = ns.substring(to: amount.location)
+        guard let symbol = Lexicon.symbolBeforeAmount.first(NSString(string: before)) else { return nil }
+        let rest = NSString(string: before).substring(to: symbol.range.location) + "\n" + ns.substring(from: amount.location + amount.length)
+        let separators = CharacterSet.whitespaces.union(CharacterSet(charactersIn: "/|·•:：,，—-"))
+        let names = rest.components(separatedBy: CharacterSet(charactersIn: "\n/|")).map { $0.trimmingCharacters(in: separators) }.filter { !$0.isEmpty }
+        guard (1...2).contains(names.count), names.allSatisfy({ (2...40).contains($0.count) && !Lexicon.notAName.test($0) }) else { return nil }
+        return names
     }
 
     /// `amount` 是紧跟在 `main` 后面括号里的另一币种金额。币种相同时说不清哪个才对，不算（保持歧义）
@@ -826,6 +854,11 @@ enum CurrencyTokens {
     private static let tokens: [(String, [CurrencyCode], CurrencyCode?, Bool)] = [
         ("人民币", [.cny], .cny, false), ("澳门元", [CurrencyCode("MOP")], nil, false), ("瑞士法郎", [.chf], nil, false),
         ("新台币", [CurrencyCode("TWD")], nil, false), ("US$", [.usd], nil, false), ("HK$", [.hkd], nil, false),
+        // 系统按地区写的币种（Apple 钱包的通知）：地区不是中国大陆的手机上人民币是「CN¥」，日元是「JP¥」。
+        // 「CA$」要排在「A$」前面，不然会被读成澳元
+        ("CN¥", [.cny], nil, false), ("JP¥", [.jpy], nil, false), ("CA$", [CurrencyCode("CAD")], nil, false),
+        ("AU$", [CurrencyCode("AUD")], nil, false), ("NZ$", [CurrencyCode("NZD")], nil, false), ("SG$", [CurrencyCode("SGD")], nil, false),
+        ("MOP$", [CurrencyCode("MOP")], nil, false),
         ("NT$", [CurrencyCode("TWD")], nil, false), ("S$", [CurrencyCode("SGD")], nil, false), ("A$", [CurrencyCode("AUD")], nil, false),
         ("C$", [CurrencyCode("CAD")], nil, false), ("RMB", [.cny], nil, false), ("CNY", [.cny], nil, false), ("EUR", [.eur], nil, false),
         ("USD", [.usd], nil, false), ("HKD", [.hkd], nil, false), ("GBP", [.gbp], nil, false), ("JPY", [.jpy], nil, false),

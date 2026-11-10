@@ -98,14 +98,18 @@ struct IngestEngine {
         if try IngestDAO.exists(db, fingerprint: fingerprint) != nil {
             return IngestResult(ingestID: nil, outcome: .duplicateInput, classification: .transaction, recordedCount: 0, mergedCount: 0, pendingCount: 0, summary: "重复的输入，已忽略")
         }
+        return try process(request, ingestID: newID(), fingerprint: fingerprint, processedAt: now)
+    }
 
-        let ingestID = newID()
+    /// 识别一条输入并入账。`fingerprint` 是 nil 时是重读一条已经保存的输入（`rereadPending`）：不再插入，只更新它的结果，
+    /// `processedAt` 是它原来的处理时间
+    private func process(_ request: IngestRequest, ingestID: String, fingerprint: String?, processedAt: Date) throws -> IngestResult {
         // 付款页截图（ADR 0021）走自己的解析：认页面、按标签读，不按银行通知的写法
         let screenshot = request.source == .screenshot
-            ? ScreenshotParser.parse(request.text, referenceDate: request.receivedAt ?? now, calendar: calendar) : nil
+            ? ScreenshotParser.parse(request.text, referenceDate: request.receivedAt ?? processedAt, calendar: calendar) : nil
         var parsed = screenshot?.message ?? MessageParser.parse(MessageContext(
             text: request.text, source: request.source, sender: request.sender, subject: request.subject,
-            referenceDate: request.receivedAt ?? now, calendar: calendar
+            referenceDate: request.receivedAt ?? processedAt, calendar: calendar
         ))
         // 用户在本机做的模板优先于通用读法：认得出时只用它认出的这一笔（验证码除外）
         var templateHit = false
@@ -142,12 +146,14 @@ struct IngestEngine {
             classification = .noFinancialContent
         } else if !ownAccount, [MessageClassification.transaction, .unrecognized, .marketing].contains(classification),
                   parsed.bankHint == nil, !parsed.bankSignature, parsed.walletHint == nil || parsed.events.isEmpty,
-                  named.isEmpty, !Lexicon.bankish.test(parsed.cleanedText), !parsed.events.contains(where: { $0.issue == nil || Self.formalAmount($0.draft.amount) }) {
+                  named.isEmpty, !Lexicon.bankish.test(parsed.cleanedText), !parsed.events.contains(where: { Self.credible($0, nameAndAmountOnly: parsed.nameAndAmountOnly) }) {
             classification = .noFinancialContent
         }
         let logOnly = screenshot == nil && !ownAccount && !parsed.hasAmount
         // 不是动账通知的不保存，也不写接收日志：普通短信、邮件不会留在 App 里
         if classification == .noFinancialContent {
+            // 重读时才发现不是动账通知：以前保存的正文清掉
+            if fingerprint == nil { try IngestDAO.discard(db, id: ingestID, classification: classification, detail: classification.displayName, parserVersion: MessageParser.version) }
             return IngestResult(ingestID: nil, outcome: .filtered, classification: classification, recordedCount: 0, mergedCount: 0, pendingCount: 0, summary: classification.displayName)
         }
 
@@ -156,11 +162,15 @@ struct IngestEngine {
         let storeRaw = classification != .verificationCode && classification != .empty
         let rawText = storeRaw ? String(request.text.prefix(20_000)) : nil
         let purgeAfter = storeRaw ? now.addingTimeInterval(Double(retention) * 86_400) : nil
-        try IngestDAO.insert(
-            db, id: ingestID, fingerprint: fingerprint, request: request, processedAt: now, rawText: rawText,
-            rawPurgeAfter: purgeAfter, classification: classification, outcome: .filtered, detail: "", parserVersion: MessageParser.version
-        )
-        let meta = IngestMeta(ingestID: ingestID, source: request.source, receivedAt: request.receivedAt, processedAt: now)
+        if let fingerprint {
+            try IngestDAO.insert(
+                db, id: ingestID, fingerprint: fingerprint, request: request, processedAt: processedAt, rawText: rawText,
+                rawPurgeAfter: purgeAfter, classification: classification, outcome: .filtered, detail: "", parserVersion: MessageParser.version
+            )
+        } else {
+            try IngestDAO.setParserVersion(db, id: ingestID, MessageParser.version, clearRaw: !storeRaw)
+        }
+        let meta = IngestMeta(ingestID: ingestID, source: request.source, receivedAt: request.receivedAt, processedAt: processedAt)
 
         var recorded = 0, merged = 0, pending = 0
         var items: [IngestItem] = []
@@ -315,6 +325,17 @@ struct IngestEngine {
         amount.currencyCandidates.count == 1 && amount.digits.range(of: #"[.,]\d{2}$"#, options: .regularExpression) != nil
     }
 
+    /// 没有署名、对不上账户的通知里，这一笔够不够算动账通知。完整认出交易的算，但金额要像金额：
+    /// 没写币种、也没有小数的一个整数不算（聊天里的「扣了你3次」「补缴1-9月」）；
+    /// 只有名称和金额的（Apple 钱包的通知），币种要写得明确（「JP¥」「CN¥」，只写「¥」「$」的不算）
+    static func credible(_ event: ParsedEvent, nameAndAmountOnly: Bool) -> Bool {
+        let amount = event.draft.amount
+        if formalAmount(amount) { return true }
+        guard event.issue == nil else { return false }
+        if nameAndAmountOnly { return amount.currencyCandidates.count == 1 }
+        return !amount.currencyCandidates.isEmpty || amount.digits.range(of: #"[.,]\d{1,3}$"#, options: .regularExpression) != nil
+    }
+
     /// 通知里写的是账号（户口号码）或完整卡号时，和卡片信息里填写的号码比较。
     /// 通知里的号码常被打码（`100-200XXX-300`）：两边的 X、*、• 都当作任意一位数字。
     /// 只有一张卡对得上时返回它的尾号。
@@ -351,6 +372,26 @@ struct IngestEngine {
             return false
         }
         return zip(t, aligned).allSatisfy { $0 == $1 || $0 == "X" || $1 == "X" }
+    }
+
+    /// 读法更新后（`MessageParser.version`），还没处理的待处理项按新读法重读一遍：能入账的入账，不是动账通知的不再保存，
+    /// 其余换成新读出来的待处理（金额、币种、方向按新读法）。只重读整条通知都还没处理的：已经有流水入账、
+    /// 或者用户记入、忽略过其中一条的不动。截图不重读。返回重读的通知条数
+    func rereadPending() throws -> Int {
+        var count = 0
+        for entry in try IngestDAO.staleWithOpenPending(db, below: MessageParser.version) {
+            guard let raw = entry.rawText else { continue }
+            let created = try PendingDAO.firstCreatedAt(db, ingestID: entry.id)
+            try PendingDAO.deleteAll(db, ingestID: entry.id)
+            _ = try process(
+                IngestRequest(text: raw, source: entry.source, sender: entry.sender, subject: entry.subject, receivedAt: entry.receivedAt, boundAccountID: entry.boundAccountID),
+                ingestID: entry.id, fingerprint: nil, processedAt: entry.processedAt
+            )
+            // 仍然待处理的留在列表里原来的位置
+            if let created { try PendingDAO.setCreatedAt(db, ingestID: entry.id, created) }
+            count += 1
+        }
+        return count
     }
 
     /// 刚保存的模板用于还没处理的待处理项：认得出的通知按模板重新入账，或者换成新的待处理原因（例如还要选卡）；
