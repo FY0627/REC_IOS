@@ -859,28 +859,6 @@
         }
       }
     },
-    "5 步完成" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "5 Steps"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "5 步完成"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "5 個步驟"
-          }
-        }
-      }
-    },
     "7 天" : {
       "localizations" : {
         "en" : {
@@ -3777,24 +3755,46 @@
         }
       }
     },
-    "再建一个 **电子邮件** 自动化：**主题** 包含 **你**，其余同上。" : {
+    "再建三个 **电子邮件** 自动化，**主题包含** 分别填 **空格**、**你**、**您**，其余同第 1、2 步。" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Create one more **Email** automation: **Subject** contains **你**, the rest as above."
+            "value" : "Create three **Email** automations with **Subject Contains** set to a **space**, **你** and **您**; the rest as in steps 1–2."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "再建一个 **电子邮件** 自动化：**主题** 包含 **你**，其余同上。"
+            "value" : "再建三个 **电子邮件** 自动化，**主题包含** 分别填 **空格**、**你**、**您**，其余同第 1、2 步。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "再建一個 **電子郵件** 自動化：**主旨** 包含 **你**，其餘同上。"
+            "value" : "再建三個 **電子郵件** 自動化，**主旨包含** 分別填 **空格**、**你**、**您**，其餘同第 1、2 步。"
+          }
+        }
+      }
+    },
+    "再建三个 **电子邮件** 自动化，**主题包含** 分别填 **空格**、**你**、**您**，其余同第 2 步。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Create three **Email** automations with **Subject Contains** set to a **space**, **你** and **您**; the rest as in step 2."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "再建三个 **电子邮件** 自动化，**主题包含** 分别填 **空格**、**你**、**您**，其余同第 2 步。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "再建三個 **電子郵件** 自動化，**主旨包含** 分別填 **空格**、**你**、**您**，其餘同第 2 步。"
           }
         }
       }
@@ -13199,6 +13199,28 @@
         }
       }
     },
+    "添加操作 **记录银行动账通知**，**通知内容** 选 **快捷指令输入**，**来源** 选 **自动**，点 **完成**。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add the action **Record Bank Alert**, set **Content** to **Shortcut Input**, **Source** to **Automatic**, and tap **Done**."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "添加操作 **记录银行动账通知**，**通知内容** 选 **快捷指令输入**，**来源** 选 **自动**，点 **完成**。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "加入動作 **記錄銀行帳戶異動通知**，**通知內容** 選 **捷徑輸入**，**來源** 選 **自動**，點 **完成**。"
+          }
+        }
+      }
+    },
     "添加时间" : {
       "localizations" : {
         "en" : {
@@ -13573,24 +13595,46 @@
         }
       }
     },
-    "点 **打开快捷指令** → **自动化** → **+** → **信息**，条件不填，选 **立即运行** → **下一步** → **自动记账**。" : {
+    "点 **打开快捷指令** → **自动化** → **+** → **信息**，**信息包含** 填一个 **空格**，选 **立即运行** → **下一步** → **新建空白自动化**。" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Tap **Open Shortcuts** → **Automation** → **+** → **Message**. Leave the conditions empty, choose **Run Immediately** → **Next** → **自动记账**."
+            "value" : "Tap **Open Shortcuts** → **Automation** → **+** → **Message**. Set **Message Contains** to a **space**, choose **Run Immediately** → **Next** → **New Blank Automation**."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "点 **打开快捷指令** → **自动化** → **+** → **信息**，条件不填，选 **立即运行** → **下一步** → **自动记账**。"
+            "value" : "点 **打开快捷指令** → **自动化** → **+** → **信息**，**信息包含** 填一个 **空格**，选 **立即运行** → **下一步** → **新建空白自动化**。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "點 **打開「捷徑」** → **自動化** → **+** → **訊息**，條件不填，選 **立即執行** → **下一步** → **自动记账**。"
+            "value" : "點 **打開「捷徑」** → **自動化** → **+** → **訊息**，**訊息包含** 填一個 **空格**，選 **立即執行** → **下一步** → **新增空白自動化**。"
+          }
+        }
+      }
+    },
+    "点 **打开快捷指令** → **自动化** → **+** → **信息**，**信息包含** 填一个 **空格**，选 **立即运行** → **下一步** → **自动记账**。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tap **Open Shortcuts** → **Automation** → **+** → **Message**. Set **Message Contains** to a **space**, choose **Run Immediately** → **Next** → **自动记账**."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "点 **打开快捷指令** → **自动化** → **+** → **信息**，**信息包含** 填一个 **空格**，选 **立即运行** → **下一步** → **自动记账**。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "點 **打開「捷徑」** → **自動化** → **+** → **訊息**，**訊息包含** 填一個 **空格**，選 **立即執行** → **下一步** → **自动记账**。"
           }
         }
       }
@@ -13723,6 +13767,50 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "點上面的 **加入捷徑**，在打開的頁面點 **加入捷徑**。它會下載最新匯率，交給 REC 匯入。"
+          }
+        }
+      }
+    },
+    "照上一步再建两个，**信息包含** 分别填 **。** 和 **】**。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Repeat the previous step twice, with **Message Contains** set to **。** and **】**."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "照上一步再建两个，**信息包含** 分别填 **。** 和 **】**。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "照上一步再建兩個，**訊息包含** 分別填 **。** 和 **】**。"
+          }
+        }
+      }
+    },
+    "照上两步再建两个，**信息包含** 分别填 **。** 和 **】**。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Repeat the two steps above twice, with **Message Contains** set to **。** and **】**."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "照上两步再建两个，**信息包含** 分别填 **。** 和 **】**。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "照上兩步再建兩個，**訊息包含** 分別填 **。** 和 **】**。"
           }
         }
       }

@@ -508,7 +508,6 @@ t("蓝色", "藍色", "Blue")
 
 t("打开快捷指令", "打開「捷徑」", "Open Shortcuts")
 t("只需设置一次，之后添加的卡不用再设置。", "只需設定一次，之後新增的卡不用再設定。", "Set this up once. Cards you add later work automatically.")
-t("5 步完成", "5 個步驟", "5 Steps")
 t("设置自动记账", "設定自動記帳", "Set Up Auto-Recording")
 t("点上面 **打开快捷指令**，在底部选 **自动化**，点右上角 **+**，选 **信息**，条件都不填。", "點上面的 **打開「捷徑」**，在底部選 **自動化**，點右上角 **+**，選 **訊息**，條件都不用填。", "Tap **Open Shortcuts** above, choose **Automation** at the bottom, tap **+** at the top right and choose **Message**. Leave the conditions empty.")
 t("在同一个自动化里再加 **电子邮件** 触发，条件选 **主题** 包含，填 **你**（银行邮件的主题不一定写银行名，但都有「你」；别的邮件 App 不会保存）；再加 **App 通知** 触发，只选银行 App，**不要选「邮件」**：邮件 App 的通知只有开头几行，完整的邮件由「电子邮件」触发交给 App。", "在同一個自動化裡再加 **電子郵件** 觸發條件，條件選 **主旨** 包含，填 **你**（銀行郵件的主旨不一定寫銀行名，但都有「你」；其他郵件 App 不會儲存）；再加 **App 通知** 觸發條件，只選銀行 App，**不要選「郵件」**：郵件 App 的通知只有開頭幾行，完整的郵件由「電子郵件」觸發條件交給 App。", "In the same automation, add an **Email** trigger with **Subject** contains **你** (Chinese bank emails always include it; other emails aren’t saved). Then add an **App Notification** trigger with only your bank apps. **Don’t choose Mail**: its notifications only show the first lines, and the full email comes through the Email trigger.")
@@ -683,12 +682,27 @@ t("添加后打开 **自动记账**，在 **App 通知** 里选银行 App；银�
   "加入後打開 **自动记账**，在 **App 通知** 裡選銀行 App；銀行 App 記得打開通知。",
   "After adding it, open **自动记账** and choose your bank apps under **App Notification**. Make sure notifications are on for those bank apps.")
 t("点 **添加快捷指令**。", "點 **加入捷徑**。", "Tap **Add Shortcut**.")
-t("点 **打开快捷指令** → **自动化** → **+** → **信息**，条件不填，选 **立即运行** → **下一步** → **自动记账**。",
-  "點 **打開「捷徑」** → **自動化** → **+** → **訊息**，條件不填，選 **立即執行** → **下一步** → **自动记账**。",
-  "Tap **Open Shortcuts** → **Automation** → **+** → **Message**. Leave the conditions empty, choose **Run Immediately** → **Next** → **自动记账**.")
-t("再建一个 **电子邮件** 自动化：**主题** 包含 **你**，其余同上。",
-  "再建一個 **電子郵件** 自動化：**主旨** 包含 **你**，其餘同上。",
-  "Create one more **Email** automation: **Subject** contains **你**, the rest as above.")
+t("点 **打开快捷指令** → **自动化** → **+** → **信息**，**信息包含** 填一个 **空格**，选 **立即运行** → **下一步** → **自动记账**。",
+  "點 **打開「捷徑」** → **自動化** → **+** → **訊息**，**訊息包含** 填一個 **空格**，選 **立即執行** → **下一步** → **自动记账**。",
+  "Tap **Open Shortcuts** → **Automation** → **+** → **Message**. Set **Message Contains** to a **space**, choose **Run Immediately** → **Next** → **自动记账**.")
+t("照上一步再建两个，**信息包含** 分别填 **。** 和 **】**。",
+  "照上一步再建兩個，**訊息包含** 分別填 **。** 和 **】**。",
+  "Repeat the previous step twice, with **Message Contains** set to **。** and **】**.")
+t("再建三个 **电子邮件** 自动化，**主题包含** 分别填 **空格**、**你**、**您**，其余同第 2 步。",
+  "再建三個 **電子郵件** 自動化，**主旨包含** 分別填 **空格**、**你**、**您**，其餘同第 2 步。",
+  "Create three **Email** automations with **Subject Contains** set to a **space**, **你** and **您**; the rest as in step 2.")
+t("点 **打开快捷指令** → **自动化** → **+** → **信息**，**信息包含** 填一个 **空格**，选 **立即运行** → **下一步** → **新建空白自动化**。",
+  "點 **打開「捷徑」** → **自動化** → **+** → **訊息**，**訊息包含** 填一個 **空格**，選 **立即執行** → **下一步** → **新增空白自動化**。",
+  "Tap **Open Shortcuts** → **Automation** → **+** → **Message**. Set **Message Contains** to a **space**, choose **Run Immediately** → **Next** → **New Blank Automation**.")
+t("添加操作 **记录银行动账通知**，**通知内容** 选 **快捷指令输入**，**来源** 选 **自动**，点 **完成**。",
+  "加入動作 **記錄銀行帳戶異動通知**，**通知內容** 選 **捷徑輸入**，**來源** 選 **自動**，點 **完成**。",
+  "Add the action **Record Bank Alert**, set **Content** to **Shortcut Input**, **Source** to **Automatic**, and tap **Done**.")
+t("照上两步再建两个，**信息包含** 分别填 **。** 和 **】**。",
+  "照上兩步再建兩個，**訊息包含** 分別填 **。** 和 **】**。",
+  "Repeat the two steps above twice, with **Message Contains** set to **。** and **】**.")
+t("再建三个 **电子邮件** 自动化，**主题包含** 分别填 **空格**、**你**、**您**，其余同第 1、2 步。",
+  "再建三個 **電子郵件** 自動化，**主旨包含** 分別填 **空格**、**你**、**您**，其餘同第 1、2 步。",
+  "Create three **Email** automations with **Subject Contains** set to a **space**, **你** and **您**; the rest as in steps 1–2.")
 t("在 **设置 › 辅助功能 › 触控 › 轻点背面 › 轻点两下** 里选 **记录付款截图**。",
   "在 **設定 › 輔助使用 › 觸控 › 背面輕點 › 點兩下** 裡選 **记录付款截图**。",
   "In **Settings › Accessibility › Touch › Back Tap › Double Tap**, choose **记录付款截图**.")

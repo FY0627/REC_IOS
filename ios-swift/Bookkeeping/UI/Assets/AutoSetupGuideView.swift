@@ -12,8 +12,10 @@ import BKModel
 /// 不是动账通知的短信不保存。
 /// iOS 不允许 App 创建、导入或查询快捷指令自动化，自动化（触发条件）只能用户自己建。
 /// TestFlight / App Store 装的：点一下添加共享的快捷指令「自动记账」。
-/// iOS 27 的自带触发条件，只要选银行 App；iOS 26 的不带触发条件，列 3 步：添加、建「信息」自动化、建「电子邮件」自动化，都运行「自动记账」。
-/// 自己侧载的（用不了共享链接）照旧列出最少的手动步骤。
+/// iOS 27 的自带触发条件，只要选银行 App。
+/// iOS 26 的不带触发条件，一个自动化只有一个触发，「信息」条件也不能空（用户在 iOS 26 上试过）：
+/// 「信息包含」空格、「。」、「】」各建一个，「电子邮件」主题包含空格、「你」、「您」各建一个，都运行「自动记账」。
+/// 自己侧载的（用不了共享链接）列手动步骤，iOS 26、iOS 27 分开写。
 struct AutoSetupGuideView: View {
     /// 作为添加流程的最后一步出现时，右上角显示「完成」
     var onDone: (() -> Void)?
@@ -40,11 +42,7 @@ struct AutoSetupGuideView: View {
                         Text(Self.sharedLine)
                     }
                 } else {
-                    Section {
-                        ForEach(Array(Self.shared26Steps.enumerated()), id: \.offset) { index, step in
-                            StepRow(number: index + 1, text: step)
-                        }
-                    }
+                    steps(Self.shared26Steps)
                 }
             } else {
                 Section {
@@ -55,13 +53,7 @@ struct AutoSetupGuideView: View {
                     Text("只需设置一次，之后添加的卡不用再设置。")
                 }
 
-                Section {
-                    ForEach(Array(Self.smsSteps.enumerated()), id: \.offset) { index, step in
-                        StepRow(number: index + 1, text: step)
-                    }
-                } header: {
-                    Text("5 步完成")
-                }
+                steps(choosesApps ? Self.smsSteps : Self.sms26Steps)
             }
         }
         .navigationTitle("设置自动记账")
@@ -77,12 +69,30 @@ struct AutoSetupGuideView: View {
         .navigationBarBackButtonHidden(onDone != nil)
     }
 
+    private func steps(_ steps: [LocalizedStringKey]) -> some View {
+        Section {
+            ForEach(Array(steps.enumerated()), id: \.offset) { index, step in
+                StepRow(number: index + 1, text: step)
+            }
+        } header: {
+            Text("\(steps.count) 步完成")
+        }
+    }
+
     static let sharedLine: LocalizedStringKey = "添加后打开 **自动记账**，在 **App 通知** 里选银行 App；银行 App 记得打开通知。"
 
     static let shared26Steps: [LocalizedStringKey] = [
         "点 **添加快捷指令**。",
-        "点 **打开快捷指令** → **自动化** → **+** → **信息**，条件不填，选 **立即运行** → **下一步** → **自动记账**。",
-        "再建一个 **电子邮件** 自动化：**主题** 包含 **你**，其余同上。",
+        "点 **打开快捷指令** → **自动化** → **+** → **信息**，**信息包含** 填一个 **空格**，选 **立即运行** → **下一步** → **自动记账**。",
+        "照上一步再建两个，**信息包含** 分别填 **。** 和 **】**。",
+        "再建三个 **电子邮件** 自动化，**主题包含** 分别填 **空格**、**你**、**您**，其余同第 2 步。",
+    ]
+
+    static let sms26Steps: [LocalizedStringKey] = [
+        "点 **打开快捷指令** → **自动化** → **+** → **信息**，**信息包含** 填一个 **空格**，选 **立即运行** → **下一步** → **新建空白自动化**。",
+        "添加操作 **记录银行动账通知**，**通知内容** 选 **快捷指令输入**，**来源** 选 **自动**，点 **完成**。",
+        "照上两步再建两个，**信息包含** 分别填 **。** 和 **】**。",
+        "再建三个 **电子邮件** 自动化，**主题包含** 分别填 **空格**、**你**、**您**，其余同第 1、2 步。",
     ]
 
     static let smsSteps: [LocalizedStringKey] = [
