@@ -761,6 +761,16 @@ t("换页 %lld ms", "換頁 %lld ms", "Page %lld ms")
 t("选分类：显示 %lld ms，写账本 %lld ms", "選分類：顯示 %lld ms，寫入帳本 %lld ms", "Pick: shown %lld ms, saved %lld ms")
 t("启动后 %lld ms", "啟動後 %lld ms", "%lld ms after launch")
 
+# MARK: 新手引导（OnboardingView）
+
+t("新手引导", "新手導覽", "Onboarding")
+t("继续", "繼續", "Continue")
+t("跳过", "略過", "Skip")
+t("打开", "開啟", "Turn On")
+t("截图记账", "截圖記帳", "Screenshot Recording")
+t("在灵动岛上选分类", "在動態島上選擇分類", "Choose Categories in the Dynamic Island")
+t("在通知上选分类", "在通知上選擇分類", "Choose Categories from Notifications")
+
 # MARK: 快捷指令里的动作（App Intents）
 
 t("银行卡账户", "銀行卡帳戶", "Bank Card")

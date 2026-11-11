@@ -57,7 +57,6 @@ struct AddAccountView: View {
     @State private var keptPhotoID: String?
     @State private var saving = false
     @State private var errorText: String?
-    @State private var created: Account?
 
     private var bankName: String { bankText.trimmingCharacters(in: .whitespacesAndNewlines) }
 
@@ -211,9 +210,6 @@ struct AddAccountView: View {
             .onChange(of: photoItem) { _, item in
                 if let item { Task { await importPhoto(item) } }
             }
-            .navigationDestination(item: $created) { account in
-                AutoSetupGuideView(onDone: { dismiss() })
-            }
             .task {
                 // 银行和币种的搜索列表第一次要查系统名称、算拼音，先在后台准备好
                 await CurrencyCatalog.prepare()
@@ -309,13 +305,11 @@ struct AddAccountView: View {
             extraCurrencies: Array(currencies.dropFirst()), extraOpeningBalances: openings.filter { $0.key != currency }
         )
         do {
-            // 一个自动化覆盖所有卡：只有第一张卡、自动化还没收到过东西时才带去设置，之后加卡不再弹（「我的 › 自动记账」随时能看）
-            let firstCard = !store.accounts.contains { $0.cardType.isCard }
-            let showGuide = firstCard && !store.automationVerified
+            // 加卡后不带去设置自动记账：新手引导里设置，之后在「我的 › 设置自动记账」
             let account = try await store.addAccount(draft)
             await applyPhoto(to: account)
             errorText = nil
-            if showGuide { created = account } else { dismiss() }
+            dismiss()
         } catch BackendError.invalidAccount(let reason) {
             switch reason {
             case .duplicateAccount: errorText = L("已经添加过这张卡（同一银行、同一尾号、同一卡类型）。")

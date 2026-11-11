@@ -50,6 +50,7 @@ private struct ProfileList: View {
     @State private var notifyDenied = false
     @State private var scrolledUnderBar = false
     @State private var choosingTheme = false
+    @State private var showingOnboarding = false
     /// 导航栈外面的安全区：状态栏的高度
     @State private var stackSafeTop: CGFloat = 0
     @Environment(\.openURL) private var openURL
@@ -181,6 +182,12 @@ private struct ProfileList: View {
                         NavigationLink(value: ProfileRoute.performance) {
                             Label("性能开关与调试指标", systemImage: "speedometer")
                         }
+                        // 新手引导只在第一次打开时出现，这里再看一次
+                        Button {
+                            showingOnboarding = true
+                        } label: {
+                            Label("新手引导", systemImage: "hand.wave")
+                        }
                         // 灵动岛选分类上次开启的结果（ADR 0024）：后台能不能开启要在真机上看
                         LabeledContent("灵动岛", value: liveActivityResult.isEmpty ? "—" : liveActivityResult)
                         // 上次点岛上的按钮 App 这边花了多久：剩下的等待是系统叫起 App、重画岛
@@ -194,6 +201,7 @@ private struct ProfileList: View {
             .tint(ThemeColor.color(stored: themeColor))
             .sensoryFeedback(.success, trigger: showDevTools)
             .sheet(isPresented: $choosingTheme) { ThemeColorSheet(selection: $themeColor) }
+            .fullScreenCover(isPresented: $showingOnboarding) { OnboardingView { showingOnboarding = false } }
             .alert("没有通知权限", isPresented: $notifyDenied) {
                 Button("去设置") {
                     if let url = URL(string: UIApplication.openNotificationSettingsURLString) { openURL(url) }

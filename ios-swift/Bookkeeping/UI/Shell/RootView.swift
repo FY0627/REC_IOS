@@ -64,6 +64,8 @@ struct RootView: View {
     @State private var detail = DetailMotionState()
     @State private var sheet: ActiveSheet?
     @State private var assetsReselectCount = 0
+    @AppStorage(OnboardingView.doneKey) private var onboardingDone = false
+    @State private var onboarding = false
 
     /// 再点一次当前的标签时系统也会调用 set：其他页面的列表由系统滚回顶部，
     /// 资产页的卡包是 UIKit 的滚动区，系统不会替它滚，记一下让资产页自己滚
@@ -103,6 +105,21 @@ struct RootView: View {
                 PendingView()
             case .categorize(let target):
                 CategorizeSheet(target: target)
+            }
+        }
+        .fullScreenCover(isPresented: $onboarding) {
+            OnboardingView {
+                onboardingDone = true
+                onboarding = false
+            }
+        }
+        // 账本打开后决定要不要新手引导：什么都没有的新用户才出现；升级上来的老用户直接记成看过
+        .onChange(of: store.state, initial: true) { _, state in
+            guard state == .ready, !onboardingDone else { return }
+            if store.allAccounts.isEmpty, store.homeRows.isEmpty, !store.automationVerified {
+                onboarding = true
+            } else {
+                onboardingDone = true
             }
         }
         .onChange(of: notificationRecordID, initial: true) { _, recordID in

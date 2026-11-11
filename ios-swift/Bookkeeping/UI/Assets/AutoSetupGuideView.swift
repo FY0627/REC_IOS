@@ -16,10 +16,17 @@ import BKModel
 /// iOS 26 的不带触发条件，一个自动化只有一个触发，「信息」条件也不能空（用户在 iOS 26 上试过）：
 /// 「信息包含」空格、「。」、「，」、「】」各建一个，「电子邮件」主题包含空格、「你」、「您」各建一个，都运行「自动记账」。
 /// 自己侧载的（用不了共享链接）列手动步骤，iOS 26、iOS 27 分开写。
+/// 添加银行卡后不再弹出这一页：第一次打开时在新手引导里设置（`OnboardingView`）。
 struct AutoSetupGuideView: View {
-    /// 作为添加流程的最后一步出现时，右上角显示「完成」
-    var onDone: (() -> Void)?
+    var body: some View {
+        List { AutoSetupSections() }
+            .navigationTitle("设置自动记账")
+            .navigationBarTitleDisplayMode(.inline)
+    }
+}
 
+/// 「设置自动记账」的内容：「我的」里的设置页和新手引导共用，两边一样
+struct AutoSetupSections: View {
     @Environment(\.openURL) private var openURL
 
     private var useShared: Bool { SharedShortcuts.available }
@@ -29,42 +36,29 @@ struct AutoSetupGuideView: View {
     }
 
     var body: some View {
-        List {
-            if useShared {
+        if useShared {
+            Section {
+                // 点「添加快捷指令」已经进了快捷指令 App，不再放「打开快捷指令」
+                Button("添加快捷指令", systemImage: "plus.square.on.square") { openURL(SharedShortcuts.bankMessage) }
+            }
+            if choosesApps {
                 Section {
-                    // 点「添加快捷指令」已经进了快捷指令 App，不再放「打开快捷指令」
-                    Button("添加快捷指令", systemImage: "plus.square.on.square") { openURL(SharedShortcuts.bankMessage) }
-                }
-                if choosesApps {
-                    Section {
-                        Text(Self.sharedLine)
-                    }
-                } else {
-                    steps(Self.shared26Steps)
+                    Text(Self.sharedLine)
                 }
             } else {
-                Section {
-                    Button("打开快捷指令", systemImage: "arrow.up.forward.app") {
-                        if let url = URL(string: "shortcuts://") { openURL(url) }
-                    }
-                } footer: {
-                    Text("只需设置一次，之后添加的卡不用再设置。")
+                steps(Self.shared26Steps)
+            }
+        } else {
+            Section {
+                Button("打开快捷指令", systemImage: "arrow.up.forward.app") {
+                    if let url = URL(string: "shortcuts://") { openURL(url) }
                 }
+            } footer: {
+                Text("只需设置一次，之后添加的卡不用再设置。")
+            }
 
-                steps(choosesApps ? Self.smsSteps : Self.sms26Steps)
-            }
+            steps(choosesApps ? Self.smsSteps : Self.sms26Steps)
         }
-        .navigationTitle("设置自动记账")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .confirmationAction) {
-                if let onDone {
-                    Button("完成", systemImage: "checkmark", action: onDone)
-                }
-            }
-        }
-        // 添加银行卡后紧接着出现时不显示返回（卡已经保存，返回会回到已提交的表单）
-        .navigationBarBackButtonHidden(onDone != nil)
     }
 
     private func steps(_ steps: [LocalizedStringKey]) -> some View {

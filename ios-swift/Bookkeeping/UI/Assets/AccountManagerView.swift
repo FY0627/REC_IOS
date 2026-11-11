@@ -51,10 +51,19 @@ struct AccountManagerView: View {
     }
 
     private func row(_ account: Account) -> some View {
-        let on = pending[account.id] ?? !account.archived
-        return HStack(spacing: 12) {
+        AccountSummaryRow(account: account, enabled: pending[account.id] ?? !account.archived)
+    }
+}
+
+/// 一行账户：小卡面、名称，下面银行 · 卡类型 · 尾号。管理银行卡和新手引导共用
+struct AccountSummaryRow: View {
+    let account: Account
+    var enabled = true
+
+    var body: some View {
+        HStack(spacing: 12) {
             CardSwatch(account: account)
-                .grayscale(on ? 0 : 1)
+                .grayscale(enabled ? 0 : 1)
             VStack(alignment: .leading, spacing: 2) {
                 Text(account.localizedName).lineLimit(1)
                 Text(account.isCard ? "\(account.localizedBankName) · \(account.cardType.displayName.loc) · \(account.last4)" : account.cardType.displayName.loc)
