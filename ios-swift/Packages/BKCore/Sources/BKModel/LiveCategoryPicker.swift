@@ -67,6 +67,15 @@ public struct LiveCategoryPicker: Hashable, Sendable, Codable {
             self.symbol = symbol
             self.action = action
         }
+
+        /// 「全部」「更多」：换到另一屏，不是一个分类（岛上画成白色的圆）。有小类的大类虽然也换页，但它是分类
+        public var isNavigation: Bool {
+            switch action {
+            case .pick: false
+            case .show(.quick), .show(.parents): true
+            case .show(.children(_, let chunk, _)): chunk > 0
+            }
+        }
     }
 
     /// 岛上的一页：第 1 页没有标题和返回（顶上一行是商户、账户、金额）

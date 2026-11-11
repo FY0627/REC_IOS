@@ -20,6 +20,8 @@ struct CategoryActivityAttributes: ActivityAttributes {
         var screen: LiveCategoryPicker.Screen
         /// 点到的分类：显示一下就结束
         var chosen: LiveCategoryPicker.Option?
+        /// App 的主题色（`ThemeColor` 的名字，例如 `pink`）：分类按钮的圆和图标用它。以前开的活动没有，用蓝色
+        var tint: String?
     }
 }
 

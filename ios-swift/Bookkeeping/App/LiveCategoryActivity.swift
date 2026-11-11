@@ -65,7 +65,8 @@ enum LiveCategoryActivity {
         store(picker, recordID: recordID)
         let state = State(
             recordID: recordID, merchant: header.merchant, account: header.account, amount: header.amount,
-            screen: picker.screen(.quick), chosen: nil
+            screen: picker.screen(.quick), chosen: nil,
+            tint: UserDefaults.standard.string(forKey: ThemeColor.key) ?? ThemeColor.blue.rawValue
         )
         let content = ActivityContent(state: state, staleDate: nil)
         let alert = AlertConfiguration(

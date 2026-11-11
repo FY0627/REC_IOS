@@ -87,6 +87,17 @@ final class LiveCategoryPickerTests: XCTestCase {
         XCTAssertEqual(titles(picker.screen(.parents(chunk: 2))), ["类23", "类24", "类25"])
     }
 
+    /// 岛上「全部」「更多」画成白色的圆，分类（包括有小类的大类）画成主题色的圆
+    func testNavigationCellsAreAllAndMore() {
+        let big = Group(option: Option(id: "ex.big", name: "大", symbol: "tag"), children: (1...13).map { Option(id: "ex.big.\($0)", name: "小\($0)", symbol: "tag") })
+        let picker = LiveCategoryPicker(quick: [.init(option: food.option, opens: true)], groups: [food, big] + plain((1...12).map { "类\($0)" }))
+        XCTAssertEqual(picker.screen(.quick).cells.map(\.isNavigation), [false, true], "补位的大类进小类，但它是分类；「全部」是导航")
+        let parents = picker.screen(.parents(chunk: 0)).cells
+        XCTAssertEqual(parents.filter(\.isNavigation).map(\.title), ["更多"])
+        let children = picker.screen(.children(parentID: "ex.big", chunk: 0, fromQuick: false)).cells
+        XCTAssertEqual(children.filter(\.isNavigation).map(\.title), ["更多"])
+    }
+
     func testManyChildrenAlsoPage() {
         let big = Group(option: Option(id: "ex.big", name: "大", symbol: "tag"), children: (1...13).map { Option(id: "ex.big.\($0)", name: "小\($0)", symbol: "tag") })
         let picker = LiveCategoryPicker(quick: [], groups: [big])
