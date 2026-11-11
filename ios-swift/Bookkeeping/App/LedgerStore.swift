@@ -379,6 +379,22 @@ final class LedgerStore {
         await refresh()
     }
 
+    // MARK: 冻结（预授权）手动了结
+
+    func holdCaptureCandidates(holdID: String) async -> [RecordRow] {
+        (try? await backend?.holdCaptureCandidates(holdID: holdID)) ?? []
+    }
+
+    func closeHold(id: String, chargeID: String?) async throws {
+        try await backend?.closeHold(id: id, chargeID: chargeID)
+        await refresh()
+    }
+
+    func reopenHold(id: String) async throws {
+        try await backend?.reopenHold(id: id)
+        await refresh()
+    }
+
     // MARK: 一笔支出和另一个账户的一笔收入合成转帐
 
     func transferMergeCandidates(recordID: String) async -> [RecordRow] {

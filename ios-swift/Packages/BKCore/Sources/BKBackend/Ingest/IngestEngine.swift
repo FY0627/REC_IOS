@@ -540,6 +540,10 @@ struct IngestEngine {
         if duplicateCheck, let twin = try screenshotTwin(of: record, accounts: accounts, assumedAccount: assumedAccount) {
             return try mergeScreenshot(record, into: twin, meta: meta, assumedAccount: assumedAccount)
         }
+        // 同一笔的两条通知，一条写全了、一条只有卡号和金额（招行 App 的推送）：合成一笔，补上时间和商户，再了结冻结
+        if duplicateCheck, let twin = try detailTwin(of: record) {
+            return try mergeDetail(record, into: twin, dedupeKey: key, holdTime: draft.holdTime, meta: meta)
+        }
         if duplicateCheck, let similar = try possibleDuplicate(of: record) {
             return .pending(.possibleDuplicate, candidates: [account.id], duplicateOf: similar.id)
         }
@@ -579,6 +583,50 @@ struct IngestEngine {
             return ["t", r.accountID, r.direction.rawValue, String(r.amountMinor), r.currency.rawValue, r.kind.rawValue, r.status.rawValue, time.sortKey, r.balanceAfterMinor.map(String.init) ?? "-", role].joined(separator: "|")
         }
         return ["i", r.ingestID, String(r.partIndex)].joined(separator: "|")
+    }
+
+    /// 银行发来的通知（不是手动记的，也不是截图）
+    static let messageSources: Set<SourceKind> = [.sms, .email, .notification, .auto, .other]
+
+    /// 同一笔交易的两条通知，一条写全了（交易时间到分钟，常常还有商户和预授权时间，招行 95555 短信）、
+    /// 一条只有卡号和金额（招行 App 推送「扣款人民币 126.84」）：同账户、同金额币种方向和状态，系统时间 20 分钟内，
+    /// 正好一边没写交易时间、另一边写到了分钟，都是银行的通知。
+    /// 已有的那笔只能有一条来源：已经合过一次的不再合，同一张卡连着两笔一样的金额时不会把第二笔并进第一笔。
+    /// 只有一笔对得上才算；几笔都像时照常交给用户判断（`possibleDuplicate`）
+    func detailTwin(of record: LedgerRecord) throws -> LedgerRecord? {
+        guard Self.messageSources.contains(record.source) else { return nil }
+        let full = record.transactionTime?.isMinutePrecise == true
+        guard full || record.transactionTime == nil else { return nil }
+        let window: TimeInterval = 20 * 60
+        let matches = try RecordDAO.candidates(
+            db, amountMinor: record.amountMinor, currency: record.currency, direction: record.direction,
+            effectiveFrom: record.effectiveAt.addingTimeInterval(-window), effectiveTo: record.effectiveAt.addingTimeInterval(window),
+            excludingIngest: record.ingestID
+        ).filter { other in
+            guard other.accountID == record.accountID, other.status == record.status, Self.messageSources.contains(other.source) else { return false }
+            return full ? other.transactionTime == nil : other.transactionTime?.isMinutePrecise == true
+        }
+        guard matches.count == 1, try RecordDAO.evidence(db, recordID: matches[0].id).count == 1 else { return nil }
+        return matches[0]
+    }
+
+    /// 把写全的那条补到只有卡号和金额的那笔上：交易时间、商户、交易性质（推送认不出时）；去重键换成按时间算的，
+    /// 之后同一条短信（或邮件）再来按去重键合并。补上商户后没分类的重新归类；短信写了预授权时间就了结那笔冻结
+    func mergeDetail(_ record: LedgerRecord, into twin: LedgerRecord, dedupeKey key: String, holdTime: WallClock?, meta: IngestMeta) throws -> CommitOutcome {
+        var updated = twin
+        if twin.transactionTime == nil, let time = record.transactionTime {
+            updated.transactionTime = time
+            if updated.receivedAt == nil { updated.receivedAt = record.receivedAt }
+            try RecordDAO.setDedupeKey(db, id: twin.id, key: key)
+        }
+        if updated.counterparty == nil, let name = record.counterparty { updated.counterparty = name }
+        if updated.kind == .other, record.kind != .other { updated.kind = record.kind }
+        if updated != twin { _ = try RecordDAO.update(db, updated) }
+        try RecordDAO.addEvidence(db, recordID: twin.id, ingestID: meta.ingestID, source: meta.source, at: now)
+        try AccountDAO.noteSuccess(db, id: twin.accountID, at: now, source: meta.source)
+        if updated.counterparty != twin.counterparty, updated.categoryID == nil { try Categorizer(db: db).categorize(recordID: twin.id) }
+        try closeHold(of: updated, holdTime: holdTime)
+        return .merged(twin.id)
     }
 
     /// 跨来源的近似重复：同账户、同金额币种方向，来源不同（或分不出来源）、系统时间 20 分钟内，且正文时间不冲突。

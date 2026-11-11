@@ -672,11 +672,15 @@ public struct RecordDetail: Hashable, Sendable {
     public var orderMembers: [RecordRow]
     /// 一笔支出和另一个账户的一笔收入手动合成的转帐：可以拆开回到原来的两笔
     public var mergedTransfer: Bool
+    /// 这笔扣款了结的冻结（预授权）：流水列表里不单独显示
+    public var closedHolds: [RecordRow]
 
     public init(
         row: RecordRow, evidence: [RecordEvidence], transferPeer: RecordRow?, related: RecordRow?,
-        refunds: [RecordRow] = [], fee: RecordRow? = nil, orderMembers: [RecordRow] = [], mergedTransfer: Bool = false
+        refunds: [RecordRow] = [], fee: RecordRow? = nil, orderMembers: [RecordRow] = [], mergedTransfer: Bool = false,
+        closedHolds: [RecordRow] = []
     ) {
+        self.closedHolds = closedHolds
         self.row = row
         self.evidence = evidence
         self.transferPeer = transferPeer

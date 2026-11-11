@@ -800,15 +800,123 @@ final class IngestTests: XCTestCase {
         balances = try await backend.balanceSummaries()
         XCTAssertEqual(balances[account.id]?.primary?.ledgerDerivedMinor, 52_00, "完成扣款只扣一次")
         rows = try await backend.records(accountID: account.id)
-        XCTAssertEqual(rows.count, 2)
+        XCTAssertEqual(rows.count, 1, "了结的冻结收进扣款里，列表只显示扣款")
         let posted = try XCTUnwrap(rows.first { $0.record.status == .posted })
-        let closed = try XCTUnwrap(rows.first { $0.record.id == held.id })
+        let detail = try await backend.recordDetail(id: posted.id)
+        let closed = try XCTUnwrap(detail.closedHolds.first)
+        XCTAssertEqual(closed.id, held.id)
         XCTAssertEqual(closed.record.status, .holdReleased, "了结后不再是冻结")
         XCTAssertEqual(closed.record.relatedRecordID, posted.id)
         XCTAssertNil(closed.refundedMinor)
-        let detail = try await backend.recordDetail(id: posted.id)
         XCTAssertTrue(detail.refunds.isEmpty, "了结的冻结不是退款")
         XCTAssertNil(posted.refundedMinor)
+    }
+
+    // MARK: 招行 App 推送只写卡号和金额，95555 短信写全了（ADR 0024 之后的修订）
+
+    static let cmbPush = "您绑定在Apple Pay上的账户0002（设备卡号0099）扣款人民币48.00"
+
+    func cmbAccount(_ backend: LedgerBackend) async throws -> Account {
+        try await backend.addAccount(AccountDraft(
+            name: "", bankID: "cmb", bankName: "招商银行", last4: "0002", cardType: .credit, currency: .cny, paletteID: "ocean", openingBalanceMinor: 100_00
+        ))
+    }
+
+    /// 推送先到、记成一笔没有时间和商户的扣款；短信后到：合进这一笔，补上时间和商户，了结冻结，不进待处理
+    func testFullMessageAfterShortPushFillsItAndClosesHold() async throws {
+        let backend = try makeBackend()
+        let account = try await cmbAccount(backend)
+        _ = try await backend.ingest(IngestRequest(text: ParserSampleTests.cmbHold, source: .auto))
+        let push = try await backend.ingest(IngestRequest(text: Self.cmbPush, source: .auto))
+        XCTAssertEqual(push.recordedCount, 1, push.summary)
+        let sms = try await backend.ingest(IngestRequest(text: ParserSampleTests.cmbCapture, source: .auto))
+        XCTAssertEqual(sms.mergedCount, 1, sms.summary)
+        XCTAssertEqual(sms.pendingCount, 0, "不再当成可能重复")
+
+        let rows = try await backend.records(accountID: account.id)
+        XCTAssertEqual(rows.count, 1, rows.map { "\($0.record.amountMinor) \($0.record.status)" }.joined(separator: ","))
+        let charge = rows[0].record
+        XCTAssertEqual(charge.amountMinor, 48_00)
+        XCTAssertEqual(charge.transactionTime?.day, 31, "补上短信里的交易时间")
+        XCTAssertEqual(charge.counterparty, #"EXAMPLE.COM/JP\TEST BUILDING NAME\TOKYO\100-00"#)
+        let detail = try await backend.recordDetail(id: charge.id)
+        XCTAssertEqual(detail.evidence.count, 2)
+        XCTAssertEqual(detail.closedHolds.count, 1, "短信写了预授权时间：冻结了结")
+
+        // 同一条短信再来一遍（比如邮件也到了）：按补上的时间去重，合并，不进待处理
+        let again = try await backend.ingest(IngestRequest(text: ParserSampleTests.cmbCapture + " ", source: .email))
+        XCTAssertEqual(again.pendingCount, 0, again.summary)
+        let after = try await backend.records(accountID: account.id)
+        XCTAssertEqual(after.count, 1)
+    }
+
+    /// 短信先到、推送后到：推送合进短信那一笔，什么都不改
+    func testShortPushAfterFullMessageMergesIntoIt() async throws {
+        let backend = try makeBackend()
+        let account = try await cmbAccount(backend)
+        _ = try await backend.ingest(IngestRequest(text: ParserSampleTests.cmbHold, source: .auto))
+        _ = try await backend.ingest(IngestRequest(text: ParserSampleTests.cmbCapture, source: .auto))
+        let push = try await backend.ingest(IngestRequest(text: Self.cmbPush, source: .auto))
+        XCTAssertEqual(push.mergedCount, 1, push.summary)
+        let rows = try await backend.records(accountID: account.id)
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertNotNil(rows[0].record.counterparty)
+        let detail = try await backend.recordDetail(id: rows[0].id)
+        XCTAssertEqual(detail.evidence.count, 2)
+    }
+
+    /// 同一张卡连着两笔一样的金额：第二条推送不并进已经合过的那一笔，交给用户判断
+    func testSecondPushOfSameAmountIsNotSwallowed() async throws {
+        let backend = try makeBackend()
+        let account = try await cmbAccount(backend)
+        _ = try await backend.ingest(IngestRequest(text: Self.cmbPush, source: .auto))
+        _ = try await backend.ingest(IngestRequest(text: ParserSampleTests.cmbCapture, source: .auto))
+        let second = try await backend.ingest(IngestRequest(text: Self.cmbPush + "。", source: .auto))
+        XCTAssertEqual(second.mergedCount, 0, second.summary)
+        XCTAssertEqual(second.recordedCount + second.pendingCount, 1)
+        let rows = try await backend.records(accountID: account.id)
+        XCTAssertEqual(rows.first { $0.record.counterparty != nil }.map { _ in true }, true)
+    }
+
+    // MARK: 手动了结冻结
+
+    /// 冻结没等到写了预授权时间的扣款：用户自己选是哪一笔扣款了结它。和实扣一样的排在前面，但不自动了结；了结错了可以改回
+    func testHoldIsClosedByHandAndCanBeReopened() async throws {
+        let backend = try makeBackend()
+        let account = try await cmbAccount(backend)
+        _ = try await backend.ingest(IngestRequest(text: ParserSampleTests.cmbHold, source: .auto))
+        _ = try await backend.ingest(IngestRequest(text: "您尾号0002账户10月31日09:00消费人民币12.00元【招商银行】", source: .auto))
+        _ = try await backend.ingest(IngestRequest(text: Self.cmbPush, source: .auto))
+        var rows = try await backend.records(accountID: account.id)
+        let hold = try XCTUnwrap(rows.first { $0.record.status == .hold })
+        XCTAssertEqual(rows.count, 3, "推送没写预授权时间：冻结还在，不按金额自动了结")
+
+        let candidates = try await backend.holdCaptureCandidates(holdID: hold.id)
+        XCTAssertEqual(candidates.map(\.record.amountMinor), [48_00, 12_00], "和冻结时写的实扣一样的在前")
+        try await backend.closeHold(id: hold.id, chargeID: candidates[0].id)
+        rows = try await backend.records(accountID: account.id)
+        XCTAssertEqual(rows.count, 2, "了结后收进扣款里")
+        var detail = try await backend.recordDetail(id: candidates[0].id)
+        XCTAssertEqual(detail.closedHolds.map(\.id), [hold.id])
+        let left = try await backend.holdCaptureCandidates(holdID: hold.id)
+        XCTAssertTrue(left.isEmpty, "已经了结，不再给候选")
+
+        try await backend.reopenHold(id: hold.id)
+        rows = try await backend.records(accountID: account.id)
+        XCTAssertEqual(rows.filter { $0.record.status == .hold }.count, 1, "改回冻结，重新单独显示")
+        detail = try await backend.recordDetail(id: candidates[0].id)
+        XCTAssertTrue(detail.closedHolds.isEmpty)
+
+        // 撤销了、没有扣款：只改成解冻，还在列表里
+        try await backend.closeHold(id: hold.id, chargeID: nil)
+        rows = try await backend.records(accountID: account.id)
+        XCTAssertEqual(rows.first { $0.id == hold.id }?.record.status, .holdReleased)
+        do {
+            try await backend.closeHold(id: hold.id, chargeID: nil)
+            XCTFail("已经了结的不能再了结")
+        } catch {
+            XCTAssertEqual(error as? BackendError, .invalidHold)
+        }
     }
 
     func testCaptureLeavesHoldAloneUnlessExactlyOneMatches() async throws {

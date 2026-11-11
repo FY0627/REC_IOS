@@ -190,9 +190,12 @@ final class RealSampleTests: XCTestCase {
         for (index, sample) in Self.samples.enumerated() {
             _ = try await backend.ingest(IngestRequest(text: sample.text, source: .auto, receivedAt: now.addingTimeInterval(Double(index) * 60)))
         }
-        let statuses = try await backend.records(limit: 200).map(\.record)
-        XCTAssertEqual(statuses.filter { $0.status == .holdReleased }.count, 3)
-        XCTAssertEqual(statuses.filter { $0.status == .hold }.map(\.currency), [.usd])
+        let rows = try await backend.records(limit: 200)
+        XCTAssertEqual(rows.filter { $0.record.status == .holdReleased }.count, 0, "了结的冻结收进扣款里，列表里不单独显示")
+        var closed = 0
+        for row in rows where row.record.status == .posted { closed += try await backend.recordDetail(id: row.id).closedHolds.count }
+        XCTAssertEqual(closed, 3)
+        XCTAssertEqual(rows.filter { $0.record.status == .hold }.map(\.record.currency), [.usd])
     }
 
     /// 还没添加这些卡时：交易都等用户选卡，不会记到别处；不是交易的照样忽略

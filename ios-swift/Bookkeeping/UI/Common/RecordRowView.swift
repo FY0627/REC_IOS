@@ -172,6 +172,9 @@ struct RecordDetailView: View {
     @State private var deleted = false
     @State private var merging = false
     @State private var splitting = false
+    /// 手动了结冻结：可以选的扣款（和实扣一样的在前）
+    @State private var holdCandidates: [RecordRow] = []
+    @State private var closingHold = false
     @State private var note = ""
     @FocusState private var noteFocused: Bool
 
@@ -281,13 +284,36 @@ struct RecordDetailView: View {
                     ForEach(detail.refunds) { refund in link(refund) }
                 }
             }
+            if !detail.closedHolds.isEmpty {
+                // 这笔扣款了结的冻结：列表里不单独显示，收在这里
+                Section("预授权") {
+                    ForEach(detail.closedHolds) { hold in link(hold) }
+                }
+            }
             if let related = detail.related {
-                Section(r.isRefund ? "原交易" : "关联的交易") {
+                Section(r.isRefund ? "原交易" : (r.status == .holdReleased ? "完成扣款" : "关联的交易")) {
                     link(related)
                     // 关联错了：两笔都留着，退款的分类不变
                     if r.isRefund {
                         Button { Task { await unlinkRefund() } } label: { ActionLabel(title: "取消关联") }
                     }
+                    // 了结错了：改回冻结，重新单独显示
+                    if r.status == .holdReleased {
+                        Button { Task { await reopenHold() } } label: { ActionLabel(title: "取消了结") }
+                    }
+                }
+            }
+            if r.status == .hold, r.direction == .outflow {
+                // 没等到写了预授权时间的扣款通知：自己选是哪一笔扣款了结它（金额一样也可能不是同一单，不自动了结）
+                Section {
+                    Button { Task { await loadHoldCandidates() } } label: { ActionLabel(title: "了结冻结") }
+                        .confirmationDialog("了结冻结", isPresented: $closingHold, titleVisibility: .visible) {
+                            ForEach(holdCandidates) { charge in
+                                Button(candidateTitle(charge)) { Task { await closeHold(charge.id) } }
+                            }
+                            Button("没有扣款（已撤销）") { Task { await closeHold(nil) } }
+                            Button("取消", role: .cancel) {}
+                        }
                 }
             }
             if !detail.orderMembers.isEmpty {
@@ -407,6 +433,36 @@ struct RecordDetailView: View {
             saveError = nil
         } catch {
             saveError = L("取消关联失败：\(error.localizedDescription)")
+        }
+    }
+
+    private func loadHoldCandidates() async {
+        holdCandidates = await store.holdCaptureCandidates(holdID: recordID)
+        closingHold = true
+    }
+
+    /// 「11月11日 15:23 · -¥126.84 · AI订阅」
+    private func candidateTitle(_ charge: RecordRow) -> String {
+        [Fmt.dateTime(charge.record.effectiveAt), charge.amountText(inAccount: true), charge.title].joined(separator: " · ")
+    }
+
+    private func closeHold(_ chargeID: String?) async {
+        do {
+            try await store.closeHold(id: recordID, chargeID: chargeID)
+            await reload()
+            saveError = nil
+        } catch {
+            saveError = L("了结失败：\(error.localizedDescription)")
+        }
+    }
+
+    private func reopenHold() async {
+        do {
+            try await store.reopenHold(id: recordID)
+            await reload()
+            saveError = nil
+        } catch {
+            saveError = L("取消了结失败：\(error.localizedDescription)")
         }
     }
 

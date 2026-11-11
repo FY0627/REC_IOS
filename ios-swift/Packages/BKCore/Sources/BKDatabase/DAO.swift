@@ -397,6 +397,30 @@ public enum RecordDAO {
         try db.query("SELECT \(rowColumns) \(rowFrom) WHERE r.related_record_id = ? AND r.status = 'posted' ORDER BY r.effective_at", [recordID], mapRow)
     }
 
+    /// 这笔扣款了结的冻结（流水列表里不单独显示，收在扣款的详情里）
+    public static func closedHolds(_ db: SQLiteConnection, of recordID: String) throws -> [RecordRow] {
+        try db.query("SELECT \(rowColumns) \(rowFrom) WHERE r.related_record_id = ? AND r.status = 'holdReleased' ORDER BY r.effective_at", [recordID], mapRow)
+    }
+
+    /// 已经了结、关联到一笔已入账扣款的冻结：流水列表里只显示扣款那一行
+    static let closedHoldHidden = """
+    (r.status = 'holdReleased' AND r.related_record_id IS NOT NULL \
+    AND EXISTS (SELECT 1 FROM records k WHERE k.id = r.related_record_id AND k.status = 'posted'))
+    """
+
+    /// 手动了结冻结时可以选的扣款：同一个账户、时间范围内已入账的流出，还没有了结别的冻结。从早到晚
+    public static func holdCaptureCandidates(_ db: SQLiteConnection, accountID: String, from: Date, to: Date, excluding id: String, limit: Int = 50) throws -> [RecordRow] {
+        try db.query(
+            """
+            SELECT \(rowColumns) \(rowFrom)
+            WHERE r.account_id = ? AND r.status = 'posted' AND r.direction = 'outflow' AND r.effective_at BETWEEN ? AND ? AND r.id <> ?
+              AND NOT EXISTS (SELECT 1 FROM records h WHERE h.related_record_id = r.id AND h.status = 'holdReleased')
+            ORDER BY r.effective_at, r.id LIMIT ?
+            """,
+            [accountID, from, to, id, limit], mapRow
+        )
+    }
+
     /// 同一条通知拆出的手续费
     public static func splitFee(_ db: SQLiteConnection, of record: LedgerRecord) throws -> RecordRow? {
         guard record.partIndex % 2 == 0 else { return nil }
@@ -467,6 +491,11 @@ public enum RecordDAO {
 
     public static func idForDedupeKey(_ db: SQLiteConnection, _ key: String) throws -> String? {
         try db.queryOne("SELECT id FROM records WHERE dedupe_key = ?", [key]) { $0.string(0) }
+    }
+
+    /// 换成更可靠的去重键（只有卡号和金额的那笔补上了交易时间）。调用前已经确认这个键没有别的流水在用
+    public static func setDedupeKey(_ db: SQLiteConnection, id: String, key: String) throws {
+        try db.run("UPDATE records SET dedupe_key = ? WHERE id = ?", [key, id])
     }
 
     public static func find(_ db: SQLiteConnection, id: String) throws -> LedgerRecord? {
@@ -558,7 +587,7 @@ public enum RecordDAO {
     static let threeDecimalCodes = CurrencyCode.supported.filter { $0.minorUnitExponent == 3 }.map(\.rawValue)
 
     static func filterClauses(_ filter: RecordFilter) -> ([String], [SQLBindable]) {
-        var conditions: [String] = []
+        var conditions: [String] = ["NOT \(closedHoldHidden)"]
         var values: [SQLBindable] = []
         if let accountID = filter.accountID {
             conditions.append("r.account_id = ?")

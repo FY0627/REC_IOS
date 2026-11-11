@@ -30,6 +30,8 @@ public enum BackendError: Error, Equatable, Sendable {
     case invalidOrder
     /// 只有已入账的退款能关联到已入账的同一币种的支出（不是退款）
     case invalidRefund
+    /// 只有还在冻结的流出能了结，只有了结了的能改回冻结；扣款要是同一个账户已入账的流出
+    case invalidHold
 }
 
 /// App 界面与 App Intent 共用的业务入口。
@@ -917,6 +919,52 @@ public final class LedgerBackend: Sendable {
         }
     }
 
+    // MARK: 冻结（预授权）手动了结
+
+    /// 手动了结冻结时可以选的扣款：同一个账户、冻结前 1 小时到之后 45 天已入账的流出，还没有了结别的冻结。
+    /// 和冻结时写的实扣（或者冻结的金额和币种）一样的在前，其余按时间先后。不自动了结：金额一样也可能不是同一单
+    public func holdCaptureCandidates(holdID: String, limit: Int = 6) async throws -> [RecordRow] {
+        let calendar = calendar
+        return try await database.read { db in
+            guard let hold = try RecordDAO.find(db, id: holdID) else { throw BackendError.notFound }
+            guard hold.status == .hold, hold.direction == .outflow else { return [] }
+            let rows = try RecordDAO.holdCaptureCandidates(
+                db, accountID: hold.accountID, from: hold.effectiveAt.addingTimeInterval(-3600),
+                to: hold.effectiveAt.addingTimeInterval(45 * 86_400), excluding: hold.id
+            )
+            func matches(_ r: LedgerRecord) -> Bool {
+                if let charged = hold.chargeCurrency, let minor = hold.settlementMinor, r.currency == charged, r.amountMinor == minor { return true }
+                return r.currency == hold.currency && r.amountMinor == hold.amountMinor
+            }
+            let ordered = rows.enumerated().sorted { (matches($0.element.record) ? 0 : 1, $0.offset) < (matches($1.element.record) ? 0 : 1, $1.offset) }.map(\.element)
+            return try Self.decorate(Array(ordered.prefix(limit)), db: db, calendar: calendar)
+        }
+    }
+
+    /// 手动了结冻结：`chargeID` 是完成扣款的那一笔，关联过去，列表里只显示扣款；nil 是没有扣款（撤销了），只改成解冻
+    public func closeHold(id: String, chargeID: String?) async throws {
+        try await database.write { db in
+            guard let hold = try RecordDAO.find(db, id: id) else { throw BackendError.notFound }
+            guard hold.status == .hold, hold.direction == .outflow else { throw BackendError.invalidHold }
+            if let chargeID {
+                guard let charge = try RecordDAO.find(db, id: chargeID) else { throw BackendError.notFound }
+                guard charge.accountID == hold.accountID, charge.status == .posted, charge.direction == .outflow else { throw BackendError.invalidHold }
+                try RecordDAO.setRelated(db, id: id, relatedID: chargeID)
+            }
+            try RecordDAO.setStatus(db, id: id, status: .holdReleased)
+        }
+    }
+
+    /// 了结错了：改回冻结，和扣款不再关联，列表里重新单独显示
+    public func reopenHold(id: String) async throws {
+        try await database.write { db in
+            guard let hold = try RecordDAO.find(db, id: id) else { throw BackendError.notFound }
+            guard hold.status == .holdReleased, hold.direction == .outflow else { throw BackendError.invalidHold }
+            try RecordDAO.clearRelated(db, id: id)
+            try RecordDAO.setStatus(db, id: id, status: .hold)
+        }
+    }
+
     // MARK: 一笔支出和另一个账户的一笔收入合成转帐
 
     /// 可以和这一笔合成转帐的另一边：别的账户、方向相反的支出（不是退款）或收入，前后 3 天内，离得近的在前。
@@ -987,7 +1035,8 @@ public final class LedgerBackend: Sendable {
                 row: row, evidence: evidence, transferPeer: peer, related: related,
                 refunds: try RecordDAO.refunds(db, of: id), fee: try RecordDAO.splitFee(db, of: row.record),
                 orderMembers: try Self.decorate(members, db: db, calendar: calendar),
-                mergedTransfer: try row.record.transferGroupID != nil && RecordDAO.isMergedTransfer(db, id: id)
+                mergedTransfer: try row.record.transferGroupID != nil && RecordDAO.isMergedTransfer(db, id: id),
+                closedHolds: try Self.decorate(try RecordDAO.closedHolds(db, of: id), db: db, calendar: calendar)
             )
         }
     }
