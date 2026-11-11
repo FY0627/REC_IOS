@@ -13,7 +13,7 @@ struct CategoryActivityBundle: WidgetBundle {
 
 /// 灵动岛选分类（ADR 0024）：自动记账记上一笔没分类的支出或收入后，App 开启这个实时活动，在岛上和锁屏上选分类。
 ///
-/// - 展开（提醒更新时系统自动展开、长按岛展开）：摄像头两边是顶上一行（第 1 页商户、账户，第 2、3 页返回和标题；右边金额），下面是按钮，一行 6 个；
+/// - 展开（提醒更新时系统自动展开、长按岛展开）：摄像头两边是顶上一行（第 1 页商户，第 2、3 页返回和标题；右边金额），下面是按钮，一行 5 个；
 /// - 按钮：分类是主题色的圆和图标，「全部」「更多」是白色的圆，字在圆下面；
 /// - 收起：左边是分类图标（还没选是统一的图标），右边是金额；minimal 只放图标；
 /// - 锁屏：黑色卡片，同样的三页和按钮。
@@ -31,14 +31,14 @@ struct CategoryActivityWidget: Widget {
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
                     HeaderLeading(state: context.state, inline: false)
+                        .islandHeader(.leading)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
                     AmountText(amount: context.state.amount)
-                        .frame(height: IslandLayout.header)
+                        .islandHeader(.trailing)
                 }
                 DynamicIslandExpandedRegion(.bottom) {
                     PickerBody(state: context.state)
-                        .padding(.top, IslandLayout.headerGap)
                 }
             } compactLeading: {
                 Image(systemName: context.state.chosen?.symbol ?? LiveCategoryPicker.unpickedSymbol)
@@ -66,20 +66,26 @@ struct CategoryActivityWidget: Widget {
 }
 
 /// Apple 规范：展开和锁屏宽 371 点（Pro Max、Plus 408），高 84–160 点，超出的部分系统直接切掉。
-/// 按钮 60 × 44（圆 28、图标 14、字 12），一行 5 个、间隔 8，宽 332；两行高 44 + 4 + 44 = 92。
-/// 展开：真机截图量出来，摄像头那一行和下面的按钮之间系统还要空约 8 点（自己的间隔设成 0），
-/// 上边距 10 + 顶上一行 32 + 系统 8 + 92 + 下边距 8 ≈ 150，留 10 点余量（上一版 10 + 32 + 4 + 8 + 102 + 10 超过 160，第二行的字被切掉）。
+/// 真机截图量出来（展开）：
+/// - 只显示离黑边约 13 点以内的部分，四个角是半径约 35 的圆角（黑边的圆角约 48），外面那一圈黑边上的东西被切掉；
+/// - 摄像头那一行和下面的按钮之间系统还要空约 8 点。
+/// 按钮 60 × 44（圆 28、图标 14、字 12），一行 5 个、间隔 4，宽 316，两边的按钮离黑边远一些，第二行的字不碰下面两个角；两行高 44 + 4 + 44 = 92。
+/// 上边距 10 + 顶上一行 32 + 系统 8 + 92 + 下边距 16 ≈ 158：第二行的字离黑边约 18 点。
+/// 顶上一行的东西放在下面 28 点里、左右各往里缩 10 点，返回、商户和金额不碰上面两个角。
 /// 锁屏没有摄像头：10 + 30 + 6 + 92 + 10 = 148
 enum IslandLayout {
     static let cell = CGSize(width: 60, height: 44)
     static let circle: CGFloat = 28
-    static let columnSpacing: CGFloat = 8
+    static let columnSpacing: CGFloat = 4
     static let rowSpacing: CGFloat = 4
+    /// 顶上一行占的高度；里面的东西放在下面 `headerLine` 里
     static let header: CGFloat = 32
-    static let headerGap: CGFloat = 0
+    static let headerLine: CGFloat = 28
+    static let headerInset: CGFloat = 10
+    static let backCircle: CGFloat = 24
     static let sideMargin: CGFloat = 19
     static let topMargin: CGFloat = 10
-    static let bottomMargin: CGFloat = 8
+    static let bottomMargin: CGFloat = 16
     /// 摄像头两边只有一行的字和金额用同一个字号
     static let lineFont = Font.headline
     /// 字号跟系统走，但不超过这一档：再大两行按钮放不进 160 点
@@ -106,8 +112,19 @@ extension CategoryActivityAttributes.ContentState {
     }
 }
 
-/// 第 1 页：商户、账户（展开时两行，锁屏一行）；第 2、3 页：返回和标题。选好了回到商户、账户。
-/// 只有一行的字（「支出」「饮食」、没有商户时的账户、锁屏上的商户）和右边的金额一样大（`IslandLayout.lineFont`）
+extension View {
+    /// 岛上顶上一行：占 32 高，东西放在下面 28 里，再往岛中间缩 10 点，不碰岛的上面两个角
+    func islandHeader(_ edge: HorizontalEdge) -> some View {
+        let side: Edge.Set = edge == .leading ? .leading : .trailing
+        return frame(height: IslandLayout.headerLine, alignment: .center)
+            .padding(side, IslandLayout.headerInset)
+            .padding(.top, IslandLayout.header - IslandLayout.headerLine)
+    }
+}
+
+/// 第 1 页：岛上只有商户（没有商户是账户），锁屏是商户和账户；第 2、3 页：返回和标题。选好了回到第 1 页的样子。
+/// 岛上放不下两行：两行的字顶到岛上面的黑边，会被切掉。
+/// 这一行的字和右边的金额一样大（`IslandLayout.lineFont`），锁屏上商户后面的账户小一号
 struct HeaderLeading: View {
     let state: CategoryActivityAttributes.ContentState
     let inline: Bool
@@ -117,8 +134,8 @@ struct HeaderLeading: View {
             Button(intent: ShowLiveCategoryPageIntent(recordID: state.recordID, page: back)) {
                 HStack(spacing: 8) {
                     Image(systemName: "chevron.backward")
-                        .font(.system(size: 13, weight: .bold))
-                        .frame(width: 28, height: 28)
+                        .font(.system(size: 12, weight: .bold))
+                        .frame(width: IslandLayout.backCircle, height: IslandLayout.backCircle)
                         .background(Color.white.opacity(0.14), in: Circle())
                     if let title = state.screen.title {
                         Text(title)
@@ -127,43 +144,26 @@ struct HeaderLeading: View {
                     }
                 }
                 .foregroundStyle(.white)
-                .frame(minWidth: 44, minHeight: IslandLayout.header, alignment: .leading)
+                .frame(minWidth: 44, minHeight: IslandLayout.headerLine, alignment: .leading)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-        } else if state.merchant == nil {
-            Text(state.account)
-                .font(IslandLayout.lineFont)
-                .foregroundStyle(.white)
-                .lineLimit(1)
-                .frame(height: inline ? nil : IslandLayout.header, alignment: .leading)
-        } else if inline {
+        } else if inline, let merchant = state.merchant {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(state.merchant ?? state.account)
+                Text(merchant)
                     .font(IslandLayout.lineFont)
                     .foregroundStyle(.white)
                     .lineLimit(1)
-                if state.merchant != nil {
-                    Text(state.account)
-                        .font(.caption)
-                        .foregroundStyle(.white.opacity(0.55))
-                        .lineLimit(1)
-                }
+                Text(state.account)
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.55))
+                    .lineLimit(1)
             }
         } else {
-            VStack(alignment: .leading, spacing: 0) {
-                Text(state.merchant ?? state.account)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-                if state.merchant != nil {
-                    Text(state.account)
-                        .font(.caption)
-                        .foregroundStyle(.white.opacity(0.55))
-                        .lineLimit(1)
-                }
-            }
-            .frame(height: IslandLayout.header, alignment: .leading)
+            Text(state.merchant ?? state.account)
+                .font(IslandLayout.lineFont)
+                .foregroundStyle(.white)
+                .lineLimit(1)
         }
     }
 }
