@@ -57,26 +57,29 @@ struct CategoryActivityWidget: Widget {
                     .foregroundStyle(context.state.tintColor)
             }
             .contentMargins(.horizontal, IslandLayout.sideMargin, for: .expanded)
-            .contentMargins(.top, IslandLayout.verticalMargin, for: .expanded)
-            .contentMargins(.bottom, IslandLayout.verticalMargin, for: .expanded)
+            .contentMargins(.top, IslandLayout.topMargin, for: .expanded)
+            .contentMargins(.bottom, IslandLayout.bottomMargin, for: .expanded)
             .keylineTint(context.state.tintColor)
             .widgetURL(CategoryActivityLink.url(recordID: context.state.recordID))
         }
     }
 }
 
-/// Apple 规范：展开和锁屏宽 371 点（Pro Max、Plus 408），高 84–160 点。
-/// 按钮 60 × 48（圆 30、图标 15、字 12），一行 5 个、间隔 8，宽 332；两行高 48 + 6 + 48 = 102。
-/// 展开：上下边距 10 + 顶上一行 32 + 间隔 4 + 102 = 158；锁屏：10 + 30 + 6 + 102 + 10 = 158
+/// Apple 规范：展开和锁屏宽 371 点（Pro Max、Plus 408），高 84–160 点，超出的部分系统直接切掉。
+/// 按钮 60 × 44（圆 28、图标 14、字 12），一行 5 个、间隔 8，宽 332；两行高 44 + 4 + 44 = 92。
+/// 展开：真机截图量出来，摄像头那一行和下面的按钮之间系统还要空约 8 点（自己的间隔设成 0），
+/// 上边距 10 + 顶上一行 32 + 系统 8 + 92 + 下边距 8 ≈ 150，留 10 点余量（上一版 10 + 32 + 4 + 8 + 102 + 10 超过 160，第二行的字被切掉）。
+/// 锁屏没有摄像头：10 + 30 + 6 + 92 + 10 = 148
 enum IslandLayout {
-    static let cell = CGSize(width: 60, height: 48)
-    static let circle: CGFloat = 30
+    static let cell = CGSize(width: 60, height: 44)
+    static let circle: CGFloat = 28
     static let columnSpacing: CGFloat = 8
-    static let rowSpacing: CGFloat = 6
+    static let rowSpacing: CGFloat = 4
     static let header: CGFloat = 32
-    static let headerGap: CGFloat = 4
+    static let headerGap: CGFloat = 0
     static let sideMargin: CGFloat = 19
-    static let verticalMargin: CGFloat = 10
+    static let topMargin: CGFloat = 10
+    static let bottomMargin: CGFloat = 8
     /// 摄像头两边只有一行的字和金额用同一个字号
     static let lineFont = Font.headline
     /// 字号跟系统走，但不超过这一档：再大两行按钮放不进 160 点
@@ -234,7 +237,7 @@ struct CellGrid: View {
     }
 }
 
-/// 按钮 60 × 48：圆 30 里放图标，字（12 点）在圆下面。分类：主题色 22% 的圆、主题色图标；「全部」「更多」：白色 14% 的圆、白色图标
+/// 按钮 60 × 44：圆 28 里放图标，字（12 点）在圆下面。分类：主题色 22% 的圆、主题色图标；「全部」「更多」：白色 14% 的圆、白色图标
 struct CellButton: View {
     let recordID: String
     let cell: LiveCategoryPicker.Cell
@@ -252,9 +255,9 @@ struct CellButton: View {
     }
 
     private var label: some View {
-        VStack(spacing: 3) {
+        VStack(spacing: 2) {
             Image(systemName: cell.symbol)
-                .font(.system(size: 15, weight: .semibold))
+                .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(cell.isNavigation ? Color.white : tint)
                 .frame(width: IslandLayout.circle, height: IslandLayout.circle)
                 .background(cell.isNavigation ? Color.white.opacity(0.14) : tint.opacity(0.22), in: Circle())
@@ -269,7 +272,7 @@ struct CellButton: View {
     }
 }
 
-/// 锁屏卡片：黑色 80%，和岛上一样的按钮。高 10 + 30 + 6 + 102 + 10 = 158，不超过上限
+/// 锁屏卡片：黑色 80%，和岛上一样的按钮。高 10 + 30 + 6 + 92 + 10 = 148，不超过上限
 struct LockScreenCard: View {
     let state: CategoryActivityAttributes.ContentState
 

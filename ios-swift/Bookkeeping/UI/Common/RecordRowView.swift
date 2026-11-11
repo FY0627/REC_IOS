@@ -172,8 +172,7 @@ struct RecordDetailView: View {
     @State private var deleted = false
     @State private var merging = false
     @State private var splitting = false
-    /// 手动了结冻结：可以选的扣款（和实扣一样的在前）
-    @State private var holdCandidates: [RecordRow] = []
+    /// 手动了结冻结：打开 `HoldCloseView`
     @State private var closingHold = false
     @State private var note = ""
     @FocusState private var noteFocused: Bool
@@ -204,6 +203,9 @@ struct RecordDetailView: View {
         }
         .sheet(isPresented: $splitting, onDismiss: { Task { await reload() } }) {
             if let detail { OrderSplitView(detail: detail) }
+        }
+        .sheet(isPresented: $closingHold, onDismiss: { Task { await reload() } }) {
+            if let detail { HoldCloseView(row: detail.row) }
         }
         .onChange(of: noteFocused) { _, focused in
             if !focused { Task { await saveNote() } }
@@ -306,14 +308,7 @@ struct RecordDetailView: View {
             if r.status == .hold, r.direction == .outflow {
                 // 没等到写了预授权时间的扣款通知：自己选是哪一笔扣款了结它（金额一样也可能不是同一单，不自动了结）
                 Section {
-                    Button { Task { await loadHoldCandidates() } } label: { ActionLabel(title: "了结冻结") }
-                        .confirmationDialog("了结冻结", isPresented: $closingHold, titleVisibility: .visible) {
-                            ForEach(holdCandidates) { charge in
-                                Button(candidateTitle(charge)) { Task { await closeHold(charge.id) } }
-                            }
-                            Button("没有扣款（已撤销）") { Task { await closeHold(nil) } }
-                            Button("取消", role: .cancel) {}
-                        }
+                    Button { closingHold = true } label: { ActionLabel(title: "了结冻结") }
                 }
             }
             if !detail.orderMembers.isEmpty {
@@ -436,26 +431,6 @@ struct RecordDetailView: View {
         }
     }
 
-    private func loadHoldCandidates() async {
-        holdCandidates = await store.holdCaptureCandidates(holdID: recordID)
-        closingHold = true
-    }
-
-    /// 「11月11日 15:23 · -¥126.84 · AI订阅」
-    private func candidateTitle(_ charge: RecordRow) -> String {
-        [Fmt.dateTime(charge.record.effectiveAt), charge.amountText(inAccount: true), charge.title].joined(separator: " · ")
-    }
-
-    private func closeHold(_ chargeID: String?) async {
-        do {
-            try await store.closeHold(id: recordID, chargeID: chargeID)
-            await reload()
-            saveError = nil
-        } catch {
-            saveError = L("了结失败：\(error.localizedDescription)")
-        }
-    }
-
     private func reopenHold() async {
         do {
             try await store.reopenHold(id: recordID)
@@ -520,6 +495,92 @@ private struct OrderPickRow: View {
             }
         }
         .buttonStyle(.plain)
+    }
+}
+
+/// 了结冻结（手动）：和「合成一单」一样的面板。上面是这笔冻结，下面选完成扣款的那一笔（只能选一笔），
+/// 或者「没有扣款（已撤销）」，右上角确定。金额和冻结时写的实扣一样的排在前面并标出来，但不替用户选：金额一样也可能不是同一单
+struct HoldCloseView: View {
+    let row: RecordRow
+    @Environment(LedgerStore.self) private var store
+    @Environment(\.dismiss) private var dismiss
+    @State private var candidates: [RecordRow] = []
+    @State private var loaded = false
+    @State private var choice: Choice?
+    @State private var errorText: String?
+
+    enum Choice: Hashable {
+        case charge(String)
+        /// 没有扣款：预授权撤销了
+        case noCharge
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section("这一笔") { RecordRowView(row: row) }
+                Section("完成扣款") {
+                    if loaded, candidates.isEmpty {
+                        Text("之后 45 天里这个账户没有扣款").foregroundStyle(.secondary)
+                    }
+                    ForEach(candidates) { candidate in
+                        OrderPickRow(
+                            row: candidate, chosen: choice == .charge(candidate.id),
+                            hint: matchesHold(candidate.record) ? L("和实扣金额一样") : nil
+                        ) { choice = .charge(candidate.id) }
+                    }
+                }
+                Section {
+                    Button { choice = .noCharge } label: {
+                        HStack(spacing: 10) {
+                            Image(systemName: choice == .noCharge ? "checkmark.circle.fill" : "circle")
+                                .font(.title3)
+                                .foregroundStyle(choice == .noCharge ? AnyShapeStyle(.tint) : AnyShapeStyle(Color.secondary))
+                            Text("没有扣款（已撤销）")
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+                if let errorText {
+                    Section { Text(errorText).foregroundStyle(.red) }
+                }
+            }
+            .navigationTitle("了结冻结")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("取消", systemImage: "xmark") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("了结", systemImage: "checkmark") { Task { await close() } }
+                        .disabled(choice == nil)
+                }
+            }
+            .task {
+                candidates = await store.holdCaptureCandidates(holdID: row.id)
+                loaded = true
+            }
+        }
+    }
+
+    /// 和冻结时通知里写的实扣（「JPY3000（人民币126.84）」的 126.84）一样，或者和冻结的金额、币种一样
+    private func matchesHold(_ charge: LedgerRecord) -> Bool {
+        let hold = row.record
+        if let currency = hold.chargeCurrency, let minor = hold.settlementMinor, charge.currency == currency, charge.amountMinor == minor { return true }
+        return charge.currency == hold.currency && charge.amountMinor == hold.amountMinor
+    }
+
+    private func close() async {
+        guard let choice else { return }
+        do {
+            switch choice {
+            case .charge(let id): try await store.closeHold(id: row.id, chargeID: id)
+            case .noCharge: try await store.closeHold(id: row.id, chargeID: nil)
+            }
+            dismiss()
+        } catch {
+            errorText = L("了结失败：\(error.localizedDescription)")
+        }
     }
 }
 

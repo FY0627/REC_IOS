@@ -2223,6 +2223,28 @@
         }
       }
     },
+    "之后 45 天里这个账户没有扣款" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No charges on this account in the next 45 days"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "之后 45 天里这个账户没有扣款"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "之後 45 天內這個帳戶沒有扣款"
+          }
+        }
+      }
+    },
     "之后半年里没有还没关联的退款" : {
       "localizations" : {
         "en" : {
@@ -2285,6 +2307,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "書"
+          }
+        }
+      }
+    },
+    "了结" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Release"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "了结"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "了結"
           }
         }
       }
@@ -6415,6 +6459,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "啟用"
+          }
+        }
+      }
+    },
+    "和实扣金额一样" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Same as the charged amount"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "和实扣金额一样"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "和實扣金額相同"
           }
         }
       }
