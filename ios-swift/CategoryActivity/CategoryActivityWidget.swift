@@ -16,7 +16,8 @@ struct CategoryActivityBundle: WidgetBundle {
 /// - 展开（提醒更新时系统自动展开、长按岛展开）：摄像头两边是顶上一行（第 1 页商户，第 2、3 页返回和标题；右边金额），下面是按钮，一行 5 个；
 /// - 按钮：分类是主题色的圆和图标，「全部」「更多」是白色的圆，字在圆下面；
 /// - 收起：左边是分类图标（还没选是统一的图标），右边是金额；minimal 只放图标；
-/// - 锁屏：黑色卡片，同样的三页和按钮。
+/// - 锁屏：黑色卡片，同样的三页和按钮；
+/// - 换页、选好、换下一笔：旧的缩到中间淡出，新的再从中间长出来（`IslandMotion`）。
 ///
 /// 按钮都是 `LiveActivityIntent`，在 App 进程里运行，不打开 App。单点岛或卡片打开 App 里这一笔的选分类面板。
 /// 扩展只照着内容显示（`CategoryActivityAttributes.ContentState`），不读账本、不翻译
@@ -31,14 +32,17 @@ struct CategoryActivityWidget: Widget {
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
                     HeaderLeading(state: context.state, inline: false)
+                        .islandSwap(context.state.headerKey, toward: .trailing)
                         .islandHeader(.leading)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
                     AmountText(amount: context.state.amount)
+                        .islandSwap(context.state.recordID, toward: .leading)
                         .islandHeader(.trailing)
                 }
                 DynamicIslandExpandedRegion(.bottom) {
                     PickerBody(state: context.state)
+                        .islandSwap(context.state.screenKey, toward: .center)
                 }
             } compactLeading: {
                 Image(systemName: context.state.chosen?.symbol ?? LiveCategoryPicker.unpickedSymbol)
@@ -112,7 +116,41 @@ extension CategoryActivityAttributes.ContentState {
     }
 }
 
+extension CategoryActivityAttributes.ContentState {
+    /// 下面的按钮：换页、选好、换下一笔时变
+    var screenKey: String { "\(recordID)|\(screen.page.token)|\(chosen?.id ?? "")" }
+
+    /// 左上角：返回和标题跟着页变；商户只在换下一笔时变（第 1 页选好了还是这个商户，不用动）
+    var headerKey: String {
+        chosen == nil && screen.back != nil ? "\(recordID)|\(screen.page.token)" : recordID
+    }
+}
+
+/// 换页、选好、换下一笔：旧的缩到岛中间淡出，新的再从中间长出来。
+/// 系统给小组件和实时活动的动画最长 2 秒；常亮显示（Always On）时系统不做动画
+enum IslandMotion {
+    static let smallest: CGFloat = 0.3
+    static let shrink: Animation = .easeIn(duration: 0.16)
+    static let grow: Animation = .spring(duration: 0.4, bounce: 0.25).delay(0.12)
+    /// 岛跟着变大变小
+    static let resize: Animation = .spring(duration: 0.4, bounce: 0.15)
+
+    static func swap(toward anchor: UnitPoint) -> AnyTransition {
+        let small: AnyTransition = .scale(scale: smallest, anchor: anchor)
+        let fade: AnyTransition = small.combined(with: .opacity)
+        return .asymmetric(insertion: fade.animation(grow), removal: fade.animation(shrink))
+    }
+}
+
 extension View {
+    /// `key` 变了就换成新的：旧的朝 `anchor` 缩进去，新的从那里长出来
+    func islandSwap<Key: Hashable>(_ key: Key, toward anchor: UnitPoint) -> some View {
+        ZStack {
+            self.id(key).transition(IslandMotion.swap(toward: anchor))
+        }
+        .animation(IslandMotion.resize, value: key)
+    }
+
     /// 岛上顶上一行：占 32 高，东西放在下面 28 里，再往岛中间缩 10 点，不碰岛的上面两个角
     func islandHeader(_ edge: HorizontalEdge) -> some View {
         let side: Edge.Set = edge == .leading ? .leading : .trailing
@@ -280,11 +318,14 @@ struct LockScreenCard: View {
         VStack(spacing: 6) {
             HStack {
                 HeaderLeading(state: state, inline: true)
+                    .islandSwap(state.headerKey, toward: .trailing)
                 Spacer(minLength: 8)
                 AmountText(amount: state.amount)
+                    .islandSwap(state.recordID, toward: .leading)
             }
             .frame(height: 30)
             PickerBody(state: state)
+                .islandSwap(state.screenKey, toward: .center)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)

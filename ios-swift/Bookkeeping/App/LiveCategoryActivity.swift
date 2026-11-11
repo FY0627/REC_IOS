@@ -8,11 +8,12 @@ import BKModel
 /// - 只用在有灵动岛的手机（`DynamicIsland`，按机型）。没有灵动岛、系统里关了实时活动、开启失败时返回 false，照常发记账结果通知（长按选分类，ADR 0020）；
 /// - 两个记账动作遵循 `LiveActivityIntent`，在它们的 perform 里开启：系统只让用户经快捷指令、Siri、小组件运行的动作从后台开启；
 /// - 开启后马上发一次会提醒的更新，让岛自动展开、锁屏亮屏。不出声：银行短信已经响过，和记账结果通知一样；
-/// - 只留一个：又记了一笔要选的，就换成这一笔；
-/// - 不设时长：用户不选就留着，自己上滑收起；系统最长 8 小时后结束。这一笔在 App 里选了分类、删了，打开或离开 App 时结束（`reconcile`）。
+/// - 只留一个：又记了一笔要选的，就换成这一笔，原来那一笔排着（`LiveCategoryQueue`）；
+/// - 不设时长：用户不选就留着，自己上滑收起；系统最长 8 小时后结束。这一笔在 App 里选了分类、删了，打开或离开 App 时换下一笔（`reconcile`）。
 ///
 /// 岛上的按钮（`PickLiveCategoryIntent`、`ShowLiveCategoryPageIntent`）在 App 进程里运行到这里：
-/// 换页只读开启时存下的选项（`LiveCategoryPicker`），不开账本；点到分类时写进账本，显示选中的分类一下再结束
+/// 换页只读开启时存下的选项（`LiveCategoryPicker`），不开账本；点到分类时写进账本，显示选中的分类一下，
+/// 再换成排着的下一笔（还没分类的），没有了才结束
 enum LiveCategoryActivity {
     typealias State = CategoryActivityAttributes.ContentState
 
@@ -27,6 +28,7 @@ enum LiveCategoryActivity {
     static let lastResultKey = "liveCategory.lastResult"
     private static let pickerKey = "liveCategory.picker"
     private static let pickerRecordKey = "liveCategory.pickerRecord"
+    private static let queueKey = "liveCategory.queue"
     /// 选好的分类在岛上显示多久再结束
     private static let chosenDisplay: Duration = .milliseconds(1200)
     /// 提醒更新的声音：一段没有声音的文件（系统要求提醒带声音）
@@ -52,7 +54,7 @@ enum LiveCategoryActivity {
 
     // MARK: 开启
 
-    /// 在岛上选这一笔的分类：已经有一个就换成这一笔，然后发一次会提醒的更新。
+    /// 在岛上选这一笔的分类：已经有一个就换成这一笔（原来没选的那一笔排着），然后发一次会提醒的更新。
     /// 成功返回 true，这一笔不再发记账成功通知
     @MainActor
     static func show(recordID: String, suggestions: CategorySuggestions, header: Header) async -> Bool {
@@ -63,18 +65,20 @@ enum LiveCategoryActivity {
         }
         let picker = makePicker(suggestions)
         store(picker, recordID: recordID)
-        let state = State(
-            recordID: recordID, merchant: header.merchant, account: header.account, amount: header.amount,
-            screen: picker.screen(.quick), chosen: nil,
-            tint: UserDefaults.standard.string(forKey: ThemeColor.key) ?? ThemeColor.blue.rawValue
-        )
-        let content = ActivityContent(state: state, staleDate: nil)
-        let alert = AlertConfiguration(
-            title: LocalizedStringResource(stringLiteral: header.merchant ?? header.account),
-            body: LocalizedStringResource(stringLiteral: header.amount),
-            sound: .named(silentSound)
-        )
+        let record = LiveCategoryQueue.Entry(recordID: recordID, merchant: header.merchant, account: header.account, amount: header.amount)
+        let content = ActivityContent(state: makeState(record, picker: picker), staleDate: nil)
+        let alert = makeAlert(record)
         let current = running()
+        var queue = loadQueue()
+        if let showing = current.first?.content.state {
+            // 岛上那一笔已经选好（正在显示选中的分类）就不用排
+            if showing.chosen == nil, showing.recordID != recordID { queue.wait(queueEntry(showing)) }
+        } else {
+            // 岛被上滑收起了：之前排着的不再接着弹，留在待分类
+            queue = LiveCategoryQueue()
+        }
+        queue.remove(recordID)
+        saveQueue(queue)
         if let activity = current.first {
             await activity.update(content, alertConfiguration: alert)
             for extra in current.dropFirst() { await extra.end(nil, dismissalPolicy: .immediate) }
@@ -105,8 +109,8 @@ enum LiveCategoryActivity {
         await activity.update(ActivityContent(state: state, staleDate: nil))
     }
 
-    /// 点到一个分类：写进账本（学习和通知上选分类一样），岛上显示选中的分类一下，然后结束、马上消失。
-    /// 写不进去（开机后还没解锁过）时岛留着，可以再点或单点打开 App；这一笔已经删了就结束
+    /// 点到一个分类：写进账本（学习和通知上选分类一样），岛上显示选中的分类一下，然后换成排着的下一笔；没有了就结束、马上消失。
+    /// 写不进去（开机后还没解锁过）时岛留着，可以再点或单点打开 App；这一笔已经删了就直接换下一笔
     @MainActor
     static func pick(recordID: String, categoryID: String) async {
         guard let backend = await openBackend() else {
@@ -116,7 +120,7 @@ enum LiveCategoryActivity {
         do {
             try await backend.setCategory(recordID: recordID, categoryID: categoryID)
         } catch BackendError.notFound {
-            await end(recordID)
+            if let activity = find(recordID) { await advance(activity, from: recordID, backend: backend, alert: true) }
             return
         } catch {
             AppServices.logger.error("live activity pick failed: \(String(describing: type(of: error)), privacy: .public)")
@@ -127,17 +131,17 @@ enum LiveCategoryActivity {
         guard let activity = find(recordID) else { return }
         var state = activity.content.state
         state.chosen = await loadPicker(recordID)?.option(categoryID) ?? LiveCategoryPicker.Option(id: categoryID, name: "", symbol: "checkmark")
-        await activity.update(ActivityContent(state: state, staleDate: nil))
+        let chosen = ActivityContent(state: state, staleDate: nil)
+        await activity.update(chosen)
         try? await Task.sleep(for: chosenDisplay)
-        // 这期间换成了下一笔就不结束
+        // 这期间来了新的一笔、岛已经换成它了，就不动
         guard activity.content.state.recordID == recordID else { return }
-        await activity.end(ActivityContent(state: state, staleDate: nil), dismissalPolicy: .immediate)
-        clearStored(recordID)
+        await advance(activity, from: recordID, backend: backend, final: chosen, alert: true)
     }
 
     // MARK: 打开、离开 App
 
-    /// 岛上这一笔已经在 App 里选了分类或者删了：结束
+    /// 岛上这一笔已经在 App 里选了分类或者删了：换成排着的下一笔，没有了就结束
     @MainActor
     static func reconcile() async {
         let current = running().filter { $0.content.state.chosen == nil }
@@ -151,8 +155,45 @@ enum LiveCategoryActivity {
             } catch {
                 continue
             }
-            await end(recordID)
+            await advance(activity, from: recordID, backend: backend, alert: false)
         }
+    }
+
+    // MARK: 下一笔
+
+    /// 岛上这一笔选好了（或者在 App 里选了、删了）：换成排着的最近一笔，跳过已经分好类、删了的；没有了就结束。
+    /// `alert`：在岛上点的，岛可能已经收起来了，提醒一下让它再展开；在 App 里选的不用
+    @MainActor
+    private static func advance(
+        _ activity: Activity<CategoryActivityAttributes>, from recordID: String, backend: LedgerBackend,
+        final: ActivityContent<State>? = nil, alert: Bool
+    ) async {
+        clearStored(recordID)
+        var queue = loadQueue()
+        queue.remove(recordID)
+        while let next = queue.next() {
+            guard let suggestions = await waitingSuggestions(next.recordID, backend: backend) else { continue }
+            saveQueue(queue)
+            let picker = makePicker(suggestions)
+            store(picker, recordID: next.recordID)
+            let content = ActivityContent(state: makeState(next, picker: picker), staleDate: nil)
+            if alert {
+                await activity.update(content, alertConfiguration: makeAlert(next))
+            } else {
+                await activity.update(content)
+            }
+            return
+        }
+        saveQueue(queue)
+        await activity.end(final, dismissalPolicy: .immediate)
+    }
+
+    /// 排着的这一笔还要选：还在、还没分类、有分类可选
+    private static func waitingSuggestions(_ recordID: String, backend: LedgerBackend) async -> CategorySuggestions? {
+        guard let detail = try? await backend.recordDetail(id: recordID), detail.row.record.categoryID == nil,
+              let suggestions = try? await backend.categorySuggestions(recordID: recordID), !suggestions.groups.isEmpty
+        else { return nil }
+        return suggestions
     }
 
     // MARK: 内部
@@ -167,10 +208,38 @@ enum LiveCategoryActivity {
         running().first { $0.content.state.recordID == recordID }
     }
 
-    @MainActor
-    private static func end(_ recordID: String) async {
-        await find(recordID)?.end(nil, dismissalPolicy: .immediate)
-        clearStored(recordID)
+    /// 第 1 页，主题色按现在 App 里选的
+    private static func makeState(_ record: LiveCategoryQueue.Entry, picker: LiveCategoryPicker) -> State {
+        State(
+            recordID: record.recordID, merchant: record.merchant, account: record.account, amount: record.amount,
+            screen: picker.screen(.quick), chosen: nil,
+            tint: UserDefaults.standard.string(forKey: ThemeColor.key) ?? ThemeColor.blue.rawValue
+        )
+    }
+
+    private static func queueEntry(_ state: State) -> LiveCategoryQueue.Entry {
+        LiveCategoryQueue.Entry(recordID: state.recordID, merchant: state.merchant, account: state.account, amount: state.amount)
+    }
+
+    /// 岛自动展开、锁屏亮屏，不出声
+    private static func makeAlert(_ record: LiveCategoryQueue.Entry) -> AlertConfiguration {
+        AlertConfiguration(
+            title: LocalizedStringResource(stringLiteral: record.merchant ?? record.account),
+            body: LocalizedStringResource(stringLiteral: record.amount),
+            sound: .named(silentSound)
+        )
+    }
+
+    private static func loadQueue() -> LiveCategoryQueue {
+        UserDefaults.standard.string(forKey: queueKey).flatMap(LiveCategoryQueue.init(json:)) ?? LiveCategoryQueue()
+    }
+
+    private static func saveQueue(_ queue: LiveCategoryQueue) {
+        if queue.waiting.isEmpty {
+            UserDefaults.standard.removeObject(forKey: queueKey)
+        } else {
+            UserDefaults.standard.set(queue.json, forKey: queueKey)
+        }
     }
 
     /// 分类名称和固定的字按 App 里选的语言写好，扩展照着显示

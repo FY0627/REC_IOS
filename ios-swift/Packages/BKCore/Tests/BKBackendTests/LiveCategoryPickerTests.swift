@@ -180,6 +180,48 @@ final class LiveCategoryPickerTests: XCTestCase {
         XCTAssertNil(LiveCategoryPicker(json: "不是 JSON"))
     }
 
+    // MARK: 排着的几笔
+
+    func entry(_ id: String) -> LiveCategoryQueue.Entry {
+        .init(recordID: id, merchant: id == "a" ? nil : "商户\(id)", account: "尾号 1234 卡", amount: "¥\(id)")
+    }
+
+    /// 岛上先是 a，来了 b、c 各换掉一次：选完 c 接着是 b，再是 a
+    func testReplacedRecordsComeBackMostRecentFirst() {
+        var queue = LiveCategoryQueue()
+        queue.wait(entry("a"))
+        queue.wait(entry("b"))
+        XCTAssertEqual(queue.next(), entry("b"))
+        XCTAssertEqual(queue.next(), entry("a"))
+        XCTAssertNil(queue.next())
+    }
+
+    func testSameRecordWaitsOnceAndCanBeRemoved() {
+        var queue = LiveCategoryQueue()
+        queue.wait(entry("a"))
+        queue.wait(entry("b"))
+        queue.wait(entry("a"))
+        XCTAssertEqual(queue.waiting.map(\.recordID), ["a", "b"], "又排一次的挪到最前，不重复")
+        queue.remove("a")
+        XCTAssertEqual(queue.waiting.map(\.recordID), ["b"], "在 App 里选了、删了，或者又上了岛")
+    }
+
+    func testQueueKeepsTheMostRecentTwenty() {
+        var queue = LiveCategoryQueue()
+        for index in 1...25 { queue.wait(entry("\(index)")) }
+        XCTAssertEqual(queue.waiting.count, LiveCategoryQueue.limit)
+        XCTAssertEqual(queue.waiting.first?.recordID, "25")
+        XCTAssertEqual(queue.waiting.last?.recordID, "6", "最早的 5 笔只留在待分类")
+    }
+
+    func testQueueRoundTripsThroughJSON() throws {
+        var queue = LiveCategoryQueue()
+        queue.wait(entry("a"))
+        queue.wait(entry("b"))
+        XCTAssertEqual(LiveCategoryQueue(json: queue.json), queue)
+        XCTAssertNil(LiveCategoryQueue(json: "不是 JSON"))
+    }
+
     // MARK: 有没有灵动岛
 
     func testDynamicIslandByModel() {

@@ -244,6 +244,59 @@ public struct LiveCategoryPicker: Hashable, Sendable, Codable {
     }
 }
 
+/// 灵动岛上排着等选分类的几笔（ADR 0024）。岛只有一个：又来一笔要选的就换成新的，岛上原来那一笔排到这里；
+/// 选好一笔（或者在 App 里选了、删了）接着显示排着的最近一笔。用户上滑收起岛以后，再来一笔从头排
+public struct LiveCategoryQueue: Hashable, Sendable, Codable {
+    /// 岛上顶上一行要显示的：商户、账户、金额
+    public struct Entry: Hashable, Sendable, Codable {
+        public var recordID: String
+        public var merchant: String?
+        public var account: String
+        public var amount: String
+
+        public init(recordID: String, merchant: String?, account: String, amount: String) {
+            self.recordID = recordID
+            self.merchant = merchant
+            self.account = account
+            self.amount = amount
+        }
+    }
+
+    /// 最近的在前
+    public private(set) var waiting: [Entry]
+    /// 最多排几笔，再早的只留在待分类
+    public static let limit = 20
+
+    public init(waiting: [Entry] = []) {
+        self.waiting = Array(waiting.prefix(Self.limit))
+    }
+
+    /// 岛上换成了新的一笔：原来那一笔排到最前
+    public mutating func wait(_ entry: Entry) {
+        remove(entry.recordID)
+        waiting.insert(entry, at: 0)
+        if waiting.count > Self.limit { waiting.removeLast(waiting.count - Self.limit) }
+    }
+
+    public mutating func remove(_ recordID: String) {
+        waiting.removeAll { $0.recordID == recordID }
+    }
+
+    /// 取出接着显示的一笔（排着的最近一笔）
+    public mutating func next() -> Entry? {
+        waiting.isEmpty ? nil : waiting.removeFirst()
+    }
+
+    public var json: String {
+        (try? JSONEncoder().encode(self)).map { String(decoding: $0, as: UTF8.self) } ?? ""
+    }
+
+    public init?(json: String) {
+        guard let value = try? JSONDecoder().decode(Self.self, from: Data(json.utf8)) else { return nil }
+        self = value
+    }
+}
+
 extension LiveCategoryPicker.Page {
     /// 写进按钮动作的参数：`q`、`p.1`、`c.0.q.分类`（`q` 从推荐点进来，`p` 从大类点进来）
     public var token: String {
