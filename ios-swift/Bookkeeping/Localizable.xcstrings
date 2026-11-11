@@ -6441,6 +6441,28 @@
         }
       }
     },
+    "启动后 %lld ms" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld ms after launch"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "启动后 %lld ms"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "啟動後 %lld ms"
+          }
+        }
+      }
+    },
     "启用" : {
       "localizations" : {
         "en" : {
@@ -10493,6 +10515,28 @@
         }
       }
     },
+    "换页 %lld ms" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Page %lld ms"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "换页 %lld ms"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "換頁 %lld ms"
+          }
+        }
+      }
+    },
     "接收时间" : {
       "localizations" : {
         "en" : {
@@ -13789,6 +13833,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "動態島"
+          }
+        }
+      }
+    },
+    "灵动岛按钮" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dynamic Island Buttons"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "灵动岛按钮"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "動態島按鈕"
           }
         }
       }
@@ -17991,6 +18057,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "選擇分類"
+          }
+        }
+      }
+    },
+    "选分类：显示 %lld ms，写账本 %lld ms" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pick: shown %lld ms, saved %lld ms"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选分类：显示 %lld ms，写账本 %lld ms"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "選分類：顯示 %lld ms，寫入帳本 %lld ms"
           }
         }
       }

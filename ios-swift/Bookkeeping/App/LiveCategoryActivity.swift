@@ -26,6 +26,10 @@ enum LiveCategoryActivity {
 
     /// 「开发与调试」里显示上次开启的结果，装到手机上看后台能不能开启
     static let lastResultKey = "liveCategory.lastResult"
+    /// 「开发与调试」里显示上次点岛上的按钮 App 这边花了多久（系统叫起 App、重画岛的时间不在里面）
+    static let lastTapKey = "liveCategory.lastTap"
+    /// 这次 App 启动的时候（`AppDelegate` 启动时先取一次）：按钮把 App 拉起来时，记下启动后多久才轮到按钮的动作
+    static let launchedAt = ContinuousClock.now
     private static let pickerKey = "liveCategory.picker"
     private static let pickerRecordKey = "liveCategory.pickerRecord"
     private static let queueKey = "liveCategory.queue"
@@ -102,41 +106,65 @@ enum LiveCategoryActivity {
     /// 「全部」「更多」「返回」、有小类的大类：换一页
     @MainActor
     static func turn(recordID: String, to token: String) async {
+        let started = ContinuousClock.now
         guard let page = LiveCategoryPicker.Page(token: token), let activity = find(recordID),
               let picker = await loadPicker(recordID) else { return }
         var state = activity.content.state
         state.screen = picker.screen(page)
         await activity.update(ActivityContent(state: state, staleDate: nil))
+        noteTap([L("换页 \(milliseconds(since: started)) ms")], started: started)
     }
 
-    /// 点到一个分类：写进账本（学习和通知上选分类一样），岛上显示选中的分类一下，然后换成排着的下一笔；没有了就结束、马上消失。
-    /// 写不进去（开机后还没解锁过）时岛留着，可以再点或单点打开 App；这一笔已经删了就直接换下一笔
+    /// 点到一个分类：先在岛上显示选中的分类，再写进账本（学习和通知上选分类一样）——等写完再显示，点了要多等一会。
+    /// 显示约 1 秒后换成排着的下一笔；没有了就结束、马上消失。
+    /// 写不进去（开机后还没解锁过）时岛换回按钮，可以再点或单点打开 App；这一笔已经删了就直接换下一笔
     @MainActor
     static func pick(recordID: String, categoryID: String) async {
+        let started = ContinuousClock.now
+        let activity = find(recordID)
+        var shown: ActivityContent<State>?
+        var shownAt = started
+        if let activity {
+            var state = activity.content.state
+            state.chosen = await loadPicker(recordID)?.option(categoryID) ?? LiveCategoryPicker.Option(id: categoryID, name: "", symbol: "checkmark")
+            let chosen = ActivityContent(state: state, staleDate: nil)
+            await activity.update(chosen)
+            shown = chosen
+            shownAt = .now
+        }
+        let shownTime = milliseconds(since: started)
         guard let backend = await openBackend() else {
+            await undoChosen(activity, recordID: recordID)
             note(L("写入失败"))
             return
         }
         do {
             try await backend.setCategory(recordID: recordID, categoryID: categoryID)
         } catch BackendError.notFound {
-            if let activity = find(recordID) { await advance(activity, from: recordID, backend: backend, alert: true) }
+            if let activity { await advance(activity, from: recordID, backend: backend, alert: true) }
             return
         } catch {
             AppServices.logger.error("live activity pick failed: \(String(describing: type(of: error)), privacy: .public)")
+            await undoChosen(activity, recordID: recordID)
             note(L("写入失败"))
             return
         }
+        noteTap([L("选分类：显示 \(shownTime) ms，写账本 \(milliseconds(since: started)) ms")], started: started)
         NotificationCenter.default.post(name: .ledgerDidChange, object: nil)
-        guard let activity = find(recordID) else { return }
-        var state = activity.content.state
-        state.chosen = await loadPicker(recordID)?.option(categoryID) ?? LiveCategoryPicker.Option(id: categoryID, name: "", symbol: "checkmark")
-        let chosen = ActivityContent(state: state, staleDate: nil)
-        await activity.update(chosen)
-        try? await Task.sleep(for: chosenDisplay)
+        guard let activity, let shown else { return }
+        try? await Task.sleep(until: shownAt + chosenDisplay, clock: .continuous)
         // 这期间来了新的一笔、岛已经换成它了，就不动
         guard activity.content.state.recordID == recordID else { return }
-        await advance(activity, from: recordID, backend: backend, final: chosen, alert: true)
+        await advance(activity, from: recordID, backend: backend, final: shown, alert: true)
+    }
+
+    /// 写不进账本：岛上换回这一笔的按钮
+    @MainActor
+    private static func undoChosen(_ activity: Activity<CategoryActivityAttributes>?, recordID: String) async {
+        guard let activity, activity.content.state.recordID == recordID else { return }
+        var state = activity.content.state
+        state.chosen = nil
+        await activity.update(ActivityContent(state: state, staleDate: nil))
     }
 
     // MARK: 打开、离开 App
@@ -284,6 +312,23 @@ enum LiveCategoryActivity {
     @MainActor
     private static func note(_ text: String) {
         UserDefaults.standard.set("\(Fmt.dateTime(Date())) \(text)", forKey: lastResultKey)
+    }
+
+    /// App 刚被这次点击拉起来（启动不到 3 秒）时，再写上启动后多久才轮到按钮的动作
+    @MainActor
+    private static func noteTap(_ parts: [String], started: ContinuousClock.Instant) {
+        var parts = parts
+        let sinceLaunch = started - launchedAt
+        if sinceLaunch < .seconds(3) { parts.append(L("启动后 \(milliseconds(sinceLaunch)) ms")) }
+        UserDefaults.standard.set("\(Fmt.dateTime(Date())) \(parts.joined(separator: " · "))", forKey: lastTapKey)
+    }
+
+    private static func milliseconds(since start: ContinuousClock.Instant) -> Int {
+        milliseconds(.now - start)
+    }
+
+    private static func milliseconds(_ duration: Duration) -> Int {
+        Int(duration / .milliseconds(1))
     }
 }
 

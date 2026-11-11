@@ -756,6 +756,10 @@ t("写入失败", "寫入失敗", "Couldn’t save")
 t("灵动岛选分类", "動態島選擇分類", "Choose Category in Dynamic Island")
 t("灵动岛换页", "動態島換頁", "Change Dynamic Island Page")
 t("页面", "頁面", "Page")
+t("灵动岛按钮", "動態島按鈕", "Dynamic Island Buttons")
+t("换页 %lld ms", "換頁 %lld ms", "Page %lld ms")
+t("选分类：显示 %lld ms，写账本 %lld ms", "選分類：顯示 %lld ms，寫入帳本 %lld ms", "Pick: shown %lld ms, saved %lld ms")
+t("启动后 %lld ms", "啟動後 %lld ms", "%lld ms after launch")
 
 # MARK: 快捷指令里的动作（App Intents）
 

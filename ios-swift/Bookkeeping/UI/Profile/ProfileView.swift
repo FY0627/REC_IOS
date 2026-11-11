@@ -43,6 +43,7 @@ private struct ProfileList: View {
     /// 「开发与调试」平时藏着：连点 7 次版本号显示，再连点 7 次藏起来
     @AppStorage("showDevTools") private var showDevTools = false
     @AppStorage(LiveCategoryActivity.lastResultKey) private var liveActivityResult = ""
+    @AppStorage(LiveCategoryActivity.lastTapKey) private var liveActivityTap = ""
     @State private var versionTaps = 0
     @State private var lastVersionTap = Date.distantPast
     @State private var retention = 30
@@ -182,6 +183,8 @@ private struct ProfileList: View {
                         }
                         // 灵动岛选分类上次开启的结果（ADR 0024）：后台能不能开启要在真机上看
                         LabeledContent("灵动岛", value: liveActivityResult.isEmpty ? "—" : liveActivityResult)
+                        // 上次点岛上的按钮 App 这边花了多久：剩下的等待是系统叫起 App、重画岛
+                        LabeledContent("灵动岛按钮", value: liveActivityTap.isEmpty ? "—" : liveActivityTap)
                     }
                 }
             }
