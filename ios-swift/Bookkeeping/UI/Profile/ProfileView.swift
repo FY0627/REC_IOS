@@ -23,7 +23,7 @@ struct ProfileView: View {
 
 /// 「我的」推进去的二级页面
 enum ProfileRoute: Hashable {
-    case language, primaryCurrency, exchangeRates, categories, autoSetup, screenshotSetup, categoryCheckup, templates, help, dataExport, dataImport, simulation, performance
+    case language, primaryCurrency, exchangeRates, categories, autoSetup, screenshotSetup, categoryCheckup, templates, dataExport, dataImport, simulation, performance
 }
 
 /// 「我的」的列表和导航栈。顶部一行和首页、资产页一样高、一样的位置；列表滚到它下面时垫一层磨砂背景（和首页一样）。
@@ -159,9 +159,6 @@ private struct ProfileList: View {
                 }
 
                 Section("关于") {
-                    NavigationLink(value: ProfileRoute.help) {
-                        Label("使用说明", systemImage: "questionmark.circle")
-                    }
                     LabeledContent("版本", value: BuildInfo.summary)
                         .font(.subheadline.monospaced())
                         .contentShape(Rectangle())
@@ -238,7 +235,6 @@ private struct ProfileList: View {
         case .screenshotSetup: ScreenshotSetupGuideView()
         case .categoryCheckup: CategoryCheckupView()
         case .templates: TemplateListView()
-        case .help: HelpView()
         case .dataExport: DataExportView()
         case .dataImport: DataImportView()
         case .simulation: SimulationView()

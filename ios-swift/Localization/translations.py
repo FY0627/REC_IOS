@@ -515,15 +515,7 @@ t("在同一个自动化里再加 **电子邮件** 触发，条件选 **主题**
 t("选 **立即运行**，添加操作 **记录银行动账通知**。", "選 **立即執行**，加入動作 **記錄銀行帳戶異動通知**。", "Choose **Run Immediately** and add the action **Record Bank Alert**.")
 t("**通知内容** 选自动化的输入（显示为 **快捷指令输入** 或 **通知**）。", "**通知內容** 選自動化的輸入（顯示為 **捷徑輸入** 或 **通知**）。", "Set **Content** to the automation’s input (shown as **Shortcut Input** or **Notification**).")
 t("**来源** 选 **自动**，点 **完成**。不是动账通知的内容不会保存。", "**來源** 選 **自動**，點 **完成**。不是帳戶異動通知的內容不會儲存。", "Set **Source** to **Automatic** and tap **Done**. Anything that isn’t a transaction alert isn’t saved.")
-t("会记录", "會記錄", "Recorded")
-t("消费、收入、转账、退款、还款、利息、手续费、存取款、冲正。", "消費、收入、轉帳、退款、還款、利息、手續費、存提款、沖正。", "Purchases, income, transfers, refunds, repayments, interest, fees, deposits and withdrawals, reversals.")
-t("不会记录", "不會記錄", "Not Recorded")
-t("验证码、营销、提醒、账单、额度变化、只有余额的通知。", "驗證碼、行銷訊息、提醒、帳單、額度變更、只有餘額的通知。", "Verification codes, promotions, reminders, statements, limit changes and balance-only alerts.")
-t("识别不了的", "無法辨識的", "Not Recognized")
-t("进入「待处理」，由你确认或忽略。也可以把它做成识别模板，以后同样写法的通知按模板记账。", "會進入「待處理」，由你確認或忽略。也可以把它做成辨識範本，之後同樣寫法的通知就依範本記帳。", "They go to To Review for you to confirm or ignore. You can also turn one into a template so alerts written the same way are recorded.")
 t("数据", "資料", "Data")
-t("只保存在这台 iPhone，App 不联网。汇率由快捷指令下载后导入。", "只儲存在這支 iPhone，App 不連網。匯率由「捷徑」下載後匯入。", "Everything stays on this iPhone and REC never goes online. Exchange rates are downloaded by Shortcuts and imported.")
-t("使用说明", "使用說明", "How It Works")
 
 # MARK: 我的
 
@@ -675,13 +667,14 @@ t("设置", "設定", "Settings")
 
 t("添加快捷指令「导入汇率」", "加入捷徑「匯入匯率」", "Add the “Import Rates” Shortcut")
 t("添加快捷指令", "加入捷徑", "Add Shortcut")
+t("添加后打开 **汇率导入**，把里面的自动化打开。", "加入後打開 **汇率导入**，把裡面的自動化打開。", "After adding it, open **汇率导入** and turn on its automation.")
 t("添加后打开 **自动记账**，在 **App 通知** 里选银行 App；银行 App 记得打开通知。",
   "加入後打開 **自动记账**，在 **App 通知** 裡選銀行 App；銀行 App 記得打開通知。",
   "After adding it, open **自动记账** and choose your bank apps under **App Notification**. Make sure notifications are on for those bank apps.")
 t("点 **添加快捷指令**。", "點 **加入捷徑**。", "Tap **Add Shortcut**.")
-t("点 **打开快捷指令** → **自动化** → **+** → **信息**，**信息包含** 填一个 **空格**，选 **立即运行** → **下一步** → **自动记账**。",
-  "點 **打開「捷徑」** → **自動化** → **+** → **訊息**，**訊息包含** 填一個 **空格**，選 **立即執行** → **下一步** → **自动记账**。",
-  "Tap **Open Shortcuts** → **Automation** → **+** → **Message**. Set **Message Contains** to a **space**, choose **Run Immediately** → **Next** → **自动记账**.")
+t("在快捷指令底部点 **自动化** → **+** → **信息**，**信息包含** 填一个 **空格**，选 **立即运行** → **下一步** → **自动记账**。",
+  "在「捷徑」底部點 **自動化** → **+** → **訊息**，**訊息包含** 填一個 **空格**，選 **立即執行** → **下一步** → **自动记账**。",
+  "At the bottom of Shortcuts, tap **Automation** → **+** → **Message**. Set **Message Contains** to a **space**, choose **Run Immediately** → **Next** → **自动记账**.")
 t("照上一步再建三个，**信息包含** 分别填 **。**、**，**、**】**。",
   "照上一步再建三個，**訊息包含** 分別填 **。**、**，**、**】**。",
   "Repeat the previous step three times, with **Message Contains** set to **。**, **，** and **】**.")

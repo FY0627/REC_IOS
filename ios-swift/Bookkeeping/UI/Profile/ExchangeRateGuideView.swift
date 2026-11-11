@@ -17,6 +17,7 @@ struct ExchangeRateGuideView: View {
     var body: some View {
         List {
             // 和系统设置一样的普通行，不用大按钮
+            // 点「添加快捷指令」已经进了快捷指令 App，不再放「打开快捷指令」；自己搭的要先复制地址再打开
             Section {
                 if sharedShortcutWorks {
                     Button("添加快捷指令", systemImage: "plus.square.on.square") { leave(to: SharedShortcuts.exchangeRates) }
@@ -25,13 +26,18 @@ struct ExchangeRateGuideView: View {
                         UIPasteboard.general.string = ExchangeRateFeed.url.absoluteString
                         copied = true
                     }
-                }
-                Button("打开快捷指令", systemImage: "arrow.up.forward.app") {
-                    if let url = URL(string: "shortcuts://") { leave(to: url) }
+                    Button("打开快捷指令", systemImage: "arrow.up.forward.app") {
+                        if let url = URL(string: "shortcuts://") { leave(to: url) }
+                    }
                 }
             }
 
-            if !sharedShortcutWorks {
+            if sharedShortcutWorks {
+                // 链接带过去的定时触发，添加后不一定是打开的
+                Section {
+                    Text(Self.sharedLine)
+                }
+            } else {
                 Section {
                     ForEach(Array(Self.manualSteps.enumerated()), id: \.offset) { index, step in
                         StepRow(number: index + 1, text: step)
@@ -45,13 +51,15 @@ struct ExchangeRateGuideView: View {
         .navigationBarTitleDisplayMode(.inline)
     }
 
-    /// 「我的 › 通知」里开着导入汇率通知时，离开 App 前先要通知权限
+    /// 「我的 › 记账」里开着导入汇率通知时，离开 App 前先要通知权限
     private func leave(to url: URL) {
         Task {
             if ImportExchangeRatesIntent.notifies { _ = await IngestNotifier.requestAuthorization() }
             openURL(url)
         }
     }
+
+    static let sharedLine: LocalizedStringKey = "添加后打开 **汇率导入**，把里面的自动化打开。"
 
     /// 自己侧载的 App 用不了共享链接：自己搭这两个动作
     static let manualSteps: [LocalizedStringKey] = [

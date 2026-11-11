@@ -1453,28 +1453,6 @@
         }
       }
     },
-    "不会记录" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Not Recorded"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "不会记录"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "不會記錄"
-          }
-        }
-      }
-    },
     "不填为 0" : {
       "localizations" : {
         "en" : {
@@ -2795,28 +2773,6 @@
         }
       }
     },
-    "会记录" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Recorded"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "会记录"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "會記錄"
-          }
-        }
-      }
-    },
     "住信SBI网络银行" : {
       "localizations" : {
         "en" : {
@@ -2967,28 +2923,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "你填寫的實際金額"
-          }
-        }
-      }
-    },
-    "使用说明" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "How It Works"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "使用说明"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "使用說明"
           }
         }
       }
@@ -5583,28 +5517,6 @@
         }
       }
     },
-    "只保存在这台 iPhone，App 不联网。汇率由快捷指令下载后导入。" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Everything stays on this iPhone and REC never goes online. Exchange rates are downloaded by Shortcuts and imported."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "只保存在这台 iPhone，App 不联网。汇率由快捷指令下载后导入。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "只儲存在這支 iPhone，App 不連網。匯率由「捷徑」下載後匯入。"
-          }
-        }
-      }
-    },
     "只删除这一边，另一边的账户还留着这笔。删除后不能恢复" : {
       "localizations" : {
         "en" : {
@@ -6713,6 +6625,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "在同一個自動化裡再加 **電子郵件** 觸發條件，條件選 **主旨** 包含，填 **你**（銀行郵件的主旨不一定寫銀行名，但都有「你」；其他郵件 App 不會儲存）；再加 **App 通知** 觸發條件，只選銀行 App，**不要選「郵件」**：郵件 App 的通知只有開頭幾行，完整的郵件由「電子郵件」觸發條件交給 App。"
+          }
+        }
+      }
+    },
+    "在快捷指令底部点 **自动化** → **+** → **信息**，**信息包含** 填一个 **空格**，选 **立即运行** → **下一步** → **自动记账**。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "At the bottom of Shortcuts, tap **Automation** → **+** → **Message**. Set **Message Contains** to a **space**, choose **Run Immediately** → **Next** → **自动记账**."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在快捷指令底部点 **自动化** → **+** → **信息**，**信息包含** 填一个 **空格**，选 **立即运行** → **下一步** → **自动记账**。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在「捷徑」底部點 **自動化** → **+** → **訊息**，**訊息包含** 填一個 **空格**，選 **立即執行** → **下一步** → **自动记账**。"
           }
         }
       }
@@ -12935,28 +12869,6 @@
         }
       }
     },
-    "消费、收入、转账、退款、还款、利息、手续费、存取款、冲正。" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Purchases, income, transfers, refunds, repayments, interest, fees, deposits and withdrawals, reversals."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "消费、收入、转账、退款、还款、利息、手续费、存取款、冲正。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "消費、收入、轉帳、退款、還款、利息、手續費、存提款、沖正。"
-          }
-        }
-      }
-    },
     "深圳农商银行" : {
       "localizations" : {
         "en" : {
@@ -13019,6 +12931,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "新增"
+          }
+        }
+      }
+    },
+    "添加后打开 **汇率导入**，把里面的自动化打开。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "After adding it, open **汇率导入** and turn on its automation."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "添加后打开 **汇率导入**，把里面的自动化打开。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "加入後打開 **汇率导入**，把裡面的自動化打開。"
           }
         }
       }
@@ -13547,28 +13481,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "點 **打開「捷徑」** → **自動化** → **+** → **訊息**，**訊息包含** 填一個 **空格**，選 **立即執行** → **下一步** → **新增空白自動化**。"
-          }
-        }
-      }
-    },
-    "点 **打开快捷指令** → **自动化** → **+** → **信息**，**信息包含** 填一个 **空格**，选 **立即运行** → **下一步** → **自动记账**。" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tap **Open Shortcuts** → **Automation** → **+** → **Message**. Set **Message Contains** to a **space**, choose **Run Immediately** → **Next** → **自动记账**."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "点 **打开快捷指令** → **自动化** → **+** → **信息**，**信息包含** 填一个 **空格**，选 **立即运行** → **下一步** → **自动记账**。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "點 **打開「捷徑」** → **自動化** → **+** → **訊息**，**訊息包含** 填一個 **空格**，選 **立即執行** → **下一步** → **自动记账**。"
           }
         }
       }
@@ -16147,28 +16059,6 @@
         }
       }
     },
-    "识别不了的" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Not Recognized"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "识别不了的"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "無法辨識的"
-          }
-        }
-      }
-    },
     "识别微信、支付宝付款页的截图并记账。在本机识别，不联网，截图不保存。" : {
       "localizations" : {
         "en" : {
@@ -17555,28 +17445,6 @@
         }
       }
     },
-    "进入「待处理」，由你确认或忽略。也可以把它做成识别模板，以后同样写法的通知按模板记账。" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "They go to To Review for you to confirm or ignore. You can also turn one into a template so alerts written the same way are recorded."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "进入「待处理」，由你确认或忽略。也可以把它做成识别模板，以后同样写法的通知按模板记账。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "會進入「待處理」，由你確認或忽略。也可以把它做成辨識範本，之後同樣寫法的通知就依範本記帳。"
-          }
-        }
-      }
-    },
     "连小类一起删除，原来的记录改记到" : {
       "localizations" : {
         "en" : {
@@ -18937,28 +18805,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "馬來西亞"
-          }
-        }
-      }
-    },
-    "验证码、营销、提醒、账单、额度变化、只有余额的通知。" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Verification codes, promotions, reminders, statements, limit changes and balance-only alerts."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "验证码、营销、提醒、账单、额度变化、只有余额的通知。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "驗證碼、行銷訊息、提醒、帳單、額度變更、只有餘額的通知。"
           }
         }
       }

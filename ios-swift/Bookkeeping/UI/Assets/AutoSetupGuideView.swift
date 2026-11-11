@@ -32,10 +32,8 @@ struct AutoSetupGuideView: View {
         List {
             if useShared {
                 Section {
+                    // 点「添加快捷指令」已经进了快捷指令 App，不再放「打开快捷指令」
                     Button("添加快捷指令", systemImage: "plus.square.on.square") { openURL(SharedShortcuts.bankMessage) }
-                    Button("打开快捷指令", systemImage: "arrow.up.forward.app") {
-                        if let url = URL(string: "shortcuts://") { openURL(url) }
-                    }
                 }
                 if choosesApps {
                     Section {
@@ -83,7 +81,7 @@ struct AutoSetupGuideView: View {
 
     static let shared26Steps: [LocalizedStringKey] = [
         "点 **添加快捷指令**。",
-        "点 **打开快捷指令** → **自动化** → **+** → **信息**，**信息包含** 填一个 **空格**，选 **立即运行** → **下一步** → **自动记账**。",
+        "在快捷指令底部点 **自动化** → **+** → **信息**，**信息包含** 填一个 **空格**，选 **立即运行** → **下一步** → **自动记账**。",
         "照上一步再建三个，**信息包含** 分别填 **。**、**，**、**】**。",
         "再建三个 **电子邮件** 自动化，**主题包含** 分别填 **空格**、**你**、**您**，其余同第 2 步。",
     ]
@@ -120,26 +118,5 @@ struct StepRow: View {
         }
         .padding(.vertical, 2)
         .accessibilityElement(children: .combine)
-    }
-}
-
-struct HelpView: View {
-    var body: some View {
-        List {
-            Section("会记录") {
-                Text("消费、收入、转账、退款、还款、利息、手续费、存取款、冲正。")
-            }
-            Section("不会记录") {
-                Text("验证码、营销、提醒、账单、额度变化、只有余额的通知。")
-            }
-            Section("识别不了的") {
-                Text("进入「待处理」，由你确认或忽略。也可以把它做成识别模板，以后同样写法的通知按模板记账。")
-            }
-            Section("数据") {
-                Text("只保存在这台 iPhone，App 不联网。汇率由快捷指令下载后导入。")
-            }
-        }
-        .navigationTitle("使用说明")
-        .navigationBarTitleDisplayMode(.inline)
     }
 }
