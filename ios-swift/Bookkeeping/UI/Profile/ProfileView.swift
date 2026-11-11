@@ -55,8 +55,75 @@ private struct ProfileList: View {
     var body: some View {
         NavigationStack(path: $path) {
             List {
-                Section("显示") {
+                // 常用的在前面：自动记账、记账；外观这类设一次的放后面
+                Section("自动记账") {
+                    NavigationLink(value: ProfileRoute.autoSetup) {
+                        Label("设置自动记账", systemImage: "bolt.badge.automatic")
+                    }
+                    NavigationLink(value: ProfileRoute.screenshotSetup) {
+                        Label("设置截图记账", systemImage: "camera.viewfinder")
+                    }
+                    NavigationLink(value: ProfileRoute.templates) {
+                        Label("识别模板", systemImage: "text.viewfinder")
+                    }
                     // 菜单按钮右边的文字（选中的项）换了主题色不会马上重画，按主题色重建这一行
+                    Picker(selection: $notifyMode) {
+                        ForEach(IngestNotifier.Mode.allCases) { Text($0.title).tag($0.rawValue) }
+                    } label: {
+                        Label("记账结果", systemImage: "bell.badge")
+                    }
+                    .id("notify-\(themeColor)")
+                    .onChange(of: notifyMode) { _, mode in
+                        guard mode != IngestNotifier.Mode.off.rawValue else { return }
+                        askPermission { notifyMode = IngestNotifier.Mode.off.rawValue }
+                    }
+                }
+
+                Section("记账") {
+                    NavigationLink(value: ProfileRoute.categories) {
+                        Label("分类", systemImage: "square.grid.2x2")
+                    }
+                    NavigationLink(value: ProfileRoute.primaryCurrency) {
+                        LabeledContent {
+                            Text(CurrencyCode(primaryCurrency).localizedName)
+                        } label: {
+                            Label("主要币种", systemImage: "dollarsign.circle")
+                        }
+                    }
+                    NavigationLink(value: ProfileRoute.exchangeRates) {
+                        LabeledContent {
+                            Text(rateStatus)
+                        } label: {
+                            Label("汇率", systemImage: "arrow.triangle.2.circlepath")
+                        }
+                    }
+                    Toggle(isOn: $notifyRates) {
+                        Label("导入汇率通知", systemImage: "arrow.left.arrow.right.circle")
+                    }
+                    .onChange(of: notifyRates) { _, on in
+                        guard on else { return }
+                        askPermission { notifyRates = false }
+                    }
+                }
+
+                Section("数据") {
+                    NavigationLink(value: ProfileRoute.dataExport) {
+                        Label("导出数据", systemImage: "square.and.arrow.up")
+                    }
+                    NavigationLink(value: ProfileRoute.dataImport) {
+                        Label("导入数据", systemImage: "square.and.arrow.down")
+                    }
+                    Picker(selection: $retention) {
+                        Text("7 天").tag(7)
+                        Text("30 天").tag(30)
+                        Text("90 天").tag(90)
+                    } label: {
+                        Label("原始通知保留", systemImage: "clock.arrow.circlepath")
+                    }
+                    .id("retention-\(themeColor)")
+                }
+
+                Section("显示") {
                     Picker(selection: $appearance) {
                         ForEach(AppearanceMode.allCases) { Text($0.title).tag($0.rawValue) }
                     } label: {
@@ -82,89 +149,28 @@ private struct ProfileList: View {
                         }
                         .background(UndimmedList())
                     }
-                }
-
-                Section("语言") {
                     NavigationLink(value: ProfileRoute.language) {
                         LabeledContent {
                             Text((AppLanguage(rawValue: language) ?? .system).title)
                         } label: {
-                            Label("App 语言", systemImage: "globe")
+                            Label("语言", systemImage: "globe")
                         }
                     }
                 }
 
-                Section("币种与汇率") {
-                    NavigationLink(value: ProfileRoute.primaryCurrency) {
-                        LabeledContent {
-                            Text(CurrencyCode(primaryCurrency).localizedName)
-                        } label: {
-                            Label("主要币种", systemImage: "dollarsign.circle")
-                        }
-                    }
-                    NavigationLink(value: ProfileRoute.exchangeRates) {
-                        Label("用快捷指令更新汇率", systemImage: "arrow.triangle.2.circlepath")
-                    }
-                }
-
-                Section("记账") {
-                    NavigationLink(value: ProfileRoute.categories) {
-                        Label("分类", systemImage: "square.grid.2x2")
-                    }
-                }
-
-                Section("自动记账") {
-                    NavigationLink(value: ProfileRoute.autoSetup) {
-                        Label("设置自动记账", systemImage: "bolt.badge.automatic")
-                    }
-                    NavigationLink(value: ProfileRoute.screenshotSetup) {
-                        Label("设置截图记账", systemImage: "camera.viewfinder")
-                    }
-                    NavigationLink(value: ProfileRoute.templates) {
-                        Label("识别模板", systemImage: "text.viewfinder")
-                    }
+                Section("关于") {
                     NavigationLink(value: ProfileRoute.help) {
                         Label("使用说明", systemImage: "questionmark.circle")
                     }
+                    LabeledContent("版本", value: BuildInfo.summary)
+                        .font(.subheadline.monospaced())
+                        .contentShape(Rectangle())
+                        .onTapGesture(perform: tapVersion)
+                    // 汇率数据源要求注明来源并链接到官网
+                    Link(ExchangeRateFeed.attribution, destination: ExchangeRateFeed.attributionURL)
                 }
 
-                Section("通知") {
-                    Picker(selection: $notifyMode) {
-                        ForEach(IngestNotifier.Mode.allCases) { Text($0.title).tag($0.rawValue) }
-                    } label: {
-                        Label("记账结果", systemImage: "bell.badge")
-                    }
-                    .id("notify-\(themeColor)")
-                    .onChange(of: notifyMode) { _, mode in
-                        guard mode != IngestNotifier.Mode.off.rawValue else { return }
-                        askPermission { notifyMode = IngestNotifier.Mode.off.rawValue }
-                    }
-                    Toggle(isOn: $notifyRates) {
-                        Label("导入汇率通知", systemImage: "arrow.left.arrow.right.circle")
-                    }
-                    .onChange(of: notifyRates) { _, on in
-                        guard on else { return }
-                        askPermission { notifyRates = false }
-                    }
-                }
-
-                Section("隐私与数据") {
-                    Picker(selection: $retention) {
-                        Text("7 天").tag(7)
-                        Text("30 天").tag(30)
-                        Text("90 天").tag(90)
-                    } label: {
-                        Label("原始通知保留", systemImage: "clock.arrow.circlepath")
-                    }
-                    .id("retention-\(themeColor)")
-                    NavigationLink(value: ProfileRoute.dataExport) {
-                        Label("导出数据", systemImage: "square.and.arrow.up")
-                    }
-                    NavigationLink(value: ProfileRoute.dataImport) {
-                        Label("导入数据", systemImage: "square.and.arrow.down")
-                    }
-                }
-
+                // 放在最后：连点版本号时它出现在下面，版本号那一行不会被挤走
                 if showDevTools {
                     Section("开发与调试") {
                         NavigationLink(value: ProfileRoute.categoryCheckup) {
@@ -177,17 +183,6 @@ private struct ProfileList: View {
                             Label("性能开关与调试指标", systemImage: "speedometer")
                         }
                     }
-                }
-
-                Section("关于") {
-                    LabeledContent("REC", value: L("iOS 原生 Swift 版"))
-                    LabeledContent("版本", value: BuildInfo.summary)
-                        .font(.subheadline.monospaced())
-                        .contentShape(Rectangle())
-                        .onTapGesture(perform: tapVersion)
-                    LabeledContent("汇率", value: rateStatus)
-                    // 汇率数据源要求注明来源并链接到官网
-                    Link(ExchangeRateFeed.attribution, destination: ExchangeRateFeed.attributionURL)
                 }
             }
             .listStyle(.insetGrouped)

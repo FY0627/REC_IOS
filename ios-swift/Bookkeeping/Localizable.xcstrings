@@ -1123,28 +1123,6 @@
         }
       }
     },
-    "iOS 原生 Swift 版" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Native iOS App"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "iOS 原生 Swift 版"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "iOS 原生 Swift 版"
-          }
-        }
-      }
-    },
     "、" : {
       "localizations" : {
         "en" : {
@@ -8573,28 +8551,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "幣別與校正餘額"
-          }
-        }
-      }
-    },
-    "币种与汇率" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Currency & Rates"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "币种与汇率"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "幣別與匯率"
           }
         }
       }
@@ -17929,28 +17885,6 @@
         }
       }
     },
-    "通知" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Notifications"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "通知"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "通知"
-          }
-        }
-      }
-    },
     "通知中的余额" : {
       "localizations" : {
         "en" : {
@@ -18585,28 +18519,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "長沙銀行"
-          }
-        }
-      }
-    },
-    "隐私与数据" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Privacy & Data"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "隐私与数据"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "隱私與資料"
           }
         }
       }
