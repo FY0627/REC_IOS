@@ -60,6 +60,20 @@ printf 'FROM swift:latest\nRUN apt-get update && apt-get install -y libsqlite3-d
 docker run --rm -v "<仓库>/ios-swift/Packages/BKCore:/pkg" -w /pkg bk-swift swift test
 ```
 
+查类型检查慢的表达式（旧版本的 Xcode 会在这些地方报「表达式太复杂」，CI 用的新版本不报）：
+
+```sh
+docker run --rm -v "<仓库>/ios-swift/Packages/BKCore:/pkg:ro" bk-swift bash -lc 'swift build --package-path /pkg --scratch-path /tmp/slow --build-tests -Xswiftc -Xfrontend -Xswiftc -warn-long-expression-type-checking=100 2>&1 | grep type-check'
+```
+
+## 在 Mac 的 Xcode 里运行
+
+- 要 Xcode 26 或更新（部署目标 iOS 26）。打开 `ios-swift/Bookkeeping.xcodeproj`，scheme 选 `Bookkeeping`。
+- 模拟器：目标选一台 iPhone 模拟器（看灵动岛选 iPhone 15 Pro 及以后的机型），不用选开发团队。
+- 真机：`Bookkeeping`、`NotificationContent`、`CategoryActivity` 三个 target 的 Signing & Capabilities 里都选自己的 Team，Bundle ID 换成自己的
+  （`com.fy0627.rec` 登记在作者的开发者账号下；两个扩展的 Bundle ID 要以 App 的为前缀，例如 `com.你的前缀.rec.NotificationContent`）。这些改动不要提交。
+- 工程里没有写开发团队：CI 构建不签名（iLoader 签名），上传 TestFlight 时由工作流传入（ADR 0023）。
+
 ## 卡包与详情转场
 
 和 Apple 钱包一样用 UIKit + Core Animation（[ADR 0012](../docs/decisions/0012-ios-swift-wallet-core-animation.md)）：

@@ -91,9 +91,12 @@ enum DataExport {
         "\u{FEFF}" + ([header] + rows).map { $0.map(escape).joined(separator: ",") }.joined(separator: "\r\n") + "\r\n"
     }
 
+    /// 要用引号括起来的字（写成集合：一串 `$0 == "," || …` 旧版本的编译器类型检查太慢）
+    static let csvSpecial: Set<Character> = [",", "\"", "\n", "\r", "\r\n"]
+
     /// 有逗号、引号、换行的整格用引号括起来，里面的引号写两遍
     static func escape(_ field: String) -> String {
-        guard field.contains(where: { $0 == "," || $0 == "\"" || $0 == "\n" || $0 == "\r" }) else { return field }
+        guard field.contains(where: csvSpecial.contains) else { return field }
         return "\"" + field.replacingOccurrences(of: "\"", with: "\"\"") + "\""
     }
 

@@ -125,8 +125,11 @@ public enum BankCatalog {
     }
 
     // 前 15 家的标识与 `BankDirectory` 一致
-    public static let all: [BankEntry] = [
-        // 中国内地
+    // 一个地区一组：173 家写在一个数组里，旧版本的编译器类型检查要好几百毫秒，可能报「表达式太复杂」
+    public static let all: [BankEntry] = Array([mainland, hongKong, macau, taiwan, singaporeMalaysia, northAmerica, europe, japanKorea, oceania, others].joined())
+
+    // 中国内地
+    private static let mainland: [BankEntry] = [
         bank("icbc", "中国工商银行", "Industrial and Commercial Bank of China", "中国内地", "工", "crimson", ["工商银行", "工行", "ICBC", "中國工商銀行", "工銀"]),
         bank("ccb", "中国建设银行", "China Construction Bank", "中国内地", "建", "ocean", ["建设银行", "建行", "CCB", "中國建設銀行"]),
         bank("abc", "中国农业银行", "Agricultural Bank of China", "中国内地", "农", "jade", ["农业银行", "农行", "ABC", "中國農業銀行"]),
@@ -180,7 +183,10 @@ public enum BankCatalog {
         bank("alipay", "支付宝", "Alipay", "中国内地", "支", "ocean", ["支付寶", "余额宝", "花呗"]),
         bank("wechatpay", "微信支付", "WeChat Pay", "中国内地", "微", "jade", ["微信", "微信零钱", "零钱通", "财付通", "財付通"]),
 
-        // 中国香港
+    ]
+
+    // 中国香港
+    private static let hongKong: [BankEntry] = [
         bank("hsbc", "香港上海汇丰银行", "HSBC", "中国香港", "汇", "crimson", ["汇丰银行", "汇丰", "滙豐銀行", "滙豐", "匯豐銀行", "匯豐", "香港上海滙豐銀行", "The Hongkong and Shanghai Banking Corporation", "HSBC UK"]),
         bank("hangseng", "恒生银行", "Hang Seng Bank", "中国香港", "恒", "jade", ["恒生", "恒生銀行"]),
         bank("bochk", "中国银行（香港）", "Bank of China (Hong Kong)", "中国香港", "中", "crimson", ["中银香港", "中銀香港", "中國銀行(香港)", "BOCHK"]),
@@ -212,7 +218,10 @@ public enum BankCatalog {
         bank("payme", "PayMe", "PayMe from HSBC", "中国香港", "P", "crimson", ["PayMe"]),
         bank("octopus", "八达通", "Octopus", "中国香港", "八", "autumn-gold", ["八達通"]),
 
-        // 中国澳门
+    ]
+
+    // 中国澳门
+    private static let macau: [BankEntry] = [
         bank("bnu", "大西洋银行", "Banco Nacional Ultramarino", "中国澳门", "大", "ocean", ["大西洋銀行", "BNU"]),
         bank("luso", "澳门国际银行", "Luso International Banking", "中国澳门", "澳", "crimson", ["澳門國際銀行", "Luso"]),
         bank("bocmacau", "中国银行澳门分行", "Bank of China Macau Branch", "中国澳门", "中", "crimson", ["中银澳门", "中銀澳門", "中國銀行澳門分行"]),
@@ -221,7 +230,10 @@ public enum BankCatalog {
         bank("icbcmacau", "中国工商银行（澳门）", "ICBC (Macau)", "中国澳门", "工", "crimson", ["工银澳门", "工銀澳門", "中國工商銀行(澳門)"]),
         bank("mpay", "澳门钱包", "MPay", "中国澳门", "M", "lagoon", ["MPay", "澳門錢包", "澳门通", "澳門通"]),
 
-        // 中国台湾
+    ]
+
+    // 中国台湾
+    private static let taiwan: [BankEntry] = [
         bank("bot", "台湾银行", "Bank of Taiwan", "中国台湾", "台", "ocean", ["臺灣銀行", "台灣銀行", "台银", "台銀"]),
         bank("ctbc", "中国信托商业银行", "CTBC Bank", "中国台湾", "信", "jade", ["中國信託", "中国信托", "中國信託商業銀行"]),
         bank("cathaybk", "国泰世华商业银行", "Cathay United Bank", "中国台湾", "国", "forest", ["国泰世华", "國泰世華", "國泰世華銀行"]),
@@ -234,7 +246,10 @@ public enum BankCatalog {
         bank("taishin", "台新国际商业银行", "Taishin International Bank", "中国台湾", "新", "crimson", ["台新银行", "台新銀行"]),
         bank("post-tw", "中华邮政", "Chunghwa Post", "中国台湾", "邮", "jade", ["中華郵政", "郵局"]),
 
-        // 新加坡、马来西亚
+    ]
+
+    // 新加坡、马来西亚
+    private static let singaporeMalaysia: [BankEntry] = [
         bank("dbs", "星展银行", "DBS Bank", "新加坡", "星", "crimson", ["星展", "星展銀行", "DBS", "POSB"]),
         bank("ocbc", "华侨银行", "OCBC Bank", "新加坡", "侨", "crimson", ["華僑銀行", "OCBC", "永亨银行", "永亨銀行"]),
         bank("uob", "大华银行", "United Overseas Bank", "新加坡", "华", "midnight", ["大華銀行", "UOB"]),
@@ -242,7 +257,10 @@ public enum BankCatalog {
         bank("cimb", "联昌国际银行", "CIMB Bank", "马来西亚", "C", "crimson", ["聯昌國際銀行", "CIMB"]),
         bank("publicbank", "大众银行", "Public Bank", "马来西亚", "众", "crimson", ["大眾銀行"]),
 
-        // 美国、加拿大
+    ]
+
+    // 美国、加拿大
+    private static let northAmerica: [BankEntry] = [
         bank("citi", "花旗银行", "Citibank", "美国", "花", "ocean", ["花旗", "花旗銀行", "Citi"]),
         bank("chase", "摩根大通银行", "JPMorgan Chase Bank", "美国", "大", "ocean", ["摩根大通", "大通银行", "Chase", "JPMorgan"]),
         bank("bofa", "美国银行", "Bank of America", "美国", "美", "crimson", ["美國銀行", "BofA", "BoA"]),
@@ -260,7 +278,10 @@ public enum BankCatalog {
         bank("bmo", "蒙特利尔银行", "BMO Bank of Montreal", "加拿大", "蒙", "ocean", ["满地可银行", "滿地可銀行", "BMO"]),
         bank("cibc", "加拿大帝国商业银行", "CIBC", "加拿大", "帝", "crimson", ["加拿大帝國商業銀行"]),
 
-        // 欧洲
+    ]
+
+    // 欧洲
+    private static let europe: [BankEntry] = [
         bank("barclays", "巴克莱银行", "Barclays", "英国", "巴", "lagoon", ["巴克萊銀行", "巴克莱"]),
         bank("lloyds", "劳埃德银行", "Lloyds Bank", "英国", "劳", "forest", ["勞埃德銀行", "莱斯银行", "Lloyds"]),
         bank("natwest", "国民西敏寺银行", "NatWest", "英国", "西", "violet", ["國民西敏寺銀行", "国民西敏银行"]),
@@ -286,7 +307,10 @@ public enum BankCatalog {
         bank("unicredit", "裕信银行", "UniCredit", "意大利", "裕", "crimson", ["裕信銀行"]),
         bank("intesa", "联合圣保罗银行", "Intesa Sanpaolo", "意大利", "圣", "jade", ["聯合聖保羅銀行"]),
 
-        // 日本、韩国
+    ]
+
+    // 日本、韩国
+    private static let japanKorea: [BankEntry] = [
         bank("mufg", "三菱日联银行", "MUFG Bank", "日本", "三", "crimson", ["三菱UFJ銀行", "三菱UFJ", "三菱日聯銀行", "三菱東京UFJ銀行"]),
         bank("smbc", "三井住友银行", "Sumitomo Mitsui Banking Corporation", "日本", "住", "forest", ["三井住友銀行", "SMBC"]),
         bank("mizuho", "瑞穗银行", "Mizuho Bank", "日本", "瑞", "midnight", ["みずほ銀行", "みずほ", "瑞穗銀行"]),
@@ -304,13 +328,19 @@ public enum BankCatalog {
         bank("kakaobank", "KakaoBank", "KakaoBank", "韩国", "K", "autumn-gold", ["카카오뱅크"]),
         bank("tossbank", "Toss Bank", "Toss Bank", "韩国", "T", "ocean", ["토스뱅크"]),
 
-        // 澳大利亚、新西兰
+    ]
+
+    // 澳大利亚、新西兰
+    private static let oceania: [BankEntry] = [
         bank("commbank", "澳大利亚联邦银行", "Commonwealth Bank", "澳大利亚", "联", "autumn-gold", ["澳洲聯邦銀行", "联邦银行", "CommBank", "CBA"]),
         bank("westpac", "西太平洋银行", "Westpac", "澳大利亚", "西", "crimson", ["西太平洋銀行", "西太银行"]),
         bank("anz", "澳新银行", "ANZ", "澳大利亚", "澳", "ocean", ["澳新銀行", "澳盛银行"]),
         bank("nab", "澳大利亚国民银行", "National Australia Bank", "澳大利亚", "国", "crimson", ["澳洲國民銀行", "NAB"]),
 
-        // 其他
+    ]
+
+    // 其他
+    private static let others: [BankEntry] = [
         bank("kbank", "开泰银行", "Kasikornbank", "泰国", "开", "forest", ["開泰銀行", "KBank", "ธนาคารกสิกรไทย"]),
         bank("bangkokbank", "盘谷银行", "Bangkok Bank", "泰国", "盘", "ocean", ["盤谷銀行", "ธนาคารกรุงเทพ"]),
         bank("scbthai", "泰国汇商银行", "Siam Commercial Bank", "泰国", "汇", "violet", ["泰國匯商銀行", "ไทยพาณิชย์"]),

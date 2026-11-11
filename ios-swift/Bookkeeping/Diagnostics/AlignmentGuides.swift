@@ -11,7 +11,8 @@ struct AlignmentGuides: View {
             // 和首页、资产页一样从窗口的安全区算（状态栏下面），减去这一层在窗口里的位置
             let top = Self.windowSafeTop - proxy.frame(in: .global).minY
             if let first = FirstBoxLayout.shared.home {
-                let contentTop = first.box + (FirstBoxLayout.shared.homeRowInsets?.top ?? 0) + ConvertedTotalsView.verticalPadding
+                let rowInset: CGFloat = FirstBoxLayout.shared.homeRowInsets?.top ?? 0
+                let contentTop: CGFloat = first.box + rowInset + ConvertedTotalsView.verticalPadding
                 line(.red, y: top + first.title)
                 line(.blue, y: top + first.box)
                 line(.green, y: top + contentTop)

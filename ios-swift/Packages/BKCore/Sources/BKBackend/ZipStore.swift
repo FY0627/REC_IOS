@@ -78,9 +78,16 @@ enum ZipStore {
 
     private static func dosTime(_ date: Date, calendar: Calendar) -> (UInt16, UInt16) {
         let c = calendar.dateComponents([.year, .month, .day, .hour, .minute, .second], from: date)
-        let time = UInt16((c.hour ?? 0) << 11 | (c.minute ?? 0) << 5 | (c.second ?? 0) / 2)
-        let day = UInt16(max(0, (c.year ?? 1980) - 1980) << 9 | (c.month ?? 1) << 5 | (c.day ?? 1))
-        return (time, day)
+        // 一步一步写、写明类型：`??`、移位、`|` 混在一个表达式里，旧版本的编译器类型检查超时
+        let hour: Int = c.hour ?? 0
+        let minute: Int = c.minute ?? 0
+        let second: Int = c.second ?? 0
+        let year: Int = max(0, (c.year ?? 1980) - 1980)
+        let month: Int = c.month ?? 1
+        let dayOfMonth: Int = c.day ?? 1
+        let time: Int = (hour << 11) | (minute << 5) | (second / 2)
+        let day: Int = (year << 9) | (month << 5) | dayOfMonth
+        return (UInt16(truncatingIfNeeded: time), UInt16(truncatingIfNeeded: day))
     }
 
     // MARK: 读

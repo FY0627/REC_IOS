@@ -181,12 +181,17 @@ public struct Account: Identifiable, Hashable, Sendable, Codable {
     /// 填了完整卡号时和卡号末尾逐位比较；没填时只能比较和后四位重叠的几位（「234」），至少要 3 位
     public func matches(tail: String) -> Bool {
         guard tail.hasSuffix("*") else { return last4 == tail || (tail.count == 3 && last4.hasSuffix(tail)) }
-        let pattern = Array(Self.numberPattern(tail))
+        let pattern: [Character] = Array(Self.numberPattern(tail))
+        // 写明类型：旧版本的编译器推断「"X"」是什么类型太慢，报「表达式太复杂」
+        let mask: Character = "X"
         if let number = cardNumber, number.count >= pattern.count {
-            return zip(pattern, number.suffix(pattern.count)).allSatisfy { $0 == "X" || $0 == $1 }
+            for (p, digit) in zip(pattern, number.suffix(pattern.count)) where p != mask && p != digit {
+                return false
+            }
+            return true
         }
-        let overlap = zip(pattern.suffix(4), last4.suffix(min(4, pattern.count))).filter { $0.0 != "X" }
-        return overlap.count >= 3 && overlap.allSatisfy { $0 == $1 }
+        let overlap: [(Character, Character)] = zip(pattern.suffix(4), last4.suffix(min(4, pattern.count))).filter { pair in pair.0 != mask }
+        return overlap.count >= 3 && overlap.allSatisfy { pair in pair.0 == pair.1 }
     }
     public var deleted: Bool { deletedAt != nil }
 

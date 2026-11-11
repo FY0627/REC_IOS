@@ -371,7 +371,12 @@ struct IngestEngine {
         } else {
             return false
         }
-        return zip(t, aligned).allSatisfy { $0 == $1 || $0 == "X" || $1 == "X" }
+        // 写明类型、拆开写：旧版本的编译器推断「"X"」是什么类型太慢，报「表达式太复杂」
+        let mask: Character = "X"
+        for (a, b) in zip(t, aligned) where a != b && a != mask && b != mask {
+            return false
+        }
+        return true
     }
 
     /// 读法更新后（`MessageParser.version`），还没处理的待处理项按新读法重读一遍：能入账的入账，不是动账通知的不再保存，
