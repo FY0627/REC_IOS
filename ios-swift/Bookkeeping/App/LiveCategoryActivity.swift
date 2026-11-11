@@ -84,7 +84,7 @@ enum LiveCategoryActivity {
         queue.remove(recordID)
         saveQueue(queue)
         if let activity = current.first {
-            await activity.update(content, alertConfiguration: alert)
+            await present(activity, content.state, alert: alert)
             for extra in current.dropFirst() { await extra.end(nil, dismissalPolicy: .immediate) }
             note(L("实时活动已更新"))
             return true
@@ -110,8 +110,10 @@ enum LiveCategoryActivity {
         guard let page = LiveCategoryPicker.Page(token: token), let activity = find(recordID),
               let picker = await loadPicker(recordID) else { return }
         var state = activity.content.state
+        // 点的是左上角的返回：往回滚
+        state.back = state.screen.back == page
         state.screen = picker.screen(page)
-        await activity.update(ActivityContent(state: state, staleDate: nil))
+        await present(activity, state)
         noteTap([L("换页 \(milliseconds(since: started)) ms")], started: started)
     }
 
@@ -127,8 +129,9 @@ enum LiveCategoryActivity {
         if let activity {
             var state = activity.content.state
             state.chosen = await loadPicker(recordID)?.option(categoryID) ?? LiveCategoryPicker.Option(id: categoryID, name: "", symbol: "checkmark")
+            state.back = false
             let chosen = ActivityContent(state: state, staleDate: nil)
-            await activity.update(chosen)
+            await present(activity, state)
             shown = chosen
             shownAt = .now
         }
@@ -164,7 +167,26 @@ enum LiveCategoryActivity {
         guard let activity, activity.content.state.recordID == recordID else { return }
         var state = activity.content.state
         state.chosen = nil
-        await activity.update(ActivityContent(state: state, staleDate: nil))
+        state.back = true
+        await present(activity, state)
+    }
+
+    /// 换岛上的内容。旧内容按它自己身上的方向滚走（`IslandMotion`），所以这次和上次方向不一样时，
+    /// 先只改方向更新一次（看不出变化），再换内容
+    @MainActor
+    private static func present(_ activity: Activity<CategoryActivityAttributes>, _ state: State, alert: AlertConfiguration? = nil) async {
+        let showing = activity.content.state
+        if showing.isBack != state.isBack {
+            var turned = showing
+            turned.back = state.back
+            await activity.update(ActivityContent(state: turned, staleDate: nil))
+        }
+        let content = ActivityContent(state: state, staleDate: nil)
+        if let alert {
+            await activity.update(content, alertConfiguration: alert)
+        } else {
+            await activity.update(content)
+        }
     }
 
     // MARK: 打开、离开 App
@@ -204,12 +226,7 @@ enum LiveCategoryActivity {
             saveQueue(queue)
             let picker = makePicker(suggestions)
             store(picker, recordID: next.recordID)
-            let content = ActivityContent(state: makeState(next, picker: picker), staleDate: nil)
-            if alert {
-                await activity.update(content, alertConfiguration: makeAlert(next))
-            } else {
-                await activity.update(content)
-            }
+            await present(activity, makeState(next, picker: picker), alert: alert ? makeAlert(next) : nil)
             return
         }
         saveQueue(queue)

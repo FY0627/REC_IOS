@@ -17,7 +17,7 @@ struct CategoryActivityBundle: WidgetBundle {
 /// - 按钮：分类是主题色的圆和图标，「全部」「更多」是白色的圆，字在圆下面；
 /// - 收起：左边是分类图标（还没选是统一的图标），右边是金额；minimal 只放图标；
 /// - 锁屏：黑色卡片，同样的三页和按钮；
-/// - 换页、选好、换下一笔：旧的缩到中间淡出，新的再从中间长出来（`IslandMotion`）。
+/// - 换页、选好、换下一笔：整页上下滚过去，返回时反过来（`IslandMotion`）。
 ///
 /// 按钮都是 `LiveActivityIntent`，在 App 进程里运行，不打开 App。单点岛或卡片打开 App 里这一笔的选分类面板。
 /// 扩展只照着内容显示（`CategoryActivityAttributes.ContentState`），不读账本、不翻译
@@ -32,17 +32,17 @@ struct CategoryActivityWidget: Widget {
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
                     HeaderLeading(state: context.state, inline: false)
-                        .islandSwap(context.state.headerKey, toward: .trailing)
+                        .islandSwap(context.state.headerKey, back: context.state.isBack)
                         .islandHeader(.leading)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
                     AmountText(amount: context.state.amount)
-                        .islandSwap(context.state.recordID, toward: .leading)
+                        .islandSwap(context.state.recordID, back: context.state.isBack)
                         .islandHeader(.trailing)
                 }
                 DynamicIslandExpandedRegion(.bottom) {
                     PickerBody(state: context.state)
-                        .islandSwap(context.state.screenKey, toward: .center)
+                        .islandSwap(context.state.screenKey, back: context.state.isBack)
                 }
             } compactLeading: {
                 Image(systemName: context.state.chosen?.symbol ?? LiveCategoryPicker.unpickedSymbol)
@@ -126,29 +126,26 @@ extension CategoryActivityAttributes.ContentState {
     }
 }
 
-/// 换页、选好、换下一笔：旧的缩到岛中间淡出，新的再从中间长出来。
+/// 换页、选好、换下一笔：像翻桌面那样整页滚过去，只是上下滚。
+/// 往前（点进去、「更多」、选好、下一笔）旧的往上滚走、新的从下面上来；返回反过来，新的从上面下来。
+/// 系统让旧内容按它自己身上的方向离开，所以方向变了 App 先单独更新一次方向，再换内容（`LiveCategoryActivity.present`）。
 /// 系统给小组件和实时活动的动画最长 2 秒；常亮显示（Always On）时系统不做动画
 enum IslandMotion {
-    static let smallest: CGFloat = 0.3
-    static let shrink: Animation = .easeIn(duration: 0.16)
-    static let grow: Animation = .spring(duration: 0.4, bounce: 0.25).delay(0.12)
-    /// 岛跟着变大变小
-    static let resize: Animation = .spring(duration: 0.4, bounce: 0.15)
+    static let scroll: Animation = .smooth(duration: 0.35)
 
-    static func swap(toward anchor: UnitPoint) -> AnyTransition {
-        let small: AnyTransition = .scale(scale: smallest, anchor: anchor)
-        let fade: AnyTransition = small.combined(with: .opacity)
-        return .asymmetric(insertion: fade.animation(grow), removal: fade.animation(shrink))
+    static func page(back: Bool) -> AnyTransition {
+        .push(from: back ? .top : .bottom)
     }
 }
 
 extension View {
-    /// `key` 变了就换成新的：旧的朝 `anchor` 缩进去，新的从那里长出来
-    func islandSwap<Key: Hashable>(_ key: Key, toward anchor: UnitPoint) -> some View {
+    /// `key` 变了就整页滚过去；只在自己的范围里滚，滚出去的部分切掉，不压到别的东西上
+    func islandSwap<Key: Hashable>(_ key: Key, back: Bool) -> some View {
         ZStack {
-            self.id(key).transition(IslandMotion.swap(toward: anchor))
+            self.id(key).transition(IslandMotion.page(back: back))
         }
-        .animation(IslandMotion.resize, value: key)
+        .clipped()
+        .animation(IslandMotion.scroll, value: key)
     }
 
     /// 岛上顶上一行：占 32 高，东西放在下面 28 里，再往岛中间缩 10 点，不碰岛的上面两个角
@@ -318,14 +315,14 @@ struct LockScreenCard: View {
         VStack(spacing: 6) {
             HStack {
                 HeaderLeading(state: state, inline: true)
-                    .islandSwap(state.headerKey, toward: .trailing)
+                    .islandSwap(state.headerKey, back: state.isBack)
                 Spacer(minLength: 8)
                 AmountText(amount: state.amount)
-                    .islandSwap(state.recordID, toward: .leading)
+                    .islandSwap(state.recordID, back: state.isBack)
             }
             .frame(height: 30)
             PickerBody(state: state)
-                .islandSwap(state.screenKey, toward: .center)
+                .islandSwap(state.screenKey, back: state.isBack)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)

@@ -22,6 +22,10 @@ struct CategoryActivityAttributes: ActivityAttributes {
         var chosen: LiveCategoryPicker.Option?
         /// App 的主题色（`ThemeColor` 的名字，例如 `pink`）：分类按钮的圆和图标用它。以前开的活动没有，用蓝色
         var tint: String?
+        /// 这次换内容是「返回」：岛上往回滚，新的从上面下来。nil 和 false 一样，往前滚
+        var back: Bool?
+
+        var isBack: Bool { back ?? false }
     }
 }
 
