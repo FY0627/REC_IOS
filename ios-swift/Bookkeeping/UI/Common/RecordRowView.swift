@@ -369,8 +369,8 @@ struct RecordDetailView: View {
 
     private func chargeNote(_ charge: RecordCharge) -> String {
         if charge.isActual { return L("你填写的实际金额") }
-        guard let day = charge.rateDay else { return L("导入汇率后按交易当天的汇率估算，可以在编辑里改成实际金额") }
-        return L("按 \(Fmt.rateDay(day)) 的汇率估算，可以在编辑里改成实际金额")
+        guard let day = charge.rateDay else { return L("导入汇率后按交易当天的汇率估算") }
+        return L("按 \(Fmt.rateDay(day)) 的汇率估算")
     }
 
     private func reload() async {
@@ -495,8 +495,6 @@ struct OrderSplitView: View {
                     }
                 } header: {
                     Text("选要拆出去的几笔")
-                } footer: {
-                    Text("拆出去的单独显示，分类保留。没选的还是一单，只剩一笔时就不再是一单了。")
                 }
                 if let errorText {
                     Section { Text(errorText).foregroundStyle(.red) }

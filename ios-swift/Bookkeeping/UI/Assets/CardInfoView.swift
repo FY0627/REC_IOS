@@ -94,7 +94,7 @@ struct CardInfoView: View {
                 if account.archived {
                     Section {
                         Menu {
-                            Section("删除后不能恢复，流水会保留") {
+                            Section("保留流水并删除账户") {
                                 Button(account.isCard ? "删除这张卡" : "删除这个账户", systemImage: "trash", role: .destructive) { delete(account) }
                             }
                         } label: {
@@ -167,7 +167,7 @@ struct CardInfoView: View {
                     Text(account.openingBalance(code).map { Fmt.money($0.amountMinor, code) } ?? L("未填写")).monospacedDigit()
                 }
                 if let unconverted = summary?.unconvertedCount, unconverted > 0 {
-                    Text("另有 \(unconverted) 笔外币交易还没有汇率，没算进余额").font(.footnote).foregroundStyle(.secondary)
+                    Text("另有 \(unconverted) 笔外币交易还没有汇率").font(.footnote).foregroundStyle(.secondary)
                 }
             }
         }

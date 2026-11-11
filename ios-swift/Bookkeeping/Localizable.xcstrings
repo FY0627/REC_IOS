@@ -177,24 +177,24 @@
         }
       }
     },
-    "%@没有汇率，没算进去" : {
+    "%@没有汇率" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "No rate for %@, so it isn’t included."
+            "value" : "No rate for %@"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@没有汇率，没算进去"
+            "value" : "%@没有汇率"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@沒有匯率，沒算進去"
+            "value" : "%@沒有匯率"
           }
         }
       }
@@ -3103,6 +3103,28 @@
         }
       }
     },
+    "保留流水并删除账户" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete the account, keep its transactions"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "保留流水并删除账户"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "保留明細並刪除帳戶"
+          }
+        }
+      }
+    },
     "信用卡" : {
       "localizations" : {
         "en" : {
@@ -4169,28 +4191,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "刪除後無法復原"
-          }
-        }
-      }
-    },
-    "删除后不能恢复，流水会保留" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "This can’t be undone. Transactions are kept."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "删除后不能恢复，流水会保留"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "刪除後無法復原，明細會保留"
           }
         }
       }
@@ -5571,7 +5571,7 @@
         }
       }
     },
-    "另有 %lld 笔外币交易还没有汇率，没算进余额" : {
+    "另有 %lld 笔外币交易还没有汇率" : {
       "localizations" : {
         "en" : {
           "variations" : {
@@ -5579,13 +5579,13 @@
               "one" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "%lld foreign-currency transaction has no rate yet and isn’t in the balance."
+                  "value" : "%lld more foreign-currency transaction has no rate yet"
                 }
               },
               "other" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "%lld foreign-currency transactions have no rate yet and aren’t in the balance."
+                  "value" : "%lld more foreign-currency transactions have no rate yet"
                 }
               }
             }
@@ -5594,13 +5594,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "另有 %lld 笔外币交易还没有汇率，没算进余额"
+            "value" : "另有 %lld 笔外币交易还没有汇率"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "另有 %lld 筆外幣交易還沒有匯率，沒算進餘額"
+            "value" : "另有 %lld 筆外幣交易還沒有匯率"
           }
         }
       }
@@ -7729,24 +7729,24 @@
         }
       }
     },
-    "导入汇率后按交易当天的汇率估算，可以在编辑里改成实际金额" : {
+    "导入汇率后按交易当天的汇率估算" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Estimated at the day’s rate once rates are imported. You can enter the actual amount in Edit."
+            "value" : "Estimated at the day’s rate once rates are imported"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "导入汇率后按交易当天的汇率估算，可以在编辑里改成实际金额"
+            "value" : "导入汇率后按交易当天的汇率估算"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "匯入匯率後，依交易當天的匯率估算，可以在編輯裡改成實際金額"
+            "value" : "匯入匯率後，依交易當天的匯率估算"
           }
         }
       }
@@ -9943,28 +9943,6 @@
         }
       }
     },
-    "拆出去的单独显示，分类保留。没选的还是一单，只剩一笔时就不再是一单了。" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Split-off transactions show on their own and keep their categories. The rest stay together; an order with one transaction left is no longer an order."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "拆出去的单独显示，分类保留。没选的还是一单，只剩一笔时就不再是一单了。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "拆出去的會單獨顯示，分類保留。沒選的仍是同一筆訂單，只剩一筆時就不再是訂單。"
-          }
-        }
-      }
-    },
     "拆开" : {
       "localizations" : {
         "en" : {
@@ -10097,24 +10075,24 @@
         }
       }
     },
-    "按 %@ 的汇率估算，可以在编辑里改成实际金额" : {
+    "按 %@ 的汇率估算" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Estimated at the rate on %@. You can enter the actual amount in Edit."
+            "value" : "Estimated at the rate on %@"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "按 %@ 的汇率估算，可以在编辑里改成实际金额"
+            "value" : "按 %@ 的汇率估算"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "依 %@ 的匯率估算，可以在編輯裡改成實際金額"
+            "value" : "依 %@ 的匯率估算"
           }
         }
       }
@@ -17467,28 +17445,6 @@
         }
       }
     },
-    "这个钱包发来的、没写银行卡号的通知会自动记到这里；同一个钱包有几个账户时，会让你选记到哪个。" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Notifications from this wallet that don’t mention a card are recorded here. If you have several accounts for the same wallet, you’ll be asked which one."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "这个钱包发来的、没写银行卡号的通知会自动记到这里；同一个钱包有几个账户时，会让你选记到哪个。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "這個錢包發來、沒寫銀行卡號的通知會自動記到這裡；同一個錢包有幾個帳戶時，會讓你選記到哪個。"
-          }
-        }
-      }
-    },
     "这张卡" : {
       "localizations" : {
         "en" : {
@@ -17815,28 +17771,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "選取的內容"
-          }
-        }
-      }
-    },
-    "选了是哪个钱包，它发来的通知可以自动记到这里。" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Choose the wallet so its notifications are recorded here automatically."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "选了是哪个钱包，它发来的通知可以自动记到这里。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "選了是哪個錢包，它發來的通知就能自動記到這裡。"
           }
         }
       }

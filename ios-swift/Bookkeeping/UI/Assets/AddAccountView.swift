@@ -140,12 +140,6 @@ struct AddAccountView: View {
                         TextField(kind == .cash ? L("现金") : (WalletDirectory.profile(id: walletID)?.name.loc ?? L("例如 微信零钱、支付宝余额")), text: $name)
                     } header: {
                         Text("名称")
-                    } footer: {
-                        if kind == .wallet {
-                            Text(walletID == nil
-                                 ? "选了是哪个钱包，它发来的通知可以自动记到这里。"
-                                 : "这个钱包发来的、没写银行卡号的通知会自动记到这里；同一个钱包有几个账户时，会让你选记到哪个。")
-                        }
                     }
                 }
                 Section("币种与初始余额") {

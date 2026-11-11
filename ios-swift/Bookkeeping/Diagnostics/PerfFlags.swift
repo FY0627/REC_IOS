@@ -37,7 +37,7 @@ final class PerfFlags {
         rasterizeCards = UserDefaults.standard.object(forKey: "perf.rasterizeCards") as? Bool ?? false
         clipCardPhotos = UserDefaults.standard.object(forKey: "perf.clipCardPhotos") as? Bool ?? false
         flattenCardAmount = UserDefaults.standard.object(forKey: "perf.flattenCardAmount") as? Bool ?? true
-        gentleCardReturn = UserDefaults.standard.object(forKey: "perf.gentleCardReturn") as? Bool ?? true
+        gentleCardReturn = UserDefaults.standard.object(forKey: "perf.gentleCardReturn") as? Bool ?? false
         lateDetailCleanup = UserDefaults.standard.object(forKey: "perf.lateDetailCleanup") as? Bool ?? true
         settleSprings = UserDefaults.standard.object(forKey: "perf.settleSprings") as? Bool ?? true
         holdHighRefresh = UserDefaults.standard.object(forKey: "perf.holdHighRefresh") as? Bool ?? true
@@ -50,7 +50,7 @@ final class PerfFlags {
         rasterizeCards = false
         clipCardPhotos = false
         flattenCardAmount = true
-        gentleCardReturn = true
+        gentleCardReturn = false
         lateDetailCleanup = true
         settleSprings = true
         holdHighRefresh = true

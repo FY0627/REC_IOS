@@ -28,7 +28,7 @@ struct ConvertedTotalsView: View {
                 }
                 .padding(.top, Self.figuresTop)
                 if !total.unconverted.isEmpty {
-                    Text(L("\(total.unconverted.map(\.localizedName).joined(separator: L("、")))没有汇率，没算进去"))
+                    Text(L("\(total.unconverted.map(\.localizedName).joined(separator: L("、")))没有汇率"))
                         .font(.footnote).foregroundStyle(.secondary).padding(.top, 10)
                 }
             } else {
