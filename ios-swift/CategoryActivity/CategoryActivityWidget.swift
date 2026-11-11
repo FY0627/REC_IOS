@@ -129,11 +129,12 @@ extension CategoryActivityAttributes.ContentState {
 /// 换页、选好、换下一笔：旧的缩到岛中间淡出，新的再从中间长出来。
 /// 系统给小组件和实时活动的动画最长 2 秒；常亮显示（Always On）时系统不做动画
 enum IslandMotion {
-    static let smallest: CGFloat = 0.3
-    static let shrink: Animation = .easeIn(duration: 0.16)
-    static let grow: Animation = .spring(duration: 0.4, bounce: 0.25).delay(0.12)
+    /// 只缩到 0.6、新旧同时动、不等：系统那一圈已经有延迟，动画不能再加等待
+    static let smallest: CGFloat = 0.6
+    static let shrink: Animation = .easeOut(duration: 0.1)
+    static let grow: Animation = .spring(duration: 0.28, bounce: 0.15)
     /// 岛跟着变大变小
-    static let resize: Animation = .spring(duration: 0.4, bounce: 0.15)
+    static let resize: Animation = .spring(duration: 0.28, bounce: 0.1)
 
     static func swap(toward anchor: UnitPoint) -> AnyTransition {
         let small: AnyTransition = .scale(scale: smallest, anchor: anchor)
