@@ -20,6 +20,8 @@ AI 编程助手的入口文件。Claude Code 通过 `CLAUDE.md` 引用本文件�
 |---|---|---|
 | `ios-swift/Bookkeeping/` | App target：SwiftUI 界面、App Intents、性能诊断 | `Bookkeeping` |
 | `ios-swift/NotificationContent/` | 通知内容扩展：长按记账结果通知选分类（ADR 0020），只链接 `BKModel` | `NotificationContent` |
+| `ios-swift/CategoryActivity/` | 小组件扩展：灵动岛上选分类的实时活动（ADR 0024），只链接 `BKModel` | `CategoryActivity` |
+| `ios-swift/Shared/` | App 和 `CategoryActivity` 都编译的文件：实时活动的内容、岛上按钮的动作 | — |
 | `ios-swift/Packages/BKCore/` | 纯 Swift 业务核心（见 ADR 0006–0009） | `BKModel` / `BKDatabase` / `BKBackend` |
 | `ios-swift/ci/` | GitHub Actions 调用的测试、构建、打包、校验脚本 | — |
 | `ios-swift/Localization/` | 界面文字的翻译表（台湾繁体、英文），生成 `Bookkeeping/Localizable.xcstrings`（ADR 0022） | — |

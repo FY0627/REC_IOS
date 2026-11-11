@@ -9,8 +9,9 @@ import BKModel
 /// 用法：快捷指令「截屏 → 记录付款截图」，设到轻点背面，付完款敲两下背面。以前的截图在 App 的「记一笔」里从相册选。
 /// 也接受「从图像中提取文本」得到的文字，一行一行，和截图一样解析。
 /// 和「记录银行动账通知」一样在后台执行，不打开 App、不弹对话框；结果发记账结果通知（「我的 › 通知」）。
-/// 截图识别完就丢掉，只保存识别出的文字（和短信一样按保留期限清理），用来核对和处理待处理
-struct RecordPaymentScreenshotIntent: AppIntent {
+/// 截图识别完就丢掉，只保存识别出的文字（和短信一样按保留期限清理），用来核对和处理待处理。
+/// 遵循 `LiveActivityIntent`：和「记录银行动账通知」一样，要从后台开启灵动岛选分类（ADR 0024）
+struct RecordPaymentScreenshotIntent: LiveActivityIntent {
     static let title: LocalizedStringResource = "记录付款截图"
     static let description = IntentDescription(
         "识别微信、支付宝付款页的截图并记账。在本机识别，不联网，截图不保存。",

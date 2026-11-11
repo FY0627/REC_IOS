@@ -1,0 +1,85 @@
+# 0024 iOS Swift 版：灵动岛上选分类（实时活动）
+
+- 状态：已采纳（`ios-swift/`），第一版，等真机验证；没有灵动岛的手机仍用 [ADR 0020](0020-ios-swift-notification-category-picker.md) 的长按通知选分类
+- 日期：2026-11-11
+
+## 背景
+
+长按通知选分类（ADR 0020）：要先长按，一页只有 3 个按钮，常常要翻页。有灵动岛的手机可以不长按，直接在岛上点，一屏放得下 12 个。
+目标：自动记账记上一笔要选分类的支出或收入后，在灵动岛上选完，每次点按都不打开 App。
+
+## 决定
+
+**只用在有灵动岛的手机。** 没有公开接口，按机型标识符判断（`BKModel/LiveCategoryPicker.swift` 的 `DynamicIsland.isPresent`）：
+`iPhone15,x`（14 Pro）起都有，只有 16e（`iPhone17,5`）、17e（`iPhone18,5`）还是刘海；以后的新机型按「有」算。
+判错了也不丢功能：没有灵动岛的手机会在锁屏卡片上选；有灵动岛的手机会收到通知。没有用「App 在前台时量窗口顶部安全区（≥59 点）」：
+要 App 先在前台竖屏打开过，「放大显示」下数值可能变（没核实），记账动作在后台运行时没有窗口；机型规则是纯函数，能在 Linux 上测。
+
+**什么时候弹**（`IngestNotifier` → `LiveCategoryActivity.show`）：
+
+- 两个自动记账动作（短信 / 邮件 / App 通知、付款截图）记上一笔还没分类的支出或收入（截图合并到的那笔也算），「我的 › 自动记账 › 记账结果」选的是「全部」（和长按选分类一样）。
+- 转帐、退款、没确认对方的转账（选了分类就是转给别人）、自动归了类的、记账失败进待处理的都不弹，照常发通知。
+- 弹了灵动岛的那一笔不再发「记账成功」通知。用户关了实时活动、开启失败时照常发通知。
+
+**从后台开启**：两个记账动作改成遵循 `LiveActivityIntent`，在 perform 里 `Activity.request`。
+Apple 技术支持在论坛说，后台代码自己开启会被拒（`visibility`），用户经快捷指令、Siri、小组件运行的动作可以开启（[thread 818467](https://developer.apple.com/forums/thread/818467)）；
+有开发者说快捷指令的自动化可以，用 Siri 触发、又已有一个活动时失败（[thread 834371](https://developer.apple.com/forums/thread/834371)）。
+所以已经有一个时不再开新的，而是更新它。没人说过信息、邮件、App 通知触发的自动化行不行，要真机看：
+「我的 › 开发与调试 › 灵动岛」显示上次开启的结果（开启、更新、实时活动已关闭、开启失败的原因）。
+
+**弹出**：开启后马上发一次会提醒的更新（`alertConfiguration`），岛自动展开、锁屏亮屏。系统要求提醒带声音，用一段没有声音的 `Silence.wav`：
+银行短信已经响过，和记账结果通知一样不出声。
+
+**三页**（`BKModel/LiveCategoryPicker.swift`，纯函数，Linux 上测）：
+
+| 页 | 内容 | 返回 |
+|---|---|---|
+| 1 | 顶上一行商户、账户、金额；5 个推荐和「全部」。推荐按 ADR 0017 的顺序（`CategorySuggestions.quick`，比待分类面板多一个）：这个商户选过的、常选的在前，可以是小类，点了就记 | — |
+| 2（点「全部」） | 这个类型的全部大类，分类页的顺序，固定不变；不放手续费、扣息。一屏 12 格（每行 6 个、2 行），放不下时前 11 个加「更多」 | 第 1 页或上一屏 |
+| 3（点有小类的大类） | 它的小类，分类页的顺序，最后是「只记<大类名>」；放不下时同样有「更多」 | 来的那一页 |
+
+第 1 页上带小类的大类：用户自己选过、常选的大类本身，点了直接记；只是没有记录时补位凑上的（刚开始用时），点了进第 3 页（`learnedIDs`）。
+第 2、3 页固定顺序：推荐已经在第 1 页，位置不变才好记。
+
+**按钮**都是 `Button(intent:)`，动作遵循 `LiveActivityIntent`，系统在 App 的进程里运行，不打开 App、不用解锁：
+
+- 「全部」「更多」「返回」、有小类的大类（`ShowLiveCategoryPageIntent`）：只换一页。读开启时存在 `UserDefaults` 的这一笔的选项，算出下一页，更新实时活动的内容，不开账本。
+- 点到分类（`PickLiveCategoryIntent`）：`LedgerBackend.setCategory` 在账本的串行队列上写入，学习和通知上选分类一样；岛上显示选中的分类约 1.2 秒，然后结束、马上消失。
+  写不进去（开机后还没解锁过）时岛留着；这一笔已经删了就结束。
+
+**内容**（`Shared/CategoryActivity.swift` 的 `ContentState`，要小于 4KB）：当前这一页（标题、返回到哪、格子的名称、图标、动作）、商户、账户、金额、选中的分类。
+文字由 App 用 `L()` 按 App 里选的语言写好，扩展不需要翻译表。页面和动作都存成短字符串（`c.0.q.分类`、`k.分类`），最坏的一屏（12 格、名字很长、id 是 UUID）也小于 2.5KB（单元测试）。
+`ActivityAttributes` 和动作放在 App 和扩展共用的 `Shared/` 文件夹，不放进 BKCore：BKCore 要在 Linux 上测，没有 ActivityKit。
+
+**收起后**：左边是分类图标（还没选是统一的 `tag`），右边是金额；minimal 只放图标。长按岛重新展开，照样在岛上选。
+单点岛按系统规定会打开 App：`widgetURL` 带上这一笔，App 的 URL scheme 就是 Bundle ID（`Config/Info.plist` 写 `$(PRODUCT_BUNDLE_IDENTIFIER)`），打开这一笔的选分类面板。
+
+**锁屏**：卡片显示同样的三页和按钮。
+
+**尺寸**：Apple 规范是展开和锁屏宽 371 点（Pro Max、Plus 408），高 84–160 点，按钮不小于 44 点。
+按钮 52 × 46，间隔 4，一行 6 个宽 332；展开时左右边距 14。锁屏卡片高 8 + 44 + 4 + 96 + 8 = 160。界面上只有标题、按钮、数据。
+
+**连着记了几笔（第一版）**：只留一个实时活动，新的一笔换掉旧的，旧的留在待分类。标出还有几笔、选完接着显示下一笔，真机看过之后再做。
+
+**一直没选的**：不设时长。用户要收起自己上滑；系统最长 8 小时后结束（App 没有服务器，没法在某个时间点自己结束）。
+这一笔在 App 里选了分类、或者删了，打开或离开 App 时结束（`LiveCategoryActivity.reconcile`）。没选的照常留在待分类。
+
+**新扩展** `CategoryActivity`（`ios-swift/CategoryActivity/`，Bundle ID `com.fy0627.rec.CategoryActivity`，WidgetKit + ActivityKit）：只链接 BKModel，和 `NotificationContent` 一样；
+`Shared/` 两个 target 都编译。动作的 perform 在扩展里是空壳（`LiveCategoryActions`），App 里是真的。
+
+## 没有选的
+
+- **量安全区判断灵动岛**：见上。
+- **推送开启（push-to-start）**：要服务器发 APNs，这个 App 没有服务器（ADR 0001）。
+- **扩展直接写账本**：要 App Group，数据库挪到共享目录，和 ADR 0020 的理由一样。
+- **三页都放进实时活动的内容**：分类多的人会超过 4KB；换页时 App 本来就要运行（按钮的动作在 App 里）。
+- **换页时从账本重新算**：每次都要打开账本；存下来的选项读一下就够了（存的不是这一笔时才从账本算）。
+- **到时间自动结束**：没有服务器推送，App 只在下一笔记账或打开时运行，定不了时间。
+
+## 影响
+
+- IPA 多一个 `PlugIns/CategoryActivity.appex`。免费账号用 iLoader 安装时每周 10 个 App ID 的额度里多用一个，要用 v2.3.10（v2.4.0 起扩展借用主 App 的描述文件，系统不运行它）；
+  TestFlight 自动签名时新扩展的 App ID 自动登记。`package-ipa.sh` 检查扩展在不在、Bundle ID、类型、构建号、架构，App 的 `NSSupportsLiveActivities`、URL scheme、`Silence.wav` 和两个按钮动作的元数据。
+- 两个记账动作从 `AppIntent` 改成 `LiveActivityIntent`。
+- 单元测试覆盖三页的逻辑、内容大小和机型规则；扩展和后台开启要真机验证（[真机验收清单](../guides/ios-swift-device-checklist.md) C7k）：
+  自动化触发时能不能开启、提醒展开几秒后系统收起、点按钮后岛会不会收起、换页快不快（App 没在运行时第一下要冷启动）、展开时圆角会不会切到按钮。

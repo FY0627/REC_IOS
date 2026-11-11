@@ -3,7 +3,7 @@
 #   1. macOS 主机上 `swift test`（BKCore 包，纯 Swift，含 SQLite）。CORE_TESTS=0 时不跑：这次只改了 App 界面（changes.sh）
 #   2. iOS 模拟器上同一套测试（iOS 的 Foundation / SQLite 行为）。只有 SIMULATOR_TESTS=1（手动触发时勾选）才跑：
 #      要启动模拟器、再编一遍，耗时最长，平时有 macOS 主机这一遍和本机 Docker 里的 Linux 那一遍就够了
-# 分层约束（App 和通知扩展不能 import BKDatabase）每次都查。
+# 分层约束（App、通知扩展、灵动岛扩展和共用文件不能 import BKDatabase）每次都查。
 # 用法：bash ios-swift/ci/test.sh <输出目录>
 set -euo pipefail
 on_error() { echo "::error title=test.sh::test.sh line $1 failed: $2"; }
@@ -26,9 +26,9 @@ OUT="${1:?output dir}"
 PACKAGE_DIR="ios-swift/Packages/BKCore"
 mkdir -p "$OUT/logs" "$OUT/results"
 
-# 分层约束：App 和通知扩展不能直接 import 数据库层
-if grep -rn --include='*.swift' -E '^\s*(@testable\s+)?import\s+BKDatabase' ios-swift/Bookkeeping ios-swift/NotificationContent; then
-  echo "::error::App 或通知扩展直接 import 了 BKDatabase，违反 App → BKBackend → BKDatabase 的依赖方向"
+# 分层约束：App 和扩展不能直接 import 数据库层
+if grep -rn --include='*.swift' -E '^\s*(@testable\s+)?import\s+BKDatabase' ios-swift/Bookkeeping ios-swift/NotificationContent ios-swift/CategoryActivity ios-swift/Shared; then
+  echo "::error::App 或扩展直接 import 了 BKDatabase，违反 App → BKBackend → BKDatabase 的依赖方向"
   exit 1
 fi
 

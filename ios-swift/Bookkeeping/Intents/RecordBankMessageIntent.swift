@@ -10,7 +10,8 @@ import BKModel
 /// - 不实现 `ProvidesDialog`、不调用 `requestValue` / `requestConfirmation`，
 ///   所以成功时不会弹出 App 自己的任何交互；所有参数都是可选的，缺失时不会向用户追问。
 /// - 系统自身的提示（例如自动化的「运行时通知」开关、首次授权）不受 App 控制，见文档说明。
-struct RecordBankMessageIntent: AppIntent {
+/// - 遵循 `LiveActivityIntent`：记上没分类的一笔时要从后台开启灵动岛选分类（ADR 0024），系统只让这种动作在后台开启实时活动。
+struct RecordBankMessageIntent: LiveActivityIntent {
     static let title: LocalizedStringResource = "记录银行动账通知"
     static let description = IntentDescription(
         "把收到的银行短信或邮件交给 REC，在本机解析、匹配账户、去重并入账。不会打开 App，也不联网。",

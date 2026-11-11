@@ -109,6 +109,24 @@ otool -L "$APPEX/$APPEX_EXEC" | grep -q "/UserNotificationsUI.framework/" || fai
 # 变量后面紧跟中文时要加花括号：macOS 的 bash 会把全角字符当成变量名的一部分
 ok "通知扩展 PlugIns/NotificationContent.appex（${APPEX_ID}）"
 
+# 灵动岛选分类（ADR 0024）：小组件扩展里的实时活动，按钮的动作在 App 里运行
+WIDGET="$APP/PlugIns/CategoryActivity.appex"
+[[ -d "$WIDGET" ]] || fail "缺少灵动岛扩展 PlugIns/CategoryActivity.appex"
+read_widget() { /usr/libexec/PlistBuddy -c "Print :$1" "$WIDGET/Info.plist" 2>/dev/null || true; }
+WIDGET_ID=$(read_widget CFBundleIdentifier)
+[[ "$WIDGET_ID" == "$EXPECTED_BUNDLE_ID.CategoryActivity" ]] || fail "灵动岛扩展的 Bundle ID 是 ${WIDGET_ID}，期望 $EXPECTED_BUNDLE_ID.CategoryActivity"
+[[ "$(read_widget NSExtension:NSExtensionPointIdentifier)" == "com.apple.widgetkit-extension" ]] || fail "灵动岛扩展的类型不对"
+[[ "$(read_widget CFBundleVersion)" == "$BUILD" ]] || fail "灵动岛扩展的构建号 $(read_widget CFBundleVersion) 和 App 的 $BUILD 不一样"
+WIDGET_EXEC=$(read_widget CFBundleExecutable)
+[[ "$(lipo -archs "$WIDGET/$WIDGET_EXEC")" == "arm64" ]] || fail "灵动岛扩展的架构不是 arm64"
+[[ "$(read_key NSSupportsLiveActivities)" == "true" ]] || fail "App 的 Info.plist 没有打开 NSSupportsLiveActivities，开不了实时活动"
+# 单点灵动岛打开这一笔：URL scheme 就是 Bundle ID（Shared/CategoryActivity.swift 的 CategoryActivityLink）
+[[ "$(read_key CFBundleURLTypes:0:CFBundleURLSchemes:0)" == "$BUNDLE_ID" ]] || fail "App 的 URL scheme 不是 ${BUNDLE_ID}，单点灵动岛打不开这一笔"
+[[ -f "$APP/Silence.wav" ]] || fail "缺少 Silence.wav（灵动岛提醒用的静音）"
+grep -q "PickLiveCategoryIntent" "$ACTIONS" || fail "App Intents 元数据里没有 PickLiveCategoryIntent，岛上点分类不会写账本"
+grep -q "ShowLiveCategoryPageIntent" "$ACTIONS" || fail "App Intents 元数据里没有 ShowLiveCategoryPageIntent，岛上换不了页"
+ok "灵动岛扩展 PlugIns/CategoryActivity.appex（${WIDGET_ID}）"
+
 [[ ! -d "$APP/_CodeSignature" ]] && ok "未签名（CI 不使用任何证书，由 iLoader 签名）" || ok "存在 _CodeSignature（将被 iLoader 替换）"
 [[ ! -f "$APP/embedded.mobileprovision" ]] || fail "不应包含描述文件"
 
@@ -130,6 +148,7 @@ grep -q " Payload/Bookkeeping.app/$EXECUTABLE$" "$OUT/ipa-contents.txt" || fail 
 grep -q " Payload/Bookkeeping.app/Info.plist$" "$OUT/ipa-contents.txt" || fail "IPA 结构不对：缺少 Info.plist"
 grep -q " Payload/Bookkeeping.app/Metadata.appintents/" "$OUT/ipa-contents.txt" || fail "IPA 里缺少 App Intents 元数据"
 grep -q " Payload/Bookkeeping.app/PlugIns/NotificationContent.appex/$APPEX_EXEC$" "$OUT/ipa-contents.txt" || fail "IPA 里缺少通知扩展"
+grep -q " Payload/Bookkeeping.app/PlugIns/CategoryActivity.appex/$WIDGET_EXEC$" "$OUT/ipa-contents.txt" || fail "IPA 里缺少灵动岛扩展"
 ok "IPA 结构 Payload/Bookkeeping.app"
 
 SHA256=$(shasum -a 256 "$OUT/ipa/$NAME.ipa" | awk '{print $1}')

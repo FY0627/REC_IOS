@@ -164,12 +164,21 @@ public struct CategorySuggestions: Hashable, Sendable {
     public var preferredID: String?
     /// 这笔已经自动归到的分类（不在 `categories` 里）；nil 表示还没分类
     public var autoCategory: LedgerCategory?
+    /// 灵动岛第 1 页的推荐（ADR 0024）：和 `categories` 同一个顺序，多一个
+    public var quick: [LedgerCategory]
+    /// 这个商户选过的、最近常用的分类：不是补位凑上的（灵动岛上带小类的大类，补位的点了进小类）
+    public var learnedIDs: Set<String>
 
-    public init(categories: [LedgerCategory] = [], groups: [CategoryGroup] = [], preferredID: String? = nil, autoCategory: LedgerCategory? = nil) {
+    public init(
+        categories: [LedgerCategory] = [], groups: [CategoryGroup] = [], preferredID: String? = nil, autoCategory: LedgerCategory? = nil,
+        quick: [LedgerCategory] = [], learnedIDs: Set<String> = []
+    ) {
         self.categories = categories
         self.groups = groups
         self.preferredID = preferredID
         self.autoCategory = autoCategory
+        self.quick = quick
+        self.learnedIDs = learnedIDs
     }
 
     /// 通知上的选分类：这个商户选过的放在第一个，点了直接记；后面是全部大类

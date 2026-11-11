@@ -93,6 +93,12 @@ struct BookkeepingApp: App {
                 .onChange(of: scenePhase) { _, phase in
                     // 自动化在后台入账后，用户下次打开 App 时刷新
                     if phase == .active { store.scheduleRefresh() }
+                    // 灵动岛上那一笔已经在 App 里选了分类、或者删了：打开、离开 App 时结束它（ADR 0024）
+                    if phase != .inactive { Task { await LiveCategoryActivity.reconcile() } }
+                }
+                // 单点灵动岛或锁屏卡片：打开这一笔的选分类面板
+                .onOpenURL { url in
+                    if let recordID = CategoryActivityLink.recordID(from: url) { CategorizeRequest.shared.recordID = recordID }
                 }
                 // 重装后系统可能换回主图标；打开 App 时对一下
                 .onChange(of: scenePhase, initial: true) { _, phase in

@@ -259,6 +259,27 @@ final class CategoryLearningTests: XCTestCase {
         XCTAssertEqual(suggestions.picker.first?.id, lunch.id, "这个商户选过的放在第一个，点了直接记")
     }
 
+    /// 灵动岛第 1 页（ADR 0024）：比面板多一个推荐，顺序一样；没记录时补位的大类点了进小类
+    func testIslandQuickPicksExtendThePanel() async throws {
+        let backend = try await makeBackend()
+        let lunch = try await category(backend, "午餐")
+        let food = try await category(backend, "饮食")
+        try await spendAndPick(backend, at: "测试小馆", lunch.id)
+        let next = try await spend(backend, at: "测试小馆")
+        let suggestions = try await backend.categorySuggestions(recordID: try XCTUnwrap(next.recordID))
+        XCTAssertEqual(suggestions.quick.count, CategoryLearner.quickLimit)
+        XCTAssertEqual(Array(suggestions.quick.prefix(CategoryLearner.suggestionLimit)), suggestions.categories, "面板是前 4 个")
+        XCTAssertEqual(suggestions.quick.first, lunch)
+        XCTAssertTrue(suggestions.learnedIDs.contains(lunch.id))
+        XCTAssertFalse(suggestions.learnedIDs.contains(food.id), "饮食只是补位的")
+
+        let picker = LiveCategoryPicker(suggestions)
+        let cells = picker.screen(.quick).cells
+        XCTAssertEqual(cells.first?.action, .pick(lunch.id))
+        XCTAssertEqual(cells.first { $0.title == "饮食" }?.action, .show(.children(parentID: food.id, chunk: 0, fromQuick: true)))
+        XCTAssertEqual(cells.count, LiveCategoryPicker.quickCount + 1)
+    }
+
     func testWithoutHistoryTopLevelsFollowCategoryOrder() async throws {
         let backend = try await makeBackend()
         let next = try await spend(backend, at: "测试小馆")

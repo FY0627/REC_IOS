@@ -735,6 +735,18 @@ t("按%@扣约 %@", "以%@扣約 %@", "Charged in %@: ≈ %@")
 t("按%@扣（还没有汇率）", "以%@扣（還沒有匯率）", "Charged in %@ (no rate yet)")
 t("%@余额不足，%@", "%@餘額不足，%@", "Not enough %@, %@")
 
+# MARK: 灵动岛选分类（ADR 0024）
+
+t("灵动岛", "動態島", "Dynamic Island")
+t("实时活动已开启", "即時動態已開啟", "Live Activity started")
+t("实时活动已更新", "即時動態已更新", "Live Activity updated")
+t("实时活动已关闭", "即時動態已關閉", "Live Activities are off")
+t("开启失败：%@", "開啟失敗：%@", "Couldn’t start: %@")
+t("写入失败", "寫入失敗", "Couldn’t save")
+t("灵动岛选分类", "動態島選擇分類", "Choose Category in Dynamic Island")
+t("灵动岛换页", "動態島換頁", "Change Dynamic Island Page")
+t("页面", "頁面", "Page")
+
 # MARK: 快捷指令里的动作（App Intents）
 
 t("银行卡账户", "銀行卡帳戶", "Bank Card")

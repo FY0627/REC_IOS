@@ -17,3 +17,4 @@
 *.otf binary
 *.keystore binary
 *.jks binary
+*.wav binary

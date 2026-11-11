@@ -42,6 +42,7 @@ private struct ProfileList: View {
     @AppStorage(ImportExchangeRatesIntent.notifyKey) private var notifyRates = true
     /// 「开发与调试」平时藏着：连点 7 次版本号显示，再连点 7 次藏起来
     @AppStorage("showDevTools") private var showDevTools = false
+    @AppStorage(LiveCategoryActivity.lastResultKey) private var liveActivityResult = ""
     @State private var versionTaps = 0
     @State private var lastVersionTap = Date.distantPast
     @State private var retention = 30
@@ -179,6 +180,8 @@ private struct ProfileList: View {
                         NavigationLink(value: ProfileRoute.performance) {
                             Label("性能开关与调试指标", systemImage: "speedometer")
                         }
+                        // 灵动岛选分类上次开启的结果（ADR 0024）：后台能不能开启要在真机上看
+                        LabeledContent("灵动岛", value: liveActivityResult.isEmpty ? "—" : liveActivityResult)
                     }
                 }
             }

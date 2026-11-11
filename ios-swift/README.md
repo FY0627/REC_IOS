@@ -9,8 +9,10 @@ App 不联网；净资产换算用的汇率由快捷指令下载后导入（[ADR
 ```
 ios-swift/
 ├── Bookkeeping.xcodeproj/         手写工程（objectVersion 77），含共享 scheme「Bookkeeping」
-├── Config/                        Info.plist（App）、NotificationContent-Info.plist（通知扩展）
+├── Config/                        Info.plist（App）、NotificationContent-Info.plist（通知扩展）、CategoryActivity-Info.plist（灵动岛扩展）
 ├── NotificationContent/           通知内容扩展：长按记账结果通知时换按钮选分类（ADR 0020，文件夹同步，只链接 BKModel）
+├── CategoryActivity/              小组件扩展：灵动岛和锁屏上选分类的实时活动（ADR 0024，文件夹同步，只链接 BKModel）
+├── Shared/                        App 和 CategoryActivity 都编译：实时活动的内容、岛上按钮的动作（LiveActivityIntent）
 ├── Bookkeeping/                   App target（文件夹同步，新增 .swift 文件无需改工程）
 │   ├── App/                       入口、共享服务 AppServices、界面状态 LedgerStore
 │   ├── Intents/                   App Intent「记录银行动账通知」「记录付款截图」、AccountEntity、AppShortcuts
@@ -37,7 +39,7 @@ ios-swift/
    iOS 模拟器上那一遍（`xcodebuild test`）最慢，只有手动触发时勾选「simulator_tests」才跑。模拟器按目标设备选择：优先 iPhone 16 Pro，其次其他 iPhone Pro，不使用双屏机型（[`ci/pick-simulator.sh`](ci/pick-simulator.sh)）；
    App 图标没改时不渲染图标预览（第 6 步）。不加缓存：没有第三方依赖可缓存，Xcode 和 SwiftPM 按文件修改时间判断要不要重编，每次检出的文件都是新的，缓存了也会全部重编；
 3. 构建 Release / iphoneos / arm64、不签名的 `Bookkeeping.app`；
-4. 校验可执行文件、Mach-O 平台、Info.plist、依赖、资源、App Intents 元数据和通知扩展 `PlugIns/NotificationContent.appex`，打包为 `Payload/Bookkeeping.app` 的 IPA；
+4. 校验可执行文件、Mach-O 平台、Info.plist、依赖、资源、App Intents 元数据、通知扩展 `PlugIns/NotificationContent.appex` 和灵动岛扩展 `PlugIns/CategoryActivity.appex`，打包为 `Payload/Bookkeeping.app` 的 IPA；
 5. 上传 IPA（含 SHA-256 与 build-info）和诊断产物；
 6. 检查 App 图标和两个备用图标编进了 App，用 Xcode 自带的 `ictool` 按默认、深色、着色渲染预览（[`ci/icon-preview.sh`](ci/icon-preview.sh)，
    预览图在诊断产物里，32×32 缩略图在运行页面的注释里），不影响打包。

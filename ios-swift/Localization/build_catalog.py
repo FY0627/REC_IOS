@@ -149,7 +149,7 @@ def check():
     plain = set(keys)
     patterns = [re.compile("^" + re.sub(r"%(?:@|lld)", lambda _: "%(?:@|lld|lf|d)", re.escape(k).replace("%@", "%@").replace(r"\%", "%")) + "$") for k in keys if "%" in k]
     missing = 0
-    for folder in ["Bookkeeping", "NotificationContent"]:
+    for folder in ["Bookkeeping", "NotificationContent", "CategoryActivity", "Shared"]:
         for dirpath, dirnames, filenames in os.walk(os.path.join(ROOT, folder)):
             dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]
             for name in sorted(filenames):

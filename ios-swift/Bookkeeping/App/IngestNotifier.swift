@@ -14,6 +14,9 @@ import BKModel
 /// 点到一个分类把「pick.分类」交回这里，不打开 App，在后台保存（`handle`），锁屏时也能写
 /// （账本的保护等级是 `completeUntilFirstUserAuthentication`，和自动化入账一样）。
 /// 点「打开 App」或点通知本身，打开 App 里这一笔的选分类面板（`CategorizeRequest`）。
+///
+/// 有灵动岛的手机（ADR 0024）：选「全部」时，没分类的支出、收入改在灵动岛上选（`LiveCategoryActivity`），这一笔不发通知；
+/// 没有灵动岛、关了实时活动、开启失败时照常发这条通知。
 enum IngestNotifier {
     enum Mode: String, CaseIterable, Identifiable {
         case all
@@ -60,6 +63,11 @@ enum IngestNotifier {
         }
         for (index, item) in result.items.enumerated() {
             let suggestions = await categorySuggestions(for: item, backend: backend, screenshot: screenshot)
+            // 有灵动岛时在岛上选分类（ADR 0024），这一笔不再发记账成功通知；没开成照常发
+            if let recordID = item.recordID, LiveCategoryActivity.eligible(item, suggestions: suggestions),
+               await LiveCategoryActivity.show(recordID: recordID, suggestions: suggestions, header: islandHeader(item)) {
+                continue
+            }
             guard let body = message(item, failuresOnly: mode == .failures, autoCategory: suggestions.autoCategory?.name.loc, screenshot: screenshot) else { continue }
             let content = UNMutableNotificationContent()
             content.body = body
@@ -182,8 +190,7 @@ enum IngestNotifier {
         }
 
         var parts: [String] = []
-        // 现金、电子钱包没有卡号：写账户名称
-        parts.append(item.accountTitle?.loc ?? item.cardTail.map { L("尾号 \($0) 卡") } ?? L("未知尾号的卡"))
+        parts.append(accountText(item))
         if screenshot, let counterparty = item.counterparty { parts.append(counterparty) }
         if let kind = item.kind {
             var action = kind.displayName.loc
@@ -202,6 +209,16 @@ enum IngestNotifier {
         }
         parts.append(outcome)
         return parts.joined(separator: L("，"))
+    }
+
+    /// 现金、电子钱包没有卡号：写账户名称
+    private static func accountText(_ item: IngestItem) -> String {
+        item.accountTitle?.loc ?? item.cardTail.map { L("尾号 \($0) 卡") } ?? L("未知尾号的卡")
+    }
+
+    /// 灵动岛顶上一行：商户、账户、金额
+    private static func islandHeader(_ item: IngestItem) -> LiveCategoryActivity.Header {
+        LiveCategoryActivity.Header(merchant: item.counterparty, account: accountText(item), amount: amountText(item) ?? "")
     }
 
     private static func amountText(_ item: IngestItem) -> String? {

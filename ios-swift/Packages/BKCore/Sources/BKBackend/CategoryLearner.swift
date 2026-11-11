@@ -10,6 +10,8 @@ struct CategoryLearner {
     static let autoStreak = 3
     /// 待分类面板的候选最多几个
     static let suggestionLimit = 4
+    /// 灵动岛第 1 页的推荐几个（ADR 0024）
+    static let quickLimit = LiveCategoryPicker.quickCount
     /// 这些性质的分类是通知写明的，或者跟着原交易，不是用户的选择
     static let ruleKinds: Set<TransactionKind> = [.fee, .interestCharge, .salary, .interestIncome, .refund, .reversal]
 
@@ -49,13 +51,16 @@ struct CategoryLearner {
         let type = CategoryType(record.entryType)
         guard record.status == .posted, type != .transfer, record.categoryID == nil || record.categoryAuto else { return CategorySuggestions() }
         let learned = try learnedCategories(for: record)
-        let ordered = learned + (try RecordDAO.frequentCategories(db, type: type)) + tree.nodes(type).map(\.id)
+        let chosen = learned + (try RecordDAO.frequentCategories(db, type: type))
+        let ordered = chosen + tree.nodes(type).map(\.id)
         var categories: [LedgerCategory] = []
+        var quick: [LedgerCategory] = []
         var parents: [LedgerCategory] = []
         for id in ordered {
             guard let category = usable(id, type: type, tree: tree), !category.locked else { continue }
-            if categories.count < Self.suggestionLimit, id != record.categoryID, !categories.contains(category) {
-                categories.append(category)
+            if quick.count < Self.quickLimit, id != record.categoryID, !quick.contains(category) {
+                quick.append(category)
+                if categories.count < Self.suggestionLimit { categories.append(category) }
             }
             if let top = tree.topLevel(id), !top.locked, !parents.contains(top) { parents.append(top) }
         }
@@ -70,7 +75,10 @@ struct CategoryLearner {
         }
         let first = categories.first?.id
         let preferred = record.categoryID == nil && !record.needsTransferConfirmation && learned.contains { $0 == first } ? first : nil
-        return CategorySuggestions(categories: categories, groups: groups, preferredID: preferred, autoCategory: tree.category(record.categoryID))
+        return CategorySuggestions(
+            categories: categories, groups: groups, preferredID: preferred, autoCategory: tree.category(record.categoryID),
+            quick: quick, learnedIDs: Set(chosen)
+        )
     }
 
     /// 这个商户选过的分类，最近选的在前
