@@ -8,6 +8,15 @@ import BKBackend
 /// 共享的快捷指令按 App 标识找「导入汇率」动作。别人用自己的 Apple ID 侧载时标识后面是他的签名团队，
 /// 链接里的动作对不上：这时不给链接，改成自己搭（复制汇率地址，两个动作）。
 struct ExchangeRateGuideView: View {
+    var body: some View {
+        List { ExchangeRateSetupSections() }
+            .navigationTitle("用快捷指令更新汇率")
+            .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+/// 「用快捷指令更新汇率」的内容：「我的 › 记账 › 汇率」和新手引导共用
+struct ExchangeRateSetupSections: View {
     @Environment(\.openURL) private var openURL
     @State private var copied = false
 
@@ -15,40 +24,36 @@ struct ExchangeRateGuideView: View {
     private var sharedShortcutWorks: Bool { SharedShortcuts.available }
 
     var body: some View {
-        List {
-            // 和系统设置一样的普通行，不用大按钮
-            // 点「添加快捷指令」已经进了快捷指令 App，不再放「打开快捷指令」；自己搭的要先复制地址再打开
-            Section {
-                if sharedShortcutWorks {
-                    Button("添加快捷指令", systemImage: "plus.square.on.square") { leave(to: SharedShortcuts.exchangeRates) }
-                } else {
-                    Button(copied ? "已复制汇率地址" : "复制汇率地址", systemImage: copied ? "checkmark" : "doc.on.doc") {
-                        UIPasteboard.general.string = ExchangeRateFeed.url.absoluteString
-                        copied = true
-                    }
-                    Button("打开快捷指令", systemImage: "arrow.up.forward.app") {
-                        if let url = URL(string: "shortcuts://") { leave(to: url) }
-                    }
-                }
-            }
-
+        // 和系统设置一样的普通行，不用大按钮
+        // 点「添加快捷指令」已经进了快捷指令 App，不再放「打开快捷指令」；自己搭的要先复制地址再打开
+        Section {
             if sharedShortcutWorks {
-                // 链接带过去的定时触发，添加后不一定是打开的
-                Section {
-                    Text(Self.sharedLine)
-                }
+                Button("添加快捷指令", systemImage: "plus.square.on.square") { leave(to: SharedShortcuts.exchangeRates) }
             } else {
-                Section {
-                    ForEach(Array(Self.manualSteps.enumerated()), id: \.offset) { index, step in
-                        StepRow(number: index + 1, text: step)
-                    }
-                } header: {
-                    Text("\(Self.manualSteps.count) 步完成")
+                Button(copied ? "已复制汇率地址" : "复制汇率地址", systemImage: copied ? "checkmark" : "doc.on.doc") {
+                    UIPasteboard.general.string = ExchangeRateFeed.url.absoluteString
+                    copied = true
+                }
+                Button("打开快捷指令", systemImage: "arrow.up.forward.app") {
+                    if let url = URL(string: "shortcuts://") { leave(to: url) }
                 }
             }
         }
-        .navigationTitle("用快捷指令更新汇率")
-        .navigationBarTitleDisplayMode(.inline)
+
+        if sharedShortcutWorks {
+            // 链接带过去的定时触发，添加后不一定是打开的
+            Section {
+                Text(Self.sharedLine)
+            }
+        } else {
+            Section {
+                ForEach(Array(Self.manualSteps.enumerated()), id: \.offset) { index, step in
+                    StepRow(number: index + 1, text: step)
+                }
+            } header: {
+                Text("\(Self.manualSteps.count) 步完成")
+            }
+        }
     }
 
     /// 「我的 › 记账」里开着导入汇率通知时，离开 App 前先要通知权限

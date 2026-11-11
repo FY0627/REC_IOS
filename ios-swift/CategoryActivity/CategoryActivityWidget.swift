@@ -77,11 +77,19 @@ struct CategoryActivityWidget: Widget {
 /// 上边距 10 + 顶上一行 32 + 系统 8 + 92 + 下边距 16 ≈ 158：第二行的字离黑边约 18 点。
 /// 顶上一行的东西放在下面 28 点里、左右各往里缩 10 点，返回、商户和金额不碰上面两个角。
 /// 锁屏没有摄像头：10 + 30 + 6 + 92 + 10 = 148
+///
+/// 每一页（还有选好的样子）都占两行按钮的高度：第 1 页只有一行时上下居中，空出来的地方留白。
+/// 以前第 1 页一行、「全部」两行，换页时岛跟着变高变矮，系统缩放岛时整块重排，金额也跟着动，动画乱；现在一笔从开始到选好岛的大小不变
 enum IslandLayout {
     static let cell = CGSize(width: 60, height: 44)
     static let circle: CGFloat = 28
     static let columnSpacing: CGFloat = 4
     static let rowSpacing: CGFloat = 4
+    /// 按钮区固定的高度：一屏最多的行数（两行）
+    static let grid: CGFloat = {
+        let rows = CGFloat(LiveCategoryPicker.perScreen / LiveCategoryPicker.perRow)
+        return cell.height * rows + rowSpacing * (rows - 1)
+    }()
     /// 顶上一行占的高度；里面的东西放在下面 `headerLine` 里
     static let header: CGFloat = 32
     static let headerLine: CGFloat = 28
@@ -216,7 +224,7 @@ struct AmountText: View {
     }
 }
 
-/// 按钮；选好了显示选中的分类
+/// 按钮；选好了显示选中的分类。不管几行都占两行的高度，内容上下居中（`IslandLayout.grid`）
 struct PickerBody: View {
     let state: CategoryActivityAttributes.ContentState
 
@@ -242,11 +250,12 @@ struct PickerBody: View {
                 CellGrid(recordID: state.recordID, cells: state.screen.cells, tint: state.tintColor)
             }
         }
+        .frame(maxWidth: .infinity, minHeight: IslandLayout.grid, maxHeight: IslandLayout.grid)
         .dynamicTypeSize(...IslandLayout.largestType)
     }
 }
 
-/// 一行 5 个（`LiveCategoryPicker.perRow`）；不满一行的靠左，整块居中
+/// 一行 5 个（`LiveCategoryPicker.perRow`）；不满一行的靠左，整块居中；只有一行时在两行的高度里上下居中（`PickerBody`）
 struct CellGrid: View {
     let recordID: String
     let cells: [LiveCategoryPicker.Cell]
