@@ -106,22 +106,7 @@ enum LiveCategoryActivity {
               let picker = await loadPicker(recordID) else { return }
         var state = activity.content.state
         state.screen = picker.screen(page)
-        await reopen(activity, with: state)
-    }
-
-    /// 岛收起再展开成新的一页：系统没有收起岛的接口，就开一个新的实时活动、提醒一次让它展开，再结束旧的。
-    /// 开不了新的（系统不让）时在原来的岛上换
-    @MainActor
-    private static func reopen(_ activity: Activity<CategoryActivityAttributes>, with state: State) async {
-        let content = ActivityContent(state: state, staleDate: nil)
-        do {
-            let fresh = try Activity.request(attributes: CategoryActivityAttributes(), content: content, pushType: nil)
-            await activity.end(nil, dismissalPolicy: .immediate)
-            await fresh.update(content, alertConfiguration: makeAlert(queueEntry(state)))
-        } catch {
-            AppServices.logger.error("live activity reopen failed: \(String(describing: error), privacy: .public)")
-            await activity.update(content)
-        }
+        await activity.update(ActivityContent(state: state, staleDate: nil))
     }
 
     /// 点到一个分类：写进账本（学习和通知上选分类一样），岛上显示选中的分类一下，然后换成排着的下一笔；没有了就结束、马上消失。
@@ -191,11 +176,11 @@ enum LiveCategoryActivity {
             saveQueue(queue)
             let picker = makePicker(suggestions)
             store(picker, recordID: next.recordID)
-            let state = makeState(next, picker: picker)
+            let content = ActivityContent(state: makeState(next, picker: picker), staleDate: nil)
             if alert {
-                await reopen(activity, with: state)
+                await activity.update(content, alertConfiguration: makeAlert(next))
             } else {
-                await activity.update(ActivityContent(state: state, staleDate: nil))
+                await activity.update(content)
             }
             return
         }
