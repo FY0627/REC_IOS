@@ -679,7 +679,7 @@ struct IngestEngine {
         var candidates: [String]
     }
 
-    /// 截图记到哪：写了卡的照常按尾号和银行找卡；零钱通、余额宝、花呗先找名称里有它的账户；
+    /// 截图记到哪：写了卡的照常按尾号和银行找卡；零钱通、余额宝、花呗、经营账户先找名称里有它的账户；
     /// 其余记到这个 App 的钱包。认不出是哪个 App 时，用户只有一个微信或支付宝钱包就是它
     func screenshotRoute(_ draft: EventDraft, reading: ScreenshotReading, accounts: [Account]) -> ScreenshotRoute {
         if draft.cardTail != nil || draft.bankHint != nil { return ScreenshotRoute(account: nil, assumed: false, pending: nil, candidates: []) }
@@ -694,8 +694,8 @@ struct IngestEngine {
         }
         let providers = draft.walletHint.map { [$0] } ?? ["wechatpay", "alipay"]
         var wallets = active.filter { account in WalletDirectory.provider(of: account).map(providers.contains) ?? false }
-        // 付的是零钱、余额：同一个 App 还有零钱通、余额宝账户时不算它们
-        if wallets.count > 1, reading.methodName == nil {
+        // 付的是零钱、余额（或者经营账户没有单独的账户）：同一个 App 还有零钱通、余额宝账户时不算它们
+        if wallets.count > 1, reading.methodName == nil || reading.methodName == "经营账户" {
             let plain = wallets.filter { wallet in !["零钱通", "余额宝", "花呗"].contains { wallet.name.contains($0) } }
             if !plain.isEmpty { wallets = plain }
         }

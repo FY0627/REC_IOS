@@ -50,19 +50,20 @@ enum ScreenshotParser {
 
     /// 行首的标签，长的在前：「商户全称」不能当成「商户」
     private static let labels: [(key: Label, names: [String])] = [
-        (.ignored, ["商户全称", "收款方全称", "收单机构", "商户单号", "商家订单号", "商品说明", "商品", "账单分类", "标签和备注", "备注", "转账说明", "支付奖励", "服务详情", "计入收支"]),
+        (.ignored, ["商户全称", "收款方全称", "收单机构", "商户单号", "商家订单号", "商品说明", "商品", "账单分类", "标签和备注", "备注", "转账说明", "支付奖励", "服务详情", "计入收支",
+                    "收款店铺", "收款方式", "聊天位置", "服务费", "经营账户余额"]),
         (.method, ["支付方式", "付款方式", "支付卡", "付款卡", "扣款方式"]),
-        (.target, ["到账银行卡", "到账银行", "提现银行卡", "提现到", "充值银行卡", "充值来源"]),
+        (.target, ["到账银行卡", "到账银行", "提现银行卡", "提现银行", "提现到", "充值银行卡", "充值来源"]),
         (.status, ["当前状态", "交易状态", "支付状态", "转账状态", "状态"]),
-        (.reference, ["交易单号", "转账单号", "订单号", "退款单号", "红包单号", "交易编号", "交易号"]),
+        (.reference, ["交易单号", "转账单号", "订单号", "退款单号", "红包单号", "提现单号", "收款单号", "交易编号", "交易号"]),
         (.counterparty, ["收款商户", "商户名称", "收款方", "收款人", "对方账户", "对方", "转账给", "付款方", "付款人", "商户"]),
         (.amount, ["付款金额", "支付金额", "收款金额", "转账金额", "退款金额", "实付款", "实付", "金额"]),
-        (.time, ["支付时间", "付款时间", "交易时间", "转账时间", "收款时间", "到账时间", "退款时间", "提现时间", "充值时间", "领取时间", "发起时间", "创建时间"]),
+        (.time, ["支付时间", "付款时间", "交易时间", "转账时间", "收款时间", "到账时间", "退款时间", "提现时间", "充值时间", "领取时间", "发起时间", "创建时间", "申请时间"]),
     ]
 
     private enum Label { case ignored, method, target, status, reference, counterparty, amount, time }
 
-    private static let timePreference = ["支付时间", "付款时间", "交易时间", "转账时间", "到账时间", "退款时间", "提现时间", "充值时间", "收款时间", "领取时间", "发起时间", "创建时间"]
+    private static let timePreference = ["支付时间", "付款时间", "交易时间", "转账时间", "到账时间", "退款时间", "提现时间", "充值时间", "收款时间", "领取时间", "发起时间", "创建时间", "申请时间"]
 
     // MARK: 识别用正则
 
@@ -76,7 +77,8 @@ enum ScreenshotParser {
 
     /// 看得出是付款相关的页面；一个都没有的截图不记、不进待处理
     private static let paymentMark = Rx(#"支付成功|付款成功|交易成功|支付时间|付款时间|支付方式|付款方式|转账|转帐|红包|收款|退款|提现|充值|当前状态|交易单号|订单号|账单详情|已存入"#)
-    private static let wechatMarks = ["微信", "零钱", "财付通", "转账单号", "交易单号", "商户单号", "收单机构"]
+    /// 「经营账户」是微信收款商业版收的钱存的地方，收款页、提现页上只有它，没有「微信」「零钱」
+    private static let wechatMarks = ["微信", "零钱", "财付通", "转账单号", "交易单号", "商户单号", "收单机构", "经营账户", "聊天位置"]
     private static let alipayMarks = ["支付宝", "余额宝", "花呗", "账单分类", "收款方全称", "商家订单号", "蚂蚁"]
 
     private static let outgoingWords = Rx(#"对方已收|待对方|待.{0,8}(?:确认)?收款|转给|发给|付款给|已转账|转账成功|发出的红包"#)
@@ -88,12 +90,16 @@ enum ScreenshotParser {
     private static let withdraw = Rx(#"(?:零钱|余额)提现|提现-到|提现到|^提现"#)
     private static let topUp = Rx(#"(?:零钱|余额)充值|充值-来自|充值到(?:零钱|余额)"#)
     private static let refund = Rx(#"退款"#)
+    /// 收款页底部「联系顾客 | 退款 | 帮助中心」里单独的「退款」是按钮，不是这笔退了款
+    private static let refundButton = Rx(#"(?:^|\s|[|｜丨])退款(?=$|\s|[|｜丨])"#)
     private static let savedToWallet = Rx(#"已存入|存入零钱|存入余额"#)
+    /// 微信收款商业版：顾客付给自己店铺的钱，存进经营账户，是收入
+    private static let businessReceipt = Rx(#"经营账户|收款店铺"#)
     /// 微信转账页的标题写着谁收了钱：「你已收款，资金已存入零钱」「待你收款」是自己收，「阿翔已收款」「待阿翔确认收款」是对方收、钱是自己转出去的
     private static let receivedTitle = Rx(#"^(?:待(.{1,24}?)(?:确认)?收款|(.{1,24}?)已收款)(?:[，,\s].*)?$"#)
 
     /// 页面上的这些行不是商户名称：状态栏、导航、页面标题、按钮
-    private static let noiseRow = Rx(#"^(?:\d{1,2}[:：]\d{2}|[0-9]{1,3}%?|[45]G|LTE|WiFi|<|返回|账单详情|交易详情|详情|全部账单|账单|支付成功|付款成功|交易成功|转账成功|收款成功|已收款|你已收款|微信支付|支付宝|完成|返回商家|\.{2,}|…+|·+|X|x|更多|查看账单|查看详情|联系商家|申请退款|常见问题|对此订单有疑问)$"#)
+    private static let noiseRow = Rx(#"^(?:\d{1,2}[:：]\d{2}|[0-9]{1,3}%?|[45]G|LTE|WiFi|<|返回|账单详情|交易详情|详情|全部账单|全部收款明细|账单|支付成功|付款成功|交易成功|转账成功|收款成功|已收款|你已收款|微信支付|支付宝|完成|返回商家|\.{2,}|…+|·+|X|x|更多|查看账单|查看详情|联系商家|申请退款|常见问题|对此订单有疑问)$"#)
     private static let adWords = Rx(#"优惠|券|奖励|领取|广告|立即|查看|积分|抽奖|推荐|活动|开通|服务|关注|公众号|小程序|随机立减|立减"#)
     private static let titlePrefix = Rx(#"^(?:转账-转给|转账-来自|转账给|转账-|微信红包-发给|微信红包-来自|微信红包-|扫二维码付款-给|二维码收款-来自|付款给|收款方[:：]?)\s*"#)
     private static let titleSuffix = Rx(#"(?:发出)?的红包$|(?:\.{2,}|…+)$"#)
@@ -207,9 +213,12 @@ enum ScreenshotParser {
         guard let digits else { return result(paymentLike ? .unrecognized : .noFinancialContent) }
         guard paymentLike else { return result(.noFinancialContent) }
 
-        // 3. 哪个 App：页面上的字；支付方式写了零钱、余额也算
+        // 3. 哪个 App：页面上的字；支付方式写了零钱、余额也算。
+        // 微信聊天里点开的转账页只有「某某已收款」「转账时间」「收款时间」：要对方点收款的转账是微信的
         let method = values[.method]?.value
+        let receiver = Self.receiver(rows: rows, before: amountRow, labelRows: labelRows)
         var app = whichApp(cleaned)
+        if app == nil, receiver != nil || (timeValues["转账时间"] != nil && timeValues["收款时间"] != nil) { app = "wechatpay" }
         if let method {
             if method.contains("零钱") { app = "wechatpay" } else if method.contains("余额宝") || method.contains("花呗") || method.contains("账户余额") || method == "余额" { app = "alipay" }
         }
@@ -225,8 +234,8 @@ enum ScreenshotParser {
         let isRedPacket = pageText.contains("红包")
         let isTransfer = pageText.contains("转账") || pageText.contains("转帐")
         let status = values[.status]?.value ?? ""
-        let isRefund = refund.test(titleText) || status.contains("退款成功") || (sign == "+" && refund.test(pageText))
-        let receiver = Self.receiver(rows: rows, before: amountRow, labelRows: labelRows)
+        let isRefund = refund.test(titleText) || status.contains("退款成功") || (sign == "+" && refund.test(refundButton.replace(pageText, with: " ")))
+        let toBusiness = businessReceipt.test(pageText)
 
         // 5. 方向：先看正负号，再看页面上的字。「谁已收款」先于「已收款」这类词：对方收了是自己付的
         var direction: FlowDirection?
@@ -244,13 +253,15 @@ enum ScreenshotParser {
         if isWithdraw { kind = .transferOut }
         else if isTopUp { kind = .transferIn }
         else if isRefund { kind = .refund }
+        else if toBusiness, direction == .inflow { kind = .income }
         else if isRedPacket { kind = direction == .inflow ? .income : .other }
         else if isTransfer { kind = direction == .inflow ? .transferIn : .transferOut }
         else { kind = direction == .inflow ? .income : .purchase }
 
         let settlement: SettlementStatus = failedWords.test(status) || (status.isEmpty && failedWords.test(pageText)) ? .failed : .posted
 
-        // 6. 记到哪：支付方式写了卡就记到卡；写了零钱、余额，或者没写，记到这个 App 的钱包。提现、充值的卡是转账的另一边
+        // 6. 记到哪：支付方式写了卡就记到卡；写了零钱、余额，或者没写，记到这个 App 的钱包。提现、充值的卡是转账的另一边。
+        // 经营账户收的、提现的：先找名称里有「经营账户」的账户，没有就是微信钱包
         var cardTail: String?
         var counterpartyTail: String?
         var bankHint: String?
@@ -261,6 +272,7 @@ enum ScreenshotParser {
             let source = values[.target]?.value ?? method ?? pageText
             counterpartyTail = tailOf(source)
             stated = true
+            if toBusiness { methodName = "经营账户" }
         } else if let method {
             stated = true
             if method.contains("零钱通") { methodName = "零钱通" }
@@ -273,6 +285,7 @@ enum ScreenshotParser {
             }
         } else if incomeToWallet {
             stated = true
+            if toBusiness { methodName = "经营账户" }
         }
         let walletHint = cardTail == nil && bankHint == nil ? app : nil
 

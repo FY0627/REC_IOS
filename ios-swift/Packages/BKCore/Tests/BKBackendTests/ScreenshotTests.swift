@@ -373,6 +373,152 @@ final class ScreenshotTests: XCTestCase {
         XCTAssertEqual(out.transferGroupID, into.transferGroupID, "零钱提现和到卡的那笔配成转帐")
     }
 
+    // MARK: 页面上没有「微信」「零钱」的微信页（照真机截图的版式，名字、卡号、单号、时间换过）
+
+    /// 微信收款商业版：经营账户提现到银行卡
+    let wechatBusinessWithdrawal = """
+    13:02
+    <
+    经营账户提现-到建设银行(0005)
+    -650.00
+    当前状态  到账成功
+    申请时间  2026年10月24日 13:00:02
+    到账时间  2026年10月24日 13:00:04
+    提现银行  建设银行(0005)
+    提现单号  2091000000000000000000000
+    00001
+    服务费 ⓘ  ¥0.00  ¥0.65
+    提现免费额度减免0.65元
+    经营账户余  ¥0.00
+    额
+    """
+
+    /// 微信收款商业版：顾客转账付给店铺，存进经营账户
+    let wechatBusinessReceipt = """
+    9:12
+    <  全部收款明细
+    示例顾客
+    +650.00
+    该顾客累计消费2次(捧场老客)  >
+    收款店铺  示例小店
+    收款方式  转账收款
+    聊天位置  示例群聊
+    当前状态  已存入经营账户
+    收款时间  2026年10月24日 09:06:33
+    收款单号  1000000000202610240000000007
+    联系顾客  退款  帮助中心
+    """
+
+    /// 聊天里点开转账：只有「谁已收款」、金额和两个时间
+    let wechatPlainTransfer = """
+    10:23
+    <
+    ...
+    示例朋友已收款
+    ¥12.50
+    转账时间  2026年10月24日 13:24:25
+    收款时间  2026年10月24日 13:53:01
+    账单详情
+    """
+
+    func testBusinessWithdrawalGoesToWechatAndPairsWithTheCard() async throws {
+        let backend = try makeBackend()
+        let wechat = try await addWechat(backend)
+        try await addAlipay(backend)
+        let card = try await addCard(backend, last4: "0005", bank: "ccb", bankName: "建设银行")
+        _ = try await backend.ingest(IngestRequest(text: "您尾号0005的储蓄卡10月24日13时00分财付通提现收入人民币650.00元,活期余额1650.00元。[建设银行]", source: .auto, receivedAt: at(13, 0, 30)))
+        let result = try await backend.ingestScreenshot(text: wechatBusinessWithdrawal, capturedAt: at(13, 2))
+        XCTAssertEqual(result.recordedCount, 1, result.summary)
+        let out = try await backend.records(accountID: wechat.id)[0].record
+        XCTAssertEqual(out.kind, .transferOut)
+        XCTAssertEqual(out.amountMinor, 650_00)
+        XCTAssertEqual(out.bankReference, "209100000000000000000000000001", "换行的单号接上")
+        XCTAssertEqual(out.transactionTime?.sortKey, "2026-10-24T13:00:04", "看到账时间")
+        let into = try await backend.records(accountID: card.id)[0].record
+        XCTAssertNotNil(out.transferGroupID)
+        XCTAssertEqual(out.transferGroupID, into.transferGroupID, "经营账户提现和到卡的那笔配成转帐")
+    }
+
+    func testBusinessAccountWithItsOwnWalletIsUsed() async throws {
+        let backend = try makeBackend()
+        try await addWechat(backend)
+        let business = try await addWechat(backend, name: "经营账户")
+        try await addAlipay(backend)
+        let result = try await backend.ingestScreenshot(text: wechatBusinessReceipt, capturedAt: at(9, 12))
+        XCTAssertEqual(result.recordedCount, 1, result.summary)
+        let count = try await backend.recordCount(accountID: business.id)
+        XCTAssertEqual(count, 1, "有名称里有「经营账户」的账户时记到它")
+    }
+
+    func testBusinessReceiptIsIncomeToWechat() async throws {
+        let backend = try makeBackend()
+        let wechat = try await addWechat(backend)
+        try await addAlipay(backend)
+        let result = try await backend.ingestScreenshot(text: wechatBusinessReceipt, capturedAt: at(9, 12))
+        XCTAssertEqual(result.recordedCount, 1, result.summary)
+        let r = try await backend.records(accountID: wechat.id)[0].record
+        XCTAssertEqual(r.direction, .inflow)
+        XCTAssertEqual(r.kind, .income, "顾客付给店铺的钱是收入；底部的「退款」是按钮，不是退款")
+        XCTAssertEqual(r.counterparty, "示例顾客")
+        XCTAssertEqual(r.transactionTime?.sortKey, "2026-10-24T09:06:33")
+        XCTAssertEqual(r.bankReference, "1000000000202610240000000007")
+
+        func kind(_ text: String) -> TransactionKind? {
+            ScreenshotParser.parse(text, referenceDate: now, calendar: calendar).message.events.first?.draft.kind
+        }
+        XCTAssertEqual(kind(wechatBusinessReceipt.replacingOccurrences(of: "联系顾客  退款  帮助中心", with: "联系顾客｜退款｜帮助中心")), .income)
+        XCTAssertEqual(kind("示例便利店\n+12.00\n当前状态  已全额退款\n退款时间  2026年10月24日 15:00:00\n退款方式  退回零钱"), .refund)
+    }
+
+    func testPlainTransferPageGoesToWechat() async throws {
+        let backend = try makeBackend()
+        let wechat = try await addWechat(backend)
+        try await addAlipay(backend)
+        let result = try await backend.ingestScreenshot(text: wechatPlainTransfer, capturedAt: at(14, 23))
+        XCTAssertEqual(result.recordedCount, 1, result.summary)
+        let r = try await backend.records(accountID: wechat.id)[0].record
+        XCTAssertEqual(r.direction, .outflow)
+        XCTAssertEqual(r.kind, .transferOut)
+        XCTAssertEqual(r.counterparty, "示例朋友")
+        XCTAssertEqual(r.amountMinor, 12_50)
+
+        // 标题只认出名字、没有「已收款」：「转账时间」「收款时间」都有的也是微信
+        let nameOnly = wechatPlainTransfer.replacingOccurrences(of: "示例朋友已收款", with: "示例朋友")
+        XCTAssertEqual(ScreenshotParser.parse(nameOnly, referenceDate: now, calendar: calendar).message.walletHint, "wechatpay")
+    }
+
+    /// 支付宝转给别人、别人转给自己的账单详情（照真机截图的版式）：认微信的改动不影响它们
+    func testAlipayTransfersStillGoToAlipay() async throws {
+        let backend = try makeBackend()
+        try await addWechat(backend)
+        let alipay = try await addAlipay(backend)
+        let tail = """
+        转账备注  转账
+        对方账户  示例好友 138******00
+        更多
+        账单管理  我的消费图鉴  >
+        账单分类  转账红包  >
+        标签  请选择  >
+        为您推荐  转账红包  +
+        计入收支
+        备注  添加  >
+        """
+        let sent = "10:25\n<  账单详情  全部账单\n示例好友\n-51.00\n交易成功\n创建时间  2026-10-24 12:09:18\n付款方式  余额宝  >\n\(tail)\n再转一笔"
+        let received = "10:25\n<  账单详情  全部账单\n示例好友\n+1,700.00\n交易成功\n创建时间  2026-10-24 09:44:15\n收款方式  账户余额  >\n\(tail)\n查看往来记录  往来流水证明\n申请电子回单  对此订单有疑问"
+        let first = try await backend.ingestScreenshot(text: sent, capturedAt: at(12, 10))
+        XCTAssertEqual(first.recordedCount, 1, first.summary)
+        let second = try await backend.ingestScreenshot(text: received, capturedAt: at(12, 11))
+        XCTAssertEqual(second.recordedCount, 1, second.summary)
+        let rows = try await backend.records(accountID: alipay.id).map(\.record)
+        XCTAssertEqual(rows.count, 2)
+        let out = try XCTUnwrap(rows.first { $0.amountMinor == 51_00 })
+        XCTAssertEqual(out.direction, .outflow)
+        XCTAssertEqual(out.transactionTime?.sortKey, "2026-10-24T12:09:18")
+        let into = try XCTUnwrap(rows.first { $0.amountMinor == 1_700_00 })
+        XCTAssertEqual(into.direction, .inflow)
+        XCTAssertEqual(into.transactionTime?.sortKey, "2026-10-24T09:44:15")
+    }
+
     // MARK: 同一笔只记一次
 
     func testSameScreenshotTwiceIsOneRecord() async throws {
