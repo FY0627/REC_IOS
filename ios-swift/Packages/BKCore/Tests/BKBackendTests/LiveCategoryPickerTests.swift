@@ -2,7 +2,7 @@ import Foundation
 import XCTest
 import BKModel
 
-/// 灵动岛上选分类的三页（ADR 0024）：推荐和「全部」、全部大类（一屏 12 格，放不下时最后一格是「更多」）、小类和「只记大类」，左上角返回。
+/// 灵动岛上选分类的三页（ADR 0024）：推荐和「全部」、全部大类（一屏 10 格，放不下时最后一格是「更多」）、小类和「只记大类」，左上角返回。
 final class LiveCategoryPickerTests: XCTestCase {
     typealias Option = LiveCategoryPicker.Option
     typealias Group = LiveCategoryPicker.Group
@@ -20,12 +20,13 @@ final class LiveCategoryPickerTests: XCTestCase {
 
     // MARK: 第 1 页
 
-    func testQuickPageHasFiveSuggestionsAndAll() {
+    func testQuickPageIsOneRowOfSuggestionsAndAll() {
         let others = plain(["衣着", "居住", "交通", "日用品", "医疗"])
         let quick = [food.children[1]] + others.map(\.option)
         let picker = LiveCategoryPicker(quick: quick.map { .init(option: $0, opens: false) }, groups: [food] + others)
         let screen = picker.screen(.quick)
-        XCTAssertEqual(titles(screen), ["午餐", "衣着", "居住", "交通", "日用品", "全部"], "最多 5 个推荐，最后是「全部」")
+        XCTAssertEqual(titles(screen), ["午餐", "衣着", "居住", "交通", "全部"], "4 个推荐加「全部」正好一行")
+        XCTAssertEqual(screen.cells.count, LiveCategoryPicker.perRow)
         XCTAssertNil(screen.back)
         XCTAssertNil(screen.title, "第 1 页顶上是商户、账户、金额")
         XCTAssertEqual(screen.cells[0].action, .pick("ex.food.1"), "推荐可以是小类，点了就记")
@@ -50,28 +51,28 @@ final class LiveCategoryPickerTests: XCTestCase {
 
     // MARK: 第 2 页
 
-    func testParentsFitOneScreenUpToTwelve() {
-        let picker = LiveCategoryPicker(quick: [], groups: [food] + plain((1...11).map { "类\($0)" }))
+    func testParentsFitOneScreenUpToTen() {
+        let picker = LiveCategoryPicker(quick: [], groups: [food] + plain((1...9).map { "类\($0)" }))
         let screen = picker.screen(.parents(chunk: 0))
-        XCTAssertEqual(screen.cells.count, 12, "12 个正好一屏，没有「更多」")
+        XCTAssertEqual(screen.cells.count, 10, "10 个正好一屏（每行 5 个、2 行），没有「更多」")
         XCTAssertEqual(screen.cells[0].action, .show(.children(parentID: "ex.food", chunk: 0, fromQuick: false)))
         XCTAssertEqual(screen.cells[1].action, .pick("ex.类1"), "没有小类的大类点了就记")
         XCTAssertEqual(screen.back, .quick)
         XCTAssertEqual(screen.title, "支出")
     }
 
-    func testMoreThanTwelveParentsEndWithMore() {
+    func testMoreThanTenParentsEndWithMore() {
         let groups = plain((1...14).map { "类\($0)" }) + [food]
         let picker = LiveCategoryPicker(quick: [], groups: groups)
         let first = picker.screen(.parents(chunk: 0))
-        XCTAssertEqual(first.cells.count, 12)
-        XCTAssertEqual(first.cells.prefix(11).map(\.title), (1...11).map { "类\($0)" })
-        XCTAssertEqual(first.cells[11].title, "更多")
-        XCTAssertEqual(first.cells[11].symbol, LiveCategoryPicker.moreSymbol)
-        XCTAssertEqual(first.cells[11].action, .show(.parents(chunk: 1)))
+        XCTAssertEqual(first.cells.count, 10)
+        XCTAssertEqual(first.cells.prefix(9).map(\.title), (1...9).map { "类\($0)" })
+        XCTAssertEqual(first.cells[9].title, "更多")
+        XCTAssertEqual(first.cells[9].symbol, LiveCategoryPicker.moreSymbol)
+        XCTAssertEqual(first.cells[9].action, .show(.parents(chunk: 1)))
 
         let second = picker.screen(.parents(chunk: 1))
-        XCTAssertEqual(titles(second), ["类12", "类13", "类14", "饮食"])
+        XCTAssertEqual(titles(second), ["类10", "类11", "类12", "类13", "类14", "饮食"])
         XCTAssertEqual(second.back, .parents(chunk: 0), "返回上一屏")
 
         // 第二屏的大类点进小类，返回回到第二屏
@@ -82,9 +83,9 @@ final class LiveCategoryPickerTests: XCTestCase {
 
     func testTwentyFiveParentsTakeThreeScreens() {
         let picker = LiveCategoryPicker(quick: [], groups: plain((1...25).map { "类\($0)" }))
-        XCTAssertEqual(picker.screen(.parents(chunk: 1)).cells.prefix(11).map(\.title), (12...22).map { "类\($0)" })
+        XCTAssertEqual(picker.screen(.parents(chunk: 1)).cells.prefix(9).map(\.title), (10...18).map { "类\($0)" })
         XCTAssertEqual(picker.screen(.parents(chunk: 1)).cells.last?.action, .show(.parents(chunk: 2)))
-        XCTAssertEqual(titles(picker.screen(.parents(chunk: 2))), ["类23", "类24", "类25"])
+        XCTAssertEqual(titles(picker.screen(.parents(chunk: 2))), (19...25).map { "类\($0)" })
     }
 
     /// 岛上「全部」「更多」画成白色的圆，分类（包括有小类的大类）画成主题色的圆
@@ -102,10 +103,10 @@ final class LiveCategoryPickerTests: XCTestCase {
         let big = Group(option: Option(id: "ex.big", name: "大", symbol: "tag"), children: (1...13).map { Option(id: "ex.big.\($0)", name: "小\($0)", symbol: "tag") })
         let picker = LiveCategoryPicker(quick: [], groups: [big])
         let first = picker.screen(.children(parentID: "ex.big", chunk: 0, fromQuick: false))
-        XCTAssertEqual(first.cells.count, 12)
+        XCTAssertEqual(first.cells.count, 10)
         XCTAssertEqual(first.cells.last?.action, .show(.children(parentID: "ex.big", chunk: 1, fromQuick: false)))
         let second = picker.screen(.children(parentID: "ex.big", chunk: 1, fromQuick: false))
-        XCTAssertEqual(titles(second), ["小12", "小13", "只记大"])
+        XCTAssertEqual(titles(second), ["小10", "小11", "小12", "小13", "只记大"])
         XCTAssertEqual(second.back, .children(parentID: "ex.big", chunk: 0, fromQuick: false))
     }
 
@@ -151,7 +152,7 @@ final class LiveCategoryPickerTests: XCTestCase {
         for bad in ["", "k.", "s.", "s.x", "pick"] { XCTAssertNil(Action(token: bad), bad) }
     }
 
-    /// 实时活动的内容要小于 4KB：最坏的一屏（12 格、名字长、id 是 UUID）也留出商户、账户、金额的地方
+    /// 实时活动的内容要小于 4KB：最坏的一屏（10 格、名字长、id 是 UUID）也留出商户、账户、金额的地方
     func testWorstScreenIsSmall() throws {
         let long = String(repeating: "很长的分类名称", count: 3)
         let groups = (0..<30).map { _ in

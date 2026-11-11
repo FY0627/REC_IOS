@@ -2,8 +2,8 @@ import Foundation
 
 /// 灵动岛（实时活动）上选分类（ADR 0024）：三页，都在岛上点完，不打开 App。
 ///
-/// - 第 1 页：5 个推荐（这个商户选过的、常选的在前，可以是小类）和「全部」；
-/// - 第 2 页（点「全部」）：这个类型的全部大类，分类页的顺序，一页 12 格（每行 6 个、2 行），放不下时最后一格是「更多」；
+/// - 第 1 页：4 个推荐（这个商户选过的、常选的在前，可以是小类）和「全部」，一行；
+/// - 第 2 页（点「全部」）：这个类型的全部大类，分类页的顺序，一屏 10 格（每行 5 个、2 行），放不下时最后一格是「更多」；
 /// - 第 3 页（点有小类的大类）：它的小类，最后一个是「只记<大类名>」。
 ///
 /// 第 2、3 页左上角有返回。App 开启实时活动时算好一页（`screen`）放进实时活动的内容，换页时 App 再算下一页。
@@ -93,12 +93,12 @@ public struct LiveCategoryPicker: Hashable, Sendable, Codable {
         }
     }
 
-    /// 第 1 页几个推荐（加「全部」一共 6 格，一行）
-    public static let quickCount = 5
-    /// 一行几格
-    public static let perRow = 6
+    /// 一行几格（修订：一行 6 个太挤，看不清，改成 5 个）
+    public static let perRow = 5
     /// 一屏几格（2 行）
-    public static let perScreen = 12
+    public static let perScreen = perRow * 2
+    /// 第 1 页几个推荐：加「全部」正好一行
+    public static let quickCount = perRow - 1
 
     public var quick: [Quick]
     /// 全部大类，分类页的顺序；小类也是分类页的顺序
@@ -195,7 +195,7 @@ public struct LiveCategoryPicker: Hashable, Sendable, Codable {
         return chunk
     }
 
-    // MARK: 分屏：一屏 12 格；后面还有时只放 11 个，最后一格是「更多」
+    // MARK: 分屏：一屏 10 格；后面还有时只放 9 个，最后一格是「更多」
 
     /// 第 `chunk` 屏放到第几个（不含）。最后一屏是 nil
     static func end(of chunk: Int, count: Int) -> Int? {
