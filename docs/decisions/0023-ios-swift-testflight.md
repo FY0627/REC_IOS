@@ -23,8 +23,10 @@
 3. 构建号 = 这个工作流的运行次数 × 10 + 重跑次数，重跑不会和已上传的重复。版本号仍是 `MARKETING_VERSION`。
 4. 结束时吊销这次新建的开发证书（[`ios-swift/ci/asc-dev-certs.py`](../../ios-swift/ci/asc-dev-certs.py)，修订 2026-11-12）：
    归档要用「Apple Development」证书签名，新机器的钥匙串里没有私钥，Xcode 每次都新建一张；第 11 次运行时证书攒到上限，归档失败
-   （「Your account has reached the maximum number of certificates」）。现在归档前记下钥匙串里已有的开发证书，
-   结束时（成功、失败都算）用同一个 API 密钥吊销新出现的那张，只动开发证书，分发证书不碰；吊销失败只打警告。
+   （「Your account has reached the maximum number of certificates」）。现在归档前用同一个 API 密钥记下账号里已有的开发证书，
+   结束时（成功、失败都算）再查一次，吊销多出来的那张（上传一次只跑一个，这期间多出来的就是这次建的）；
+   只动开发证书，分发证书和原有的不碰；归档前没查到列表就不吊销；结果写在运行页面的 Annotations 里，失败只打警告。
+   第一版按钥匙串找新证书，第 12 次运行没找到，那张留下了，所以改成按账号里的列表对比。
    以前攒下的要在 Certificates, Identifiers & Profiles › Certificates 里手动吊销一次。
 
 需要的仓库 Secrets：`ASC_KEY_ID`、`ASC_ISSUER_ID`、`ASC_KEY_P8`（.p8 文件全文）、`APPLE_TEAM_ID`。
