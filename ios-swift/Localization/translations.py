@@ -766,6 +766,7 @@ t("启动后 %lld ms", "啟動後 %lld ms", "%lld ms after launch")
 # MARK: 新手引导（OnboardingView）
 
 t("新手引导", "新手導覽", "Onboarding")
+t("反馈", "意見回饋", "Feedback")
 t("继续", "繼續", "Continue")
 t("跳过", "略過", "Skip")
 t("打开", "開啟", "Turn On")
