@@ -35,7 +35,13 @@ REC 是一款 iPhone 记账 App。你付完款，银行短信一到，它就在�
 
 ## 现在能用吗
 
-还在测试，没有上架 App Store。可以用 TestFlight 参与测试：<https://testflight.apple.com/join/9KfFbPkC>（iPhone，iOS 26 及以上）。
+还在测试，没有上架 App Store。可以用 TestFlight 参与测试：<https://testflight.apple.com/join/9KfFbPkC>
+
+要求：
+
+- 只支持 iPhone，系统要 iOS 26 及以上。建议 iOS 27：银行 App 推送记账只有 iOS 27 支持，iOS 26 设置自动记账的步骤也多一些
+- 灵动岛选分类：iPhone 14 Pro / 14 Pro Max、iPhone 15 全系列、iPhone 16 系列（16e 除外）、iPhone 17 系列和 iPhone Air（17e 除外）。其他机型长按通知选分类
+- 数据只存在本机，没有云同步。删掉 App 前，先在「我的 › 导出数据」导出一份
 
 有些银行的短信还认不准，可以在 App 里自己做识别模板。
 
