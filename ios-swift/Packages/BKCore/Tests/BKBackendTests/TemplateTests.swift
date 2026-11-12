@@ -191,6 +191,45 @@ final class TemplateTests: XCTestCase {
         XCTAssertTrue(remaining.isEmpty)
     }
 
+    /// 流水上点「不记」：这笔删掉，记住这种写法（数字换成任意数字），以后同样写法的通知不记；别的通知照常记
+    func testSkipRecordRemembersTheWording() async throws {
+        let backend = try makeBackend()
+        try await addAccount(backend)
+        let first = try await backend.ingest(IngestRequest(text: "【某某银行】您尾号5566的账户于11月12日发起活期宝转入，交易金额：港币88.20元。", source: .sms))
+        let id = try XCTUnwrap(first.items.first?.recordID)
+        let saved = try await backend.skipRecord(id: id)
+        XCTAssertEqual(saved, 1)
+        let left = try await backend.records(limit: 10)
+        XCTAssertEqual(left.count, 0)
+        let rules = try await backend.templates()
+        let rule = try XCTUnwrap(rules.first)
+        XCTAssertTrue(rule.isSkip)
+        XCTAssertFalse(rule.preview.contains("5566"), "原文的数字不保存")
+        XCTAssertFalse(rule.preview.contains("88"), "原文的数字不保存")
+
+        let next = try await backend.ingest(IngestRequest(text: "【某某银行】您尾号5566的账户于11月13日发起活期宝转入，交易金额：港币1,000.00元。", source: .sms))
+        XCTAssertEqual(next.classification, .skipped)
+        XCTAssertEqual(next.recordedCount, 0)
+        XCTAssertEqual(next.pendingCount, 0)
+        XCTAssertTrue(next.items.isEmpty, "不发记账结果通知")
+
+        let purchase = try await backend.ingest(IngestRequest(text: "【某某银行】您尾号5566的账户于11月13日消费港币30.00元。", source: .sms))
+        XCTAssertEqual(purchase.recordedCount, 1, "别的写法照常记")
+        let after = try await backend.templates()
+        XCTAssertEqual(after.count, 1)
+    }
+
+    /// 朝朝宝的转入、转出：和卡算一个整体，不记，也不进待处理
+    func testBalanceProductMovesAreSkipped() async throws {
+        let backend = try makeBackend()
+        try await addAccount(backend)
+        for text in ["您尾号5566的账户于11月12日发起朝朝宝转入，交易金额：人民币2199.99元。", "您尾号5566的账户于11月13日发起朝朝宝转出，交易金额：人民币100.00元。"] {
+            let result = try await backend.ingest(IngestRequest(text: text, source: .auto))
+            XCTAssertEqual(result.classification, .skipped, text)
+            XCTAssertEqual(result.recordedCount + result.pendingCount, 0, text)
+        }
+    }
+
     func testTemplateDoesNotOverrideVerificationCode() async throws {
         let backend = try makeBackend()
         try await addAccount(backend)

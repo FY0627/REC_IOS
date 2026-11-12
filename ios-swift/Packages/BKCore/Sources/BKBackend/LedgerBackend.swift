@@ -1019,6 +1019,39 @@ public final class LedgerBackend: Sendable {
         if !deleted { throw BackendError.notFound }
     }
 
+    /// 「不记」：这笔不该记（钱在账户和朝朝宝这类余额之间挪动）。删掉这笔，并记住收到它的通知的写法
+    /// （这一笔所在的句子，数字换成任意数字，`MessageTemplate.isSkip`），以后同样写法的通知不记。
+    /// 原文已清理、文字太少、或者已经按「不记」处理的写法不再记。返回新记下了几种写法
+    @discardableResult
+    public func skipRecord(id: String) async throws -> Int {
+        let now = clock()
+        let calendar = calendar
+        let newID = newID
+        return try await database.write { db in
+            guard let record = try RecordDAO.find(db, id: id) else { throw BackendError.notFound }
+            let templates = try TemplateDAO.all(db)
+            var known = Set(templates.filter(\.isSkip).map(\.pieces))
+            let name = try AccountDAO.find(db, id: record.accountID)?.displayTitle ?? ""
+            var saved = 0
+            for evidence in try RecordDAO.evidence(db, recordID: id) where evidence.source != .manual && evidence.source != .screenshot {
+                guard let raw = evidence.rawText else { continue }
+                let parsed = MessageParser.parse(MessageContext(
+                    text: raw, source: evidence.source, sender: evidence.sender, subject: nil,
+                    referenceDate: evidence.receivedAt ?? evidence.processedAt, calendar: calendar
+                ))
+                // 入账时是用户模板认出的：取模板对上的那段；否则取通用读法认出这一笔的那句
+                let event = parsed.events.first { $0.draft.partIndex == record.partIndex } ?? parsed.events.first
+                guard let evidenceText = MessageTemplates.firstHit(templates, in: parsed.cleanedText)?.hit.snippet ?? event?.draft.evidenceSnippet,
+                      let pieces = MessageTemplates.skipPieces(text: parsed.cleanedText, evidence: evidenceText),
+                      known.insert(pieces).inserted else { continue }
+                try TemplateDAO.save(db, MessageTemplate(id: newID(), name: name, pieces: pieces, kind: record.kind, direction: record.direction, createdAt: now))
+                saved += 1
+            }
+            guard try RecordDAO.delete(db, id: id) else { throw BackendError.notFound }
+            return saved
+        }
+    }
+
     public func recordDetail(id: String) async throws -> RecordDetail {
         let calendar = calendar
         return try await database.read { db in

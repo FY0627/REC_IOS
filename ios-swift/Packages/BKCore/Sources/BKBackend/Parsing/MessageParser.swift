@@ -60,7 +60,7 @@ public struct ParsedMessage: Sendable {
 /// 规则解析器：纯函数，不访问数据库，不依赖网络。
 public enum MessageParser {
     /// 读法变了就加 1：还没处理的待处理项按新读法重读一遍（`IngestEngine.rereadPending`）
-    public static let version = 7
+    public static let version = 8
 
     // MARK: 识别用正则
 
@@ -186,6 +186,7 @@ public enum MessageParser {
         guard !cleaned.isEmpty else { return result(.empty) }
         if Lexicon.verificationCodeValue.test(cleaned) || Lexicon.verificationCodeValue.test(subject) { return result(.verificationCode) }
         if Lexicon.statement.test(subject) || Lexicon.statement.test(cleaned) { return result(.statement) }
+        if Lexicon.balanceProductMove.test(cleaned) { return result(.skipped) }
 
         let ns = NSString(string: cleaned)
         let length = ns.length

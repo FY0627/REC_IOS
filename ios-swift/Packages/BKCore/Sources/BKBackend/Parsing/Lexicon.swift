@@ -17,6 +17,8 @@ enum Lexicon {
     static let limitChange = Rx(#"(?:临时|固定|信用|可用)?额度.{0,10}(?:调整|提升|提高|恢复|降低|调低|调为|生效|到期)|credit limit (?:increase|change|adjust)|限额|上限"#)
     /// 像银行发来的内容（银行名录里没有、也没有【签名】的银行也能认出来）
     static let bankish = Rx(#"银行|\bbank(?:ing)?\b|信用卡|借记卡|储蓄卡|扣账卡|credit card|debit card|card ending"#)
+    /// 钱在账户和朝朝宝之间挪动（「发起朝朝宝转入」）：朝朝宝随时能花，和账户算一个整体，不是收支，不记
+    static let balanceProductMove = Rx(#"朝朝宝(?:转入|转出)|(?:转入|转出)(?:至|到)?朝朝宝"#)
     static let failed = Rx(#"失败|未成功|不成功|未能成功|被拒|拒绝交易|交易拒绝|余额不足|declined|\bfailed\b|unsuccessful|not successful|could not be (?:completed|processed)|returned unpaid|dishonou?red|bounced|abgelehnt|rechazad|recusad|отклонен|reddedildi|مرفوضة|فشل"#)
     /// 短信开头或结尾的【署名】；一条短信可能有两个（「【共享流量使用提醒】…【中国移动】」）
     static let signature = Rx(#"^【([^【】\n]{2,24})】|【([^【】\n]{2,24})】[\s。.]*$"#)

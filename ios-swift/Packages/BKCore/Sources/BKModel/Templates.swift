@@ -23,6 +23,10 @@ public struct MessageTemplate: Identifiable, Hashable, Sendable, Codable {
 
     /// 给用户看的写法，例如「你已于 # # 将 HKD【金额】转出至"【对方】"」
     public var preview: String { pieces.map(\.preview).joined() }
+
+    /// 用户在一笔流水上点了「不记」记下的写法：没有圈出金额，数字全是任意数字。认出的通知不记账，
+    /// `kind`、`direction` 不用。不加新的列，旧版本读到这种模板也认不出任何通知（认通知要有金额）
+    public var isSkip: Bool { !pieces.contains(.amount) }
 }
 
 public enum TemplatePiece: Hashable, Sendable, Codable {

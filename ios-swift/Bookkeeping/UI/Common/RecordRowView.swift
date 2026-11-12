@@ -357,6 +357,14 @@ struct RecordDetailView: View {
                 }
             }
             Section {
+                // 通知记上的、原文还在：「不记」删掉这笔并记住这种写法（朝朝宝这类余额的进出），以后同样的通知不记
+                if detail.evidence.contains(where: { $0.source != .manual && $0.source != .screenshot && $0.rawText != nil }) {
+                    Menu {
+                        Button("以后这种通知都不记", systemImage: "nosign", role: .destructive) { Task { await skip() } }
+                    } label: {
+                        ActionLabel(title: "不记").foregroundStyle(Color.red)
+                    }
+                }
                 // 确认的小菜单就在这个按钮旁边弹出
                 Menu {
                     Section("删除后不能恢复") {
@@ -454,6 +462,16 @@ struct RecordDetailView: View {
     private func delete() async {
         do {
             try await store.deleteRecord(id: recordID)
+            deleted = true
+            dismiss()
+        } catch {
+            saveError = L("删除失败：\(error.localizedDescription)")
+        }
+    }
+
+    private func skip() async {
+        do {
+            try await store.skipRecord(id: recordID)
             deleted = true
             dismiss()
         } catch {

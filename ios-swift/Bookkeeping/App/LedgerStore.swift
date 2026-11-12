@@ -178,6 +178,13 @@ final class LedgerStore {
         await refresh()
     }
 
+    /// 「不记」：删掉这笔，以后同样写法的通知不记
+    func skipRecord(id: String) async throws {
+        guard let backend else { throw BackendError.notFound }
+        try await backend.skipRecord(id: id)
+        await refresh()
+    }
+
     func addAccount(_ draft: AccountDraft) async throws -> Account {
         guard let backend else { throw BackendError.notFound }
         let account = try await backend.addAccount(draft)

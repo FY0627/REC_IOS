@@ -111,10 +111,15 @@ struct IngestEngine {
             text: request.text, source: request.source, sender: request.sender, subject: request.subject,
             referenceDate: request.receivedAt ?? processedAt, calendar: calendar
         ))
-        // 用户在本机做的模板优先于通用读法：认得出时只用它认出的这一笔（验证码除外）
+        // 用户在本机做的模板优先于通用读法：认得出时只用它认出的这一笔（验证码除外）。
+        // 用户点过「不记」的写法最先看：认得出就整条不记
         var templateHit = false
-        if parsed.classification != .verificationCode, parsed.classification != .empty,
-           let found = MessageTemplates.firstHit(try TemplateDAO.all(db), in: parsed.cleanedText) {
+        let templates = parsed.classification != .verificationCode && parsed.classification != .empty ? try TemplateDAO.all(db) : []
+        if MessageTemplates.skips(templates, in: parsed.cleanedText) {
+            parsed.classification = .skipped
+            parsed.events = []
+            parsed.balances = []
+        } else if let found = MessageTemplates.firstHit(templates, in: parsed.cleanedText) {
             parsed.events = [ParsedEvent(draft: MessageTemplates.draft(found.hit, template: found.template, parsed: parsed, partIndex: 0), issue: nil)]
             parsed.classification = .transaction
             templateHit = true

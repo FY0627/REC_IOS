@@ -100,6 +100,26 @@ public enum MessageTemplates {
         return .success(trimEdges(pieces))
     }
 
+    /// 「不记」的写法（`MessageTemplate.isSkip`）：这一笔所在的句子，数字全换成任意数字。
+    /// `evidence` 是解析时记下的那句话的开头（`EventDraft.evidenceSnippet`）；文字太少时和做模板一样往前多取几句，
+    /// 仍然太少（会认错别的通知）或者正文里找不到这句时返回 nil
+    public static func skipPieces(text: String, evidence: String) -> [TemplatePiece]? {
+        let ns = NSString(string: text)
+        let found = evidence.isEmpty ? NSRange(location: NSNotFound, length: 0) : ns.range(of: evidence)
+        guard found.location != NSNotFound else { return nil }
+        var start = sentenceStart(before: found.location, in: ns)
+        var end = NSMaxRange(found)
+        while end < ns.length, !sentenceBreaks.contains(ns.character(at: end)) { end += 1 }
+        func letterCount() -> Int { letters(in: ns.substring(with: NSRange(location: start, length: end - start))) }
+        while letterCount() < minimumLetters, start > 0 {
+            start = sentenceStart(before: start - 1, in: ns)
+        }
+        guard letterCount() >= minimumLetters else { return nil }
+        var pieces: [TemplatePiece] = []
+        appendPlain(NSRange(location: start, length: end - start), in: ns, to: &pieces)
+        return trimEdges(pieces)
+    }
+
     private static func sentenceStart(before location: Int, in ns: NSString) -> Int {
         var start = location
         while start > 0, !sentenceBreaks.contains(ns.character(at: start - 1)) { start -= 1 }
@@ -248,6 +268,14 @@ public enum MessageTemplates {
             amount: AmountText(digits: digits, currencyCandidates: currency.candidates, preferredCurrency: currency.preferred),
             cardTail: tail, counterparty: counterparty, snippet: String(ns.substring(with: m.range).prefix(160))
         )
+    }
+
+    /// 有「不记」的写法认得出这条正文
+    public static func skips(_ templates: [MessageTemplate], in text: String) -> Bool {
+        let range = NSRange(location: 0, length: NSString(string: text).length)
+        return templates.contains { template in
+            template.isSkip && !template.pieces.isEmpty && regex(template.pieces)?.firstMatch(in: text, range: range) != nil
+        }
     }
 
     /// 第一个认得出这条正文的模板

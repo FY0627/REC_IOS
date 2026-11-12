@@ -32,6 +32,9 @@ public enum MessageClassification: String, Sendable, Codable, CaseIterable {
     case creditLimitChange
     /// 不是动账通知（普通短信、运营商或快递通知等）：对不上自己的账户，也看不出是银行或电子钱包发的。不保存
     case noFinancialContent
+    /// 不记：钱在账户和朝朝宝这类随时能花的余额之间挪动（和账户算一个整体，不是收支），
+    /// 或者是用户在流水上点过「不记」的同样写法（`MessageTemplate.isSkip`）。只记日志
+    case skipped
     case unrecognized
     case empty
 
@@ -45,6 +48,7 @@ public enum MessageClassification: String, Sendable, Codable, CaseIterable {
         case .balanceSnapshot: "余额通知（无交易）"
         case .creditLimitChange: "额度或限额变化"
         case .noFinancialContent: "不是动账通知（对不上自己的账户，也看不出是银行发的）"
+        case .skipped: "不记（朝朝宝转入转出，或点过「不记」的写法）"
         case .unrecognized: "未能识别"
         case .empty: "空输入（快捷指令未传入内容）"
         }

@@ -1563,6 +1563,28 @@
         }
       }
     },
+    "不记" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Don’t Record"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "不记"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "不記"
+          }
+        }
+      }
+    },
     "不记了" : {
       "localizations" : {
         "en" : {
@@ -2835,6 +2857,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "付款"
+          }
+        }
+      }
+    },
+    "以后这种通知都不记" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Never Record This Kind of Notice"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "以后这种通知都不记"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "以後這種通知都不記"
           }
         }
       }

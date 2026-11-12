@@ -237,6 +237,7 @@ enum DataExport {
     static let templateHeader = ["名称", "写法", "类型", "交易性质", "添加时间"]
 
     static func templateRow(_ t: MessageTemplate, date: (Date?) -> String) -> [String] {
+        if t.isSkip { return [t.name, t.preview, "不记", "", date(t.createdAt)] }
         let entry = MessageTemplate.entry(kind: t.kind, direction: t.direction)
         return [t.name, t.preview, entry.type.displayName + (entry.refund ? "（退款）" : ""), t.kind.displayName, date(t.createdAt)]
     }

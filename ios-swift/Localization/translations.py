@@ -177,6 +177,8 @@ t("通知金额含手续费", "通知金額含手續費", "Fee Included in Amoun
 t("原文已按保留期限清理", "原文已依保留期限清除", "Original text removed after the retention period")
 t("删除后不能恢复", "刪除後無法復原", "This can’t be undone.")
 t("删除这笔流水", "刪除這筆明細", "Delete Transaction")
+t("不记", "不記", "Don’t Record")
+t("以后这种通知都不记", "以後這種通知都不記", "Never Record This Kind of Notice")
 t("存入%@", "存入%@", "Deposited in %@")
 t("从%@扣款", "從%@扣款", "Charged in %@")
 t("还没有汇率", "還沒有匯率", "No rate yet")

@@ -33,19 +33,15 @@ struct TemplateListView: View {
                 Text("还没有识别模板").foregroundStyle(.secondary)
             }
             ForEach(templates) { template in
-                Button {
-                    editing = .existing(template)
-                } label: {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(template.name).font(.headline).foregroundStyle(Color.primary)
-                        Text("\(template.kind.displayName.loc) · \(template.direction.displayName.loc)")
-                            .font(.subheadline).foregroundStyle(Color.secondary)
-                        Text(template.preview)
-                            .font(.caption).foregroundStyle(Color.secondary).lineLimit(3)
+                // 流水上点「不记」记下的写法：没有圈出的金额，不能编辑，只能往左滑删除
+                if template.isSkip {
+                    row(template)
+                } else {
+                    Button {
+                        editing = .existing(template)
+                    } label: {
+                        row(template)
                     }
-                    .padding(.vertical, 2)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .contentShape(Rectangle())
                 }
             }
             .onDelete { offsets in
@@ -67,6 +63,19 @@ struct TemplateListView: View {
             TemplateEditorView(template: target.template)
         }
         .task { await reload() }
+    }
+
+    private func row(_ template: MessageTemplate) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(template.name).font(.headline).foregroundStyle(Color.primary)
+            Text(template.isSkip ? L("不记") : "\(template.kind.displayName.loc) · \(template.direction.displayName.loc)")
+                .font(.subheadline).foregroundStyle(Color.secondary)
+            Text(template.preview)
+                .font(.caption).foregroundStyle(Color.secondary).lineLimit(3)
+        }
+        .padding(.vertical, 2)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
     }
 
     private func reload() async {

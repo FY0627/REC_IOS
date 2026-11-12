@@ -37,6 +37,7 @@
 | 电子账单、对账单 | 只记日志，不把历史明细再入账一遍 |
 | 只有余额 | 不入账、不保存余额，**不凭余额差额编造交易**；能对上卡时记为这张卡收到过自动输入 |
 | 信用额度变化，支出限额、免密上限这类设置 | 只记日志，不是资金或负债变化，写的金额是上限 |
+| 钱在账户和朝朝宝之间挪动（「发起朝朝宝转入」，`Lexicon.balanceProductMove`）；用户在流水上点过「不记」的写法（见「识别模板」第 7 条） | 只记日志（`skipped`），不记账、不进待处理、不发记账结果通知。朝朝宝随时能花，和账户算一个整体；别的银行的同类产品遇到了再加，没加之前由用户点「不记」 |
 | 无法识别 | 通过了下面的过滤才进入待处理；可以用它做识别模板（见下） |
 
 自动化对所有短信 / 邮件 / App 通知触发，所以先判断这条是不是用户的动账通知（`IngestEngine.run`）：
@@ -148,8 +149,12 @@
    已经有流水入账的通知不动，避免重复记账。
 6. 「我的 › 自动记账 › 识别模板」：点一个模板编辑（按原来的标识保存，`TemplateDAO.save`），往左滑或在编辑页里删除。
    模板里没有原文，编辑时用 `MessageTemplates.sample` 把写法还原成一条示例（金额 100.00、尾号 1234、对方「对方」、其他数字 0），圈好原来的位置；不改原文直接保存得到同样的写法。
+7. **「不记」**：通知记上的、原文还在的流水，详情最下面有「不记」（确认菜单「以后这种通知都不记」，`LedgerBackend.skipRecord`）：
+   删掉这笔，并把收到它的每条通知（短信、推送各一份）里这一笔所在的句子记成一条「不记」的写法——数字全换成任意数字，没有圈出金额（`MessageTemplate.isSkip`），文字太少时和做模板一样往前多取几句，仍然太少就只删除。
+   识别时最先看「不记」的写法（`MessageTemplates.skips`），认得出就整条不记（`skipped`）。不加新的列：旧版本读到它也认不出任何通知。
+   识别模板列表里写「不记」，不能编辑，往左滑删除。不在设置里单独放屏蔽列表。
 
-代码：`BKModel/Templates.swift`、`BKBackend/Parsing/MessageTemplates.swift`、`IngestEngine.run` / `reapply`、`TemplateDAO`。
+代码：`BKModel/Templates.swift`、`BKBackend/Parsing/MessageTemplates.swift`、`IngestEngine.run` / `reapply`、`TemplateDAO`、`LedgerBackend.skipRecord`。
 
 ### 支持范围与样例依据
 
