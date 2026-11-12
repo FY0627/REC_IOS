@@ -32,7 +32,7 @@
 | iOS Swift 版：卡顿、性能开关、帧率指标 | [guides/ios-swift-device-checklist.md](guides/ios-swift-device-checklist.md) | `ios-swift/Bookkeeping/Diagnostics/` |
 | iOS Swift 版：语言（简体中文、繁體中文（台湾用语）、English）、「我的 › 显示 › 语言」、翻译表和 String Catalog、日期按语言格式化、通知按钮的翻译 | [decisions/0022](decisions/0022-ios-swift-languages.md) | `ios-swift/Bookkeeping/App/AppLanguage.swift`（`L`、`.loc`、`LanguageBundle`）、`ios-swift/Bookkeeping/UI/Common/LocalizedNames.swift`、`ios-swift/Bookkeeping/UI/Common/Formatters.swift`、`ios-swift/Bookkeeping/UI/Profile/LanguageSettingsView.swift`、`ios-swift/Bookkeeping/Localizable.xcstrings`（生成的）、`ios-swift/Localization/{translations,build_catalog}.py`、`ios-swift/Packages/BKCore/Sources/BKModel/NotificationPicker.swift`（`Labels`） |
 | iOS Swift 版：CI 构建、IPA、iLoader 安装与续签 | [guides/ios-swift-windows-iloader.md](guides/ios-swift-windows-iloader.md)、[decisions/0009](decisions/0009-ios-swift-ci-sideloadly.md)、[decisions/0016](decisions/0016-ios-swift-iloader.md) | `.github/workflows/ios-swift-build.yml`、`ios-swift/ci/` |
-| iOS Swift 版：Bundle ID、签名上传 TestFlight、隐私清单 | [decisions/0023](decisions/0023-ios-swift-testflight.md) | `.github/workflows/ios-swift-testflight.yml`、`ios-swift/ci/archive-upload.sh`、`ios-swift/Bookkeeping/PrivacyInfo.xcprivacy` |
+| iOS Swift 版：Bundle ID、签名上传 TestFlight、隐私清单 | [decisions/0023](decisions/0023-ios-swift-testflight.md) | `.github/workflows/ios-swift-testflight.yml`、`ios-swift/ci/archive-upload.sh`、`ios-swift/ci/asc-dev-certs.py`（结束时吊销这次新建的开发证书）、`ios-swift/Bookkeeping/PrivacyInfo.xcprivacy` |
 
 ## 按目录查
 

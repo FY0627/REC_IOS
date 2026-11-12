@@ -21,6 +21,11 @@
    证书和描述文件由 Xcode 在线创建、下载（分发证书由 Apple 云端管理），仓库和 Secrets 里没有证书、没有描述文件；
 2. `xcodebuild -exportArchive`，`method = app-store-connect`、`destination = upload`：签名导出后直接上传，不另用 altool / Transporter。
 3. 构建号 = 这个工作流的运行次数 × 10 + 重跑次数，重跑不会和已上传的重复。版本号仍是 `MARKETING_VERSION`。
+4. 结束时吊销这次新建的开发证书（[`ios-swift/ci/asc-dev-certs.py`](../../ios-swift/ci/asc-dev-certs.py)，修订 2026-11-12）：
+   归档要用「Apple Development」证书签名，新机器的钥匙串里没有私钥，Xcode 每次都新建一张；第 11 次运行时证书攒到上限，归档失败
+   （「Your account has reached the maximum number of certificates」）。现在归档前记下钥匙串里已有的开发证书，
+   结束时（成功、失败都算）用同一个 API 密钥吊销新出现的那张，只动开发证书，分发证书不碰；吊销失败只打警告。
+   以前攒下的要在 Certificates, Identifiers & Profiles › Certificates 里手动吊销一次。
 
 需要的仓库 Secrets：`ASC_KEY_ID`、`ASC_ISSUER_ID`、`ASC_KEY_P8`（.p8 文件全文）、`APPLE_TEAM_ID`。
 API 密钥的角色要「管理」（Admin）：创建云端管理的分发证书需要这个权限。

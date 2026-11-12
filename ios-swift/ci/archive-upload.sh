@@ -22,7 +22,15 @@ KEY_PATH="$KEY_DIR/AuthKey_${ASC_KEY_ID}.p8"
 mkdir -p "$KEY_DIR"
 printf '%s\n' "$ASC_KEY_P8" > "$KEY_PATH"
 chmod 600 "$KEY_PATH"
-cleanup() { rm -rf "$KEY_DIR"; }
+
+# 新机器上没有开发证书的私钥，自动签名每次都新建一张「Apple Development」，攒满上限归档就失败。
+# 归档前记下已有的，结束时（成功、失败都算）吊销这次新建的（asc-dev-certs.py）
+CERTS_BEFORE="$KEY_DIR/dev-certs-before.txt"
+python3 ios-swift/ci/asc-dev-certs.py snapshot "$CERTS_BEFORE"
+cleanup() {
+  python3 ios-swift/ci/asc-dev-certs.py revoke-new "$CERTS_BEFORE" "$KEY_PATH" || true
+  rm -rf "$KEY_DIR"
+}
 trap cleanup EXIT
 
 AUTH=(
@@ -56,6 +64,9 @@ trap 'echo "::error title=archive-upload.sh::archive-upload.sh line $LINENO fail
 if [[ $STATUS -ne 0 ]]; then
   if grep -q "no devices" "$OUT/logs/archive.log"; then
     echo "::error title=Archive::开发者账号里还没有登记设备，自动签名生成不了开发描述文件。到 Certificates, Identifiers & Profiles › Devices 登记自己的 iPhone 后重跑"
+  fi
+  if grep -q "maximum number of certificates" "$OUT/logs/archive.log"; then
+    echo "::error title=Archive::开发证书数量到上限了。到 Certificates, Identifiers & Profiles › Certificates，把以前 CI 建的「Apple Development」证书吊销掉（分发证书别动），再重跑"
   fi
   echo "::error title=Archive::归档失败（退出码 ${STATUS}）"
   exit $STATUS
