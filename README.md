@@ -35,7 +35,7 @@ REC 是一款 iPhone 记账 App。你付完款，银行短信一到，它就在�
 
 ## 现在能用吗
 
-还在测试，没有上架 App Store。需要 iOS 27 或更高版本，目前要用 [iLoader](https://github.com/nab138/iloader) 自己签名安装，步骤见[安装指南](docs/guides/ios-swift-windows-iloader.md)。
+还在测试，没有上架 App Store。
 
 有些银行的短信还认不准，可以在 App 里自己做识别模板。
 
