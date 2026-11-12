@@ -162,14 +162,14 @@ private struct ProfileList: View {
                 }
 
                 Section("关于") {
-                    // 测试反馈问卷，机型和版本预先填好（`FeedbackForm`）
-                    Link(destination: FeedbackForm.url) {
-                        Label("反馈", systemImage: "text.bubble")
-                    }
                     LabeledContent("版本", value: BuildInfo.summary)
                         .font(.subheadline.monospaced())
                         .contentShape(Rectangle())
                         .onTapGesture(perform: tapVersion)
+                    // 测试反馈问卷，机型和版本预先填好（`FeedbackForm`）
+                    Link(destination: FeedbackForm.url) {
+                        Label("反馈", systemImage: "text.bubble")
+                    }
                     // 汇率数据源要求注明来源并链接到官网
                     Link(ExchangeRateFeed.attribution, destination: ExchangeRateFeed.attributionURL)
                 }
