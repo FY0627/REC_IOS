@@ -154,7 +154,8 @@ struct CategoryLearner {
         return (inSlot + overall).filter { seen.insert($0).inserted }
     }
 
-    /// 最近用得多的分类：这个时段用得多的在前，再按全天用得多的，一样多时最近用的在前
+    /// 最近用得多的分类：饭点时这个饭点用得多的在前，再按全天用得多的，一样多时最近用的在前。
+    /// 不是饭点的时候各种事都有（下午买东西、交话费），不按时段排
     private func frequentCategories(type: CategoryType, slot: MealSlot, times: MealTimes) throws -> [String] {
         var inSlot: [String: Int] = [:]
         var overall: [String: Int] = [:]
@@ -163,7 +164,7 @@ struct CategoryLearner {
             guard let id = record.categoryID else { continue }
             overall[id, default: 0] += 1
             if latest[id] == nil { latest[id] = index }
-            if times.slot(minute: MealTimes.minuteOfDay(record, calendar: calendar)) == slot { inSlot[id, default: 0] += 1 }
+            if slot != .other, times.slot(minute: MealTimes.minuteOfDay(record, calendar: calendar)) == slot { inSlot[id, default: 0] += 1 }
         }
         return overall.keys.sorted { a, b in
             let slotA = inSlot[a] ?? 0, slotB = inSlot[b] ?? 0
