@@ -1698,3 +1698,61 @@ final class ClockBox: @unchecked Sendable {
     var value: Date
     init(_ value: Date) { self.value = value }
 }
+
+// MARK: 招行「动账提醒」推送写到了分钟、但没写商户；95555 短信写全了
+
+extension IngestTests {
+    static func cmbNotice(_ amount: String, minute: Int = 30) -> String {
+        "动账提醒\n您尾号0002的储蓄账户10月24日14时\(minute)分支出人民币\(amount)元。点击查看>>"
+    }
+
+    static func cmbQuickPay(_ amount: String, minute: Int = 30, merchant: String = "支付宝-示例超市") -> String {
+        "您账户0002于10月24日14:\(minute)在【\(merchant)】发生快捷支付扣款，人民币\(amount)"
+    }
+
+    /// 推送先到（只写金额）、短信一分钟后到（写了商户）：合成一笔，补上商户；同一条短信又从邮件来，也合进去
+    func testNoticeThenQuickPayMessageMerge() async throws {
+        let backend = try makeBackend()
+        let account = try await addAccount(backend, last4: "0002")
+        let notice = try await backend.ingest(IngestRequest(text: Self.cmbNotice("86.50"), source: .auto, receivedAt: now))
+        XCTAssertEqual(notice.recordedCount, 1, notice.summary)
+        let sms = try await backend.ingest(IngestRequest(text: Self.cmbQuickPay("86.50", minute: 31), source: .auto, receivedAt: now.addingTimeInterval(60)))
+        XCTAssertEqual(sms.mergedCount, 1, sms.summary)
+        XCTAssertEqual(sms.pendingCount, 0, "不再问是不是同一笔")
+        let rows = try await backend.records(accountID: account.id)
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertEqual(rows.first?.record.counterparty, "支付宝-示例超市", "补上商户")
+        XCTAssertEqual(rows.first?.record.kind, .purchase)
+        let detail = try await backend.recordDetail(id: try XCTUnwrap(rows.first?.id))
+        XCTAssertEqual(detail.evidence.count, 2)
+
+        let mail = try await backend.ingest(IngestRequest(text: Self.cmbQuickPay("86.50", minute: 31), source: .email, receivedAt: now.addingTimeInterval(120)))
+        XCTAssertEqual(mail.pendingCount, 0, mail.summary)
+        let count = try await backend.recordCount(accountID: account.id)
+        XCTAssertEqual(count, 1)
+    }
+
+    /// 短信先到、推送后到：推送合进短信那笔，商户不丢
+    func testQuickPayMessageThenNoticeMerge() async throws {
+        let backend = try makeBackend()
+        let account = try await addAccount(backend, last4: "0002")
+        _ = try await backend.ingest(IngestRequest(text: Self.cmbQuickPay("132.80"), source: .auto, receivedAt: now))
+        let notice = try await backend.ingest(IngestRequest(text: Self.cmbNotice("132.80"), source: .auto, receivedAt: now.addingTimeInterval(30)))
+        XCTAssertEqual(notice.mergedCount, 1, notice.summary)
+        XCTAssertEqual(notice.pendingCount, 0)
+        let rows = try await backend.records(accountID: account.id)
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertEqual(rows.first?.record.counterparty, "支付宝-示例超市")
+    }
+
+    /// 推送和短信的时间差了 5 分钟：不当成同一笔，各记各的
+    func testNoticeAndMessageMinutesApartStayApart() async throws {
+        let backend = try makeBackend()
+        let account = try await addAccount(backend, last4: "0002")
+        _ = try await backend.ingest(IngestRequest(text: Self.cmbNotice("20.00"), source: .auto, receivedAt: now))
+        let sms = try await backend.ingest(IngestRequest(text: Self.cmbQuickPay("20.00", minute: 35), source: .auto, receivedAt: now.addingTimeInterval(300)))
+        XCTAssertEqual(sms.mergedCount, 0, sms.summary)
+        let count = try await backend.recordCount(accountID: account.id)
+        XCTAssertEqual(count, 2)
+    }
+}

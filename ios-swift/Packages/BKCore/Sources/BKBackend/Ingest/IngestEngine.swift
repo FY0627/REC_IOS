@@ -603,6 +603,9 @@ struct IngestEngine {
     /// 正好一边没写交易时间、另一边写到了分钟，都是银行的通知。
     /// 已有的那笔只能有一条来源：已经合过一次的不再合，同一张卡连着两笔一样的金额时不会把第二笔并进第一笔。
     /// 只有一笔对得上才算；几笔都像时照常交给用户判断（`possibleDuplicate`）
+    ///
+    /// 两边都写到了分钟也算：一条只写了金额（没有商户、看不出是什么交易，招行 App 推送「动账提醒 … 支出人民币 86.50 元」），
+    /// 另一条写全了（95555 短信「在支付宝-鲜丰超市快捷支付」），两边的交易时间相差不到 2 分钟
     func detailTwin(of record: LedgerRecord) throws -> LedgerRecord? {
         guard Self.messageSources.contains(record.source) else { return nil }
         let full = record.transactionTime?.isMinutePrecise == true
@@ -614,13 +617,27 @@ struct IngestEngine {
             excludingIngest: record.ingestID
         ).filter { other in
             guard other.accountID == record.accountID, other.status == record.status, Self.messageSources.contains(other.source) else { return false }
+            if full, let mine = record.transactionTime, let theirs = other.transactionTime, theirs.isMinutePrecise {
+                return Self.isVague(other) != Self.isVague(record) && within(mine, theirs, minutes: 2)
+            }
             return full ? other.transactionTime == nil : other.transactionTime?.isMinutePrecise == true
         }
         guard matches.count == 1, try RecordDAO.evidence(db, recordID: matches[0].id).count == 1 else { return nil }
         return matches[0]
     }
 
-    /// 把写全的那条补到只有卡号和金额的那笔上：交易时间、商户、交易性质（推送认不出时）；去重键换成按时间算的，
+    /// 只写了金额的通知：没有商户，也看不出是什么交易（「支出」「收入」）
+    static func isVague(_ record: LedgerRecord) -> Bool {
+        record.counterparty == nil && record.kind == .other
+    }
+
+    /// 两个写到分钟的交易时间相差不超过 `minutes` 分钟；有一个缺年份时只认同一分钟
+    func within(_ a: WallClock, _ b: WallClock, minutes: Int) -> Bool {
+        guard let x = date(of: a), let y = date(of: b) else { return a.sortKey == b.sortKey }
+        return abs(x.timeIntervalSince(y)) <= TimeInterval(minutes * 60)
+    }
+
+    /// 把写全的那条补到只有卡号和金额的那笔上：交易时间、商户、交易性质（推送认不出时）；去重键换成写全的那条的，
     /// 之后同一条短信（或邮件）再来按去重键合并。补上商户后没分类的重新归类；短信写了预授权时间就了结那笔冻结
     func mergeDetail(_ record: LedgerRecord, into twin: LedgerRecord, dedupeKey key: String, holdTime: WallClock?, meta: IngestMeta) throws -> CommitOutcome {
         var updated = twin
@@ -630,7 +647,11 @@ struct IngestEngine {
             try RecordDAO.setDedupeKey(db, id: twin.id, key: key)
         }
         if updated.counterparty == nil, let name = record.counterparty { updated.counterparty = name }
-        if updated.kind == .other, record.kind != .other { updated.kind = record.kind }
+        if updated.kind == .other, record.kind != .other {
+            updated.kind = record.kind
+            // 去重键里有交易性质：换成写全的那条的，同一条短信再来（比如邮件也到了）按它合并
+            try RecordDAO.setDedupeKey(db, id: twin.id, key: key)
+        }
         if updated != twin { _ = try RecordDAO.update(db, updated) }
         try RecordDAO.addEvidence(db, recordID: twin.id, ingestID: meta.ingestID, source: meta.source, at: now)
         try AccountDAO.noteSuccess(db, id: twin.accountID, at: now, source: meta.source)

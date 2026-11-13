@@ -34,7 +34,8 @@ enum MerchantName {
         }
         name = name.trimmingCharacters(in: CharacterSet(charactersIn: " " + separators))
 
-        guard name.count >= 2, name.contains(where: \.isLetter), !collectionCodes.contains(where: { name.contains($0) }) else { return nil }
+        guard name.count >= 2, name.contains(where: \.isLetter), !collectionCodes.contains(where: { name.contains($0) }),
+              !notMerchants.contains(name) else { return nil }
         // 「某某*」后面是一串码（「TESTPAY*A1B2C3D4E5」「100*0001」）：一个收款通道下面可能是很多家店，不算商户
         if let star = name.firstIndex(of: "*") {
             let after = name[name.index(after: star)...].split(separator: " ").first.map(String.init) ?? ""
@@ -80,6 +81,10 @@ enum MerchantName {
 
     /// 写着这些的是收款码，不是店名（「Scan QR code」）
     private static let collectionCodes = ["qr code", "qrcode", "二维码", "收款码", "扫码", "扫一扫"]
+
+    /// 去掉渠道后只剩这些：是转账、红包这类动作，不是店（「财付通-微信支付-微信转账」）。
+    /// 转给不同的人不能学到一起
+    private static let notMerchants: Set<String> = ["微信转账", "转账", "微信红包", "红包", "转账红包", "零钱", "零钱通"]
 
     /// 卡组织商户描述末尾的国家（大写）
     private static let countries: Set<String> = [

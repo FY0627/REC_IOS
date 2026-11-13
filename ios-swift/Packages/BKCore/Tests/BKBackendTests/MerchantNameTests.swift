@@ -13,6 +13,8 @@ final class MerchantNameTests: XCTestCase {
         XCTAssertEqual(MerchantName.key("财付通-测试外卖"), MerchantName.key("支付宝-测试外卖"), "两个渠道付同一家店")
         XCTAssertEqual(MerchantName.key("财付通-微信支付-测试便利店"), "测试便利店", "两层渠道都去掉")
         XCTAssertNil(MerchantName.key("财付通-微信支付"), "两层都是渠道，没有商户")
+        XCTAssertNil(MerchantName.key("财付通-微信支付-微信转账"), "转给别人，不是店：转给谁都不能学到一起")
+        XCTAssertNil(MerchantName.key("财付通-微信支付-微信红包"))
     }
 
     func testOnlyChannelIsNotAMerchant() {

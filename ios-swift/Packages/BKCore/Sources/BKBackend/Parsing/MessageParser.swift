@@ -60,7 +60,7 @@ public struct ParsedMessage: Sendable {
 /// 规则解析器：纯函数，不访问数据库，不依赖网络。
 public enum MessageParser {
     /// 读法变了就加 1：还没处理的待处理项按新读法重读一遍（`IngestEngine.rereadPending`）
-    public static let version = 9
+    public static let version = 10
 
     // MARK: 识别用正则
 
