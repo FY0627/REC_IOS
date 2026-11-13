@@ -96,7 +96,7 @@ final class LedgerStore {
     /// 打开演示数据失败的原因（这时已经回到真实账本）
     var demoError: String?
 
-    /// 打开：按现在的语言重新生成一份演示账本，换过去；关掉：换回真实账本，设置恢复成打开前的样子
+    /// 打开：重新建一份只有账户的演示账本，换过去；关掉：换回真实账本，设置恢复成打开前的样子
     func setDemo(_ on: Bool) async {
         guard !switchingLedger, on != DemoMode.isActive else { return }
         switchingLedger = true
@@ -106,11 +106,10 @@ final class LedgerStore {
         await LiveCategoryActivity.endAll()
         do {
             if on {
-                let language = DemoMode.currentLanguage
                 try await Task.detached(priority: .userInitiated) {
-                    try DemoMode.activate(language: language)
+                    try DemoMode.activate()
                     let demo = try AppServices.shared.backend()
-                    _ = try await demo.seedDemo(language: language)
+                    try await demo.seedDemo()
                     // 净资产、外币换算用演示账本的汇率（关掉时连同别的设置一起换回去）
                     if let rates = try await demo.latestExchangeRates() { ExchangeRateStore.save(rates) }
                 }.value

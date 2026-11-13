@@ -33,22 +33,6 @@ public enum SimulatedSpend: String, CaseIterable, Identifiable, Sendable {
         }
     }
 
-    /// 显示和写进通知的商户。真实账本前面带「模拟·」；演示账本（ADR 0025）里和演示数据的店同名、按演示的语言写：
-    /// 早餐、午餐、咖啡、打车是常去的店（已经学会，自动归类），晚餐是没去过的店，便利店选过两个分类（都要在灵动岛上选）
-    public func merchant(in language: DemoLanguage?) -> String? {
-        guard let language else { return merchant.map { Simulation.merchantPrefix + $0 } }
-        let name: DemoName? = switch self {
-        case .breakfast: .bakery
-        case .lunch: .noodles
-        case .coffee: .coffee
-        case .taxi: .ride
-        case .dinner: .grill
-        case .store: .cornerStore
-        case .noMerchant: nil
-        }
-        return name?.text(language)
-    }
-
     /// 随机金额的范围（元）
     public var yuan: ClosedRange<Int> {
         switch self {
@@ -69,26 +53,10 @@ public enum SimulatedSpend: String, CaseIterable, Identifiable, Sendable {
 /// - 商户名前面带「模拟·」：学到的分类只算在模拟的商户上，不影响真的瑞幸、滴滴；
 /// - 发件人写「模拟消费」，清除时靠它找到模拟的通知；
 /// - 一键清除（`clear`）删掉模拟卡、它的流水、模拟的通知和学到的「模拟·」商户，账本回到模拟之前的样子。
-///
-/// 演示账本（ADR 0025）里不建模拟卡：记到演示的中行信用卡上，用中行的写法，商户和演示数据里的店同名；
-/// 一键清除只删模拟的那几笔，卡和学到的分类留着。
 enum Simulation {
     static let sender = "模拟消费"
     static let merchantPrefix = "模拟·"
     static let accountKey = "simulation.account"
-    /// 演示账本写的语言（`LedgerBackend.seedDemo`）；真实账本没有
-    static let demoLanguageKey = "demo.language"
-
-    static func demoLanguage(_ db: SQLiteConnection) throws -> DemoLanguage? {
-        try SettingsDAO.get(db, demoLanguageKey).flatMap(DemoLanguage.init(rawValue:))
-    }
-
-    /// 演示账本的模拟消费：「您尾号7315的卡消费人民币23.50元，商户：拾光咖啡。【中国银行】」（中行的通知不写时间）
-    static func demoMessage(merchant: String?, amountMinor: Int64, last4: String) -> String {
-        let amount = MoneyFormat.plain(amountMinor, exponent: 2, grouping: false)
-        let shop = merchant.map { "，商户：\($0)" } ?? ""
-        return "您尾号\(last4)的卡消费人民币\(amount)元\(shop)。【中国银行】"
-    }
     static let account = AccountDraft(
         name: "模拟卡", bankID: "icbc", bankName: "工商银行", last4: "9999", cardType: .credit, currency: .cny, paletteID: "crimson"
     )
@@ -109,18 +77,13 @@ enum Simulation {
 
     /// 模拟出来的流水有几笔
     static func recordCount(_ db: SQLiteConnection) throws -> Int {
-        if try demoLanguage(db) != nil {
-            return Int(try db.scalarInt("SELECT COUNT(*) FROM records WHERE ingest_id IN (SELECT id FROM ingests WHERE sender = ?)", [sender]))
-        }
         guard let id = try accountID(db) else { return 0 }
         return Int(try db.scalarInt("SELECT COUNT(*) FROM records WHERE account_id = ?", [id]))
     }
 
     /// 一键清除，返回删了几笔流水
     static func clear(_ db: SQLiteConnection) throws -> Int {
-        // 演示账本：卡和学到的分类是演示数据里的，只删模拟的流水
-        let demo = try demoLanguage(db) != nil
-        let account = demo ? "" : try SettingsDAO.get(db, accountKey) ?? ""
+        let account = try SettingsDAO.get(db, accountKey) ?? ""
         let records = "SELECT id FROM records WHERE account_id = ? OR ingest_id IN (SELECT id FROM ingests WHERE sender = ?)"
         let ingests = "SELECT id FROM ingests WHERE sender = ?"
         let removed = Int(try db.scalarInt("SELECT COUNT(*) FROM (\(records))", [account, sender]))
@@ -132,7 +95,6 @@ enum Simulation {
         try db.run("DELETE FROM ingests WHERE sender = ?", [sender])
         try db.run("DELETE FROM opening_balances WHERE account_id = ?", [account])
         try db.run("DELETE FROM accounts WHERE id = ?", [account])
-        guard !demo else { return removed }
         try db.run("DELETE FROM merchant_categories WHERE merchant LIKE ?", ["%|" + merchantPrefix + "%"])
         try db.run("DELETE FROM settings WHERE key = ?", [accountKey])
         return removed
@@ -142,11 +104,7 @@ enum Simulation {
 extension LedgerBackend {
     /// 模拟一笔消费：没有模拟卡就先建一张，再把编好的短信交给入账流程（和快捷指令收到的一样）
     public func simulateSpend(_ spend: SimulatedSpend, amountMinor: Int64) async throws -> IngestResult {
-        let (existing, language) = try await database.read { db in (try Simulation.accountID(db), try Simulation.demoLanguage(db)) }
-        if let language, let existing, let card = try await database.read({ try AccountDAO.find($0, id: existing) }) {
-            let text = Simulation.demoMessage(merchant: spend.merchant(in: language), amountMinor: amountMinor, last4: card.last4)
-            return try await ingest(IngestRequest(text: text, source: .auto, sender: Simulation.sender, receivedAt: clock(), boundAccountID: existing))
-        }
+        let existing = try await database.read { try Simulation.accountID($0) }
         let accountID: String
         if let existing {
             accountID = existing

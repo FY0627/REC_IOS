@@ -181,7 +181,7 @@ private struct ProfileList: View {
                         NavigationLink(value: ProfileRoute.simulation) {
                             Label("模拟消费", systemImage: "cart.badge.plus")
                         }
-                        // 官网录屏、截图用（ADR 0025）：换成一份按现在的语言生成的演示账本，关掉回到真实账本
+                        // 官网录屏、截图用（ADR 0025）：换成一份只有账户的演示账本，关掉回到真实账本
                         Toggle(isOn: Binding(get: { store.demoActive }, set: { on in Task { await store.setDemo(on) } })) {
                             Label {
                                 HStack {
