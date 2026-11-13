@@ -6,7 +6,6 @@ import BKModel
 @MainActor
 @Observable
 final class WalletDetailModel {
-    var pendingCount = 0
     /// 卡里的币种，主币种在前；多币种的卡按币种分开看流水
     var currencies: [CurrencyCode] = []
     /// 正在看的币种；单币种的卡为 nil（看全部）
@@ -25,7 +24,7 @@ final class WalletDetailModel {
 /// 格子高度事先量好（流水行每一部分都只有一行，高度只取决于系统字号），列表不做自适应高度：滚动时不再量高度、不改布局，
 /// 也不会因为格子高度随位置变化而卡在布局循环里。
 ///
-/// 打开时第一页流水、笔数和待处理数量都读到后，内容整块从屏幕底下升上来；返回时整块退到屏幕底下。
+/// 打开时第一页流水读到后，内容整块从屏幕底下升上来；返回时整块退到屏幕底下。
 /// 两个动画都只动列表的显示位置（Core Animation），升起途中也能滚动、点按。
 ///
 /// 流水行左滑露出「编辑」「删除」，用系统的滑动按钮，和首页一模一样（右滑是返回卡包，在 `WalletController`）。
@@ -56,7 +55,6 @@ final class WalletDetailList: NSObject, UITableViewDelegate {
     var onSelectRecord: (RecordRow) -> Void = { _ in }
     var onEditRecord: (RecordRow) -> Void = { _ in }
     var onDeleteRecord: (RecordRow) -> Void = { _ in }
-    var onOpenPending: () -> Void = {}
     /// 读屏激活顶部的卡片：返回卡包
     var onActivateCard: () -> Void = {}
     /// 多币种的卡换了一个币种看：卡面换成这个币种的余额
@@ -184,7 +182,6 @@ final class WalletDetailList: NSObject, UITableViewDelegate {
     private func summaryView() -> some View {
         AccountDetailSummary(
             model: model,
-            openPending: { [weak self] in self?.onOpenPending() },
             selectCurrency: { [weak self] currency in self?.setCurrency(currency) }
         )
     }
@@ -375,7 +372,7 @@ final class WalletDetailList: NSObject, UITableViewDelegate {
         applySnapshot(reconfigure: true)
     }
 
-    /// 数据变了（新流水、改了初始余额、处理了待处理账单）：重新读第一页
+    /// 数据变了（新流水、改了初始余额）：重新读第一页
     func reload() {
         guard account != nil, contentShown || loadTask != nil else { return }
         load()
@@ -405,10 +402,9 @@ final class WalletDetailList: NSObject, UITableViewDelegate {
 
     // MARK: 数据
 
-    /// 读第一页流水、笔数和待处理数量，读到后一起显示；第一次显示时内容从屏幕底下升上来
+    /// 读第一页流水，读到后显示；第一次显示时内容从屏幕底下升上来
     private func load() {
-        guard let account, let filter else { return }
-        let id = account.id
+        guard account != nil, let filter else { return }
         session += 1
         let session = session
         loadingMore = false
@@ -416,15 +412,12 @@ final class WalletDetailList: NSObject, UITableViewDelegate {
         loadTask = Task { [weak self] in
             guard let self else { return }
             let first = await self.store.records(filter, after: nil, limit: WalletDetailList.pageSize)
-            let pending = await self.pendingCount(accountID: id)
             guard !Task.isCancelled, session == self.session else { return }
             self.loadTask = nil
             var seen = Set<String>()
             self.rows = first.filter { seen.insert($0.id).inserted }
             self.rowsByID = Dictionary(uniqueKeysWithValues: self.rows.map { ($0.id, $0) })
             self.hasMore = first.count == WalletDetailList.pageSize
-            // 只在变化时写入：写入就会让读它的 SwiftUI 视图重新计算
-            if self.model.pendingCount != pending { self.model.pendingCount = pending }
             let reveal = !self.contentShown
             self.contentShown = true
             self.applySnapshot(reconfigure: true)
@@ -436,11 +429,6 @@ final class WalletDetailList: NSObject, UITableViewDelegate {
                 )
             }
         }
-    }
-
-    private func pendingCount(accountID: String) async -> Int {
-        guard store.pendingCount > 0, let account = store.account(id: accountID) else { return 0 }
-        return await store.pendingItems().filter { PendingView.belongs($0, to: account) }.count
     }
 
     private func loadMore() {
@@ -493,7 +481,7 @@ final class WalletDetailList: NSObject, UITableViewDelegate {
             snapshot.reconfigureItems(snapshot.itemIdentifiers.filter { shown.contains($0) })
         }
         dataSource.apply(snapshot, animatingDifferences: false)
-        // 流水行的高度不变，只有余额区会变
+        // 流水行的高度不变，「交易记录」那一格只在打开和清空时变
         if summaryHeight != oldSummaryHeight { refreshHeights() }
     }
 

@@ -11,7 +11,6 @@ struct WalletActions {
     var manageAccounts: () -> Void = {}
     var openInfo: () -> Void = {}
     var openFace: () -> Void = {}
-    var openPending: () -> Void = {}
     var openRecord: (RecordRow) -> Void = { _ in }
     /// 流水左滑露出的两个按钮；删除在列表里确认过才到这里
     var editRecord: (RecordRow) -> Void = { _ in }
@@ -148,7 +147,6 @@ final class WalletController: UIViewController, UIScrollViewDelegate, UIGestureR
         detailList.onSelectRecord = { [weak self] row in self?.actions.openRecord(row) }
         detailList.onEditRecord = { [weak self] row in self?.actions.editRecord(row) }
         detailList.onDeleteRecord = { [weak self] row in self?.actions.deleteRecord(row) }
-        detailList.onOpenPending = { [weak self] in self?.actions.openPending() }
         detailList.onActivateCard = { [weak self] in self?.close() }
         detailList.onCurrencyChange = { [weak self] in self?.refreshSelectedCard() }
 
@@ -647,13 +645,9 @@ final class WalletController: UIViewController, UIScrollViewDelegate, UIGestureR
 
     /// 详情里「更多」的菜单
     private func moreMenuItems() -> [UIMenuElement] {
-        let pending = detailModel.pendingCount
-        return [
+        [
             UIAction(title: L("卡片信息"), image: UIImage(systemName: "creditcard")) { [weak self] _ in self?.actions.openInfo() },
             UIAction(title: L("编辑卡面"), image: UIImage(systemName: "paintbrush")) { [weak self] _ in self?.actions.openFace() },
-            UIAction(title: pending > 0 ? L("待处理账单（\(pending)）") : L("待处理账单"), image: UIImage(systemName: "tray")) { [weak self] _ in
-                self?.actions.openPending()
-            },
         ]
     }
 

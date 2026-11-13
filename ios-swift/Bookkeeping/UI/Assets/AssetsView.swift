@@ -27,10 +27,8 @@ struct AssetsView: View {
     private var isOpen: Bool { selectedID != nil }
 
     enum AssetsSheet: Identifiable, Hashable {
-        case info, face, pending, manage, customPeriod
+        case info, face, manage, customPeriod
         case record(RecordRow)
-        /// 点了一笔待分类的：直接选分类
-        case categorize(CategorizeTarget)
         var id: Self { self }
     }
 
@@ -70,24 +68,12 @@ struct AssetsView: View {
             manageAccounts: { sheet = .manage },
             openInfo: { sheet = .info },
             openFace: { sheet = .face },
-            openPending: { sheet = .pending },
-            openRecord: openRecord,
+            // 卡片详情里待分类的也打开流水详情：待分类只在首页提醒
+            openRecord: { sheet = .record($0) },
             editRecord: { swipe.editing = $0 },
             deleteRecord: { swipe.confirmedDelete = $0 },
             chooseCustomPeriod: { sheet = .customPeriod }
         )
-    }
-
-    /// 待分类的先取好候选再打开选分类面板，其余的打开流水详情
-    private func openRecord(_ row: RecordRow) {
-        guard row.needsCategory else {
-            sheet = .record(row)
-            return
-        }
-        Task {
-            let suggestions = await store.categorySuggestions(recordID: row.id)
-            sheet = .categorize(CategorizeTarget(row: row, suggestions: suggestions))
-        }
     }
 
     @ViewBuilder
@@ -97,10 +83,6 @@ struct AssetsView: View {
             AccountManagerView()
         case .record(let row):
             RecordDetailSheet(recordID: row.id)
-        case .categorize(let target):
-            CategorizeSheet(target: target)
-        case .pending:
-            PendingView(account: selectedID.flatMap { store.account(id: $0) })
         case .info:
             if let selectedID { CardInfoView(accountID: selectedID) }
         case .face:

@@ -1,46 +1,26 @@
 import SwiftUI
 import BKModel
 
-/// 卡片详情里卡片下面、流水之前的部分：待处理提示；「交易记录」标题，多币种的卡右边是选币种的按钮（按币种分开看流水）。
+/// 卡片详情里卡片下面、流水之前的「交易记录」标题，多币种的卡右边是选币种的按钮（按币种分开看流水）。
 /// 放在详情列表（`WalletDetailList`）里；卡片本身、流水、「暂无流水」和顶部按钮（含时间段）在别处。
-/// 余额在卡片上，初始余额在「卡片信息」里。
+/// 余额在卡片上，初始余额在「卡片信息」里。待处理、待分类只在首页提醒，详情里不出现。
 ///
-/// 高度只随待处理提示变化：换币种、换时间段时这一格不变高变矮，下面的流水格子增减。
+/// 高度固定：换卡、换币种、换时间段时这一格不变高变矮，下面的流水格子增减。
 struct AccountDetailSummary: View {
     let model: WalletDetailModel
-    let openPending: () -> Void
     let selectCurrency: (CurrencyCode) -> Void
     @State private var choosingCurrency = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            if model.pendingCount > 0 {
-                pendingStrip.padding(.bottom, 16)
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Text("交易记录").font(.title3.weight(.semibold))
+            Spacer(minLength: 0)
+            if model.currencies.count > 1 {
+                currencyMenu
             }
-            HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Text("交易记录").font(.title3.weight(.semibold))
-                Spacer(minLength: 0)
-                if model.currencies.count > 1 {
-                    currencyMenu
-                }
-            }
-            .padding(.top, 8)
-            .padding(.bottom, 10)
         }
-    }
-
-    /// 只有这张卡有待处理的账单时出现。
-    private var pendingStrip: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "tray.full").font(.title3).foregroundStyle(AppTheme.debt)
-            Text("\(model.pendingCount) 条账单待处理").font(.headline).foregroundStyle(.primary)
-            Spacer()
-            Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary)
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 14)
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .tapAction(openPending)
+        .padding(.top, 8)
+        .padding(.bottom, 10)
     }
 
     /// 每个币种的流水分开看，放在「交易记录」这一行的最右边（英文标题长，放在标题旁边会挤得换行）。

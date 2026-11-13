@@ -27,7 +27,8 @@ struct RecordRowView: View {
                     if r.status != .posted { badge(r.status.displayName.loc) }
                     if r.isRefund { badge("退款") }
                     if r.categoryAuto { badge("自动（归类）") }
-                    if row.needsCategory { badge("待分类", tinted: true) }
+                    // 卡片详情里不标：待分类只在首页提醒
+                    if row.needsCategory, !inAccount { badge("待分类", tinted: true) }
                 }
                 Text(subtitle)
                     .font(.subheadline).foregroundStyle(.secondary).lineLimit(1)

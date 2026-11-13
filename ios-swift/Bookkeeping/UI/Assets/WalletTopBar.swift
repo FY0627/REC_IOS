@@ -14,7 +14,7 @@ final class WalletTopBar: UIView {
     var onAdd: () -> Void = {}
     /// 卡包状态点「更多」：管理银行卡
     var onManage: () -> Void = {}
-    /// 详情状态「更多」的菜单项，每次打开菜单时生成（待处理数量随时会变）
+    /// 详情状态「更多」的菜单项，每次打开菜单时生成
     var moreMenu: () -> [UIMenuElement] = { [] }
     /// 时间段的菜单项，每次打开菜单时生成
     var periodMenu: () -> [UIMenuElement] = { [] }
