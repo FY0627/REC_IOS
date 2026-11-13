@@ -1745,6 +1745,25 @@ extension IngestTests {
         XCTAssertEqual(rows.first?.record.counterparty, "支付宝-示例超市")
     }
 
+    /// 推送一到就在灵动岛上选了分类，短信后到补上商户：这次选择记到这家店上，下次在这家店推荐它在前
+    func testCategoryPickedOnNoticeIsLearnedWhenMerchantArrives() async throws {
+        let backend = try makeBackend()
+        try await addAccount(backend, last4: "0002")
+        let notice = try await backend.ingest(IngestRequest(text: Self.cmbNotice("86.50"), source: .auto, receivedAt: now))
+        let noticeID = try XCTUnwrap(notice.items.first?.recordID)
+        let categories = try await backend.categories()
+        let daily = try XCTUnwrap(categories.first { $0.name == "日用品" })
+        try await backend.setCategory(recordID: noticeID, categoryID: daily.id)
+        _ = try await backend.ingest(IngestRequest(text: Self.cmbQuickPay("86.50", minute: 31), source: .auto, receivedAt: now.addingTimeInterval(60)))
+
+        let next = try await backend.ingest(IngestRequest(
+            text: "您账户0002于10月24日15:40在【财付通-示例超市】发生快捷支付扣款，人民币40.00", source: .auto, receivedAt: now.addingTimeInterval(600)
+        ))
+        let nextID = try XCTUnwrap(next.items.first?.recordID)
+        let suggestions = try await backend.categorySuggestions(recordID: nextID)
+        XCTAssertEqual(suggestions.quick.first?.id, daily.id, "认得是这家店")
+    }
+
     /// 推送和短信的时间差了 5 分钟：不当成同一笔，各记各的
     func testNoticeAndMessageMinutesApartStayApart() async throws {
         let backend = try makeBackend()

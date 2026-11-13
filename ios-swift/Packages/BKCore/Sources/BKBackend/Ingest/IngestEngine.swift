@@ -638,7 +638,8 @@ struct IngestEngine {
     }
 
     /// 把写全的那条补到只有卡号和金额的那笔上：交易时间、商户、交易性质（推送认不出时）；去重键换成写全的那条的，
-    /// 之后同一条短信（或邮件）再来按去重键合并。补上商户后没分类的重新归类；短信写了预授权时间就了结那笔冻结
+    /// 之后同一条短信（或邮件）再来按去重键合并。补上商户后没分类的重新归类；已经选了分类的（推送一到就在灵动岛上选了），
+    /// 这次选择记到补上的商户上，下次这家店照样推荐。短信写了预授权时间就了结那笔冻结
     func mergeDetail(_ record: LedgerRecord, into twin: LedgerRecord, dedupeKey key: String, holdTime: WallClock?, meta: IngestMeta) throws -> CommitOutcome {
         var updated = twin
         if twin.transactionTime == nil, let time = record.transactionTime {
@@ -655,7 +656,13 @@ struct IngestEngine {
         if updated != twin { _ = try RecordDAO.update(db, updated) }
         try RecordDAO.addEvidence(db, recordID: twin.id, ingestID: meta.ingestID, source: meta.source, at: now)
         try AccountDAO.noteSuccess(db, id: twin.accountID, at: now, source: meta.source)
-        if updated.counterparty != twin.counterparty, updated.categoryID == nil { try Categorizer(db: db).categorize(recordID: twin.id) }
+        if updated.counterparty != twin.counterparty {
+            if let chosen = updated.categoryID, !updated.categoryAuto {
+                try CategoryLearner(db: db).learn(updated, categoryID: chosen, at: now)
+            } else if updated.categoryID == nil {
+                try Categorizer(db: db).categorize(recordID: twin.id)
+            }
+        }
         try closeHold(of: updated, holdTime: holdTime)
         return .merged(twin.id)
     }
