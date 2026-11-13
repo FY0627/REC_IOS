@@ -70,7 +70,7 @@ struct BookkeepingApp: App {
     @AppStorage("appearance") private var appearance = AppearanceMode.system.rawValue
     @AppStorage(ThemeColor.key) private var themeColor = ThemeColor.blue.rawValue
     @AppStorage(ExchangeRateStore.primaryKey) private var primaryCurrency = "CNY"
-    /// 换了语言整个界面按新语言重建（`AppLanguage`）；停在哪个标签放在外面，重建后还在这个标签
+    /// 换了语言、换了账本（演示数据）整个界面重建（`AppLanguage`）；停在哪个标签放在外面，重建后还在这个标签
     @AppStorage(AppLanguage.key) private var language = AppLanguage.system.rawValue
     @State private var tab: AppTab = .home
     @Environment(\.scenePhase) private var scenePhase
@@ -84,7 +84,8 @@ struct BookkeepingApp: App {
     var body: some Scene {
         WindowGroup {
             RootView(tab: $tab)
-                .id(language)
+                // 换了演示数据（ADR 0025）也整个重建：停在另一个账本里的页面都关掉
+                .id("\(language)|\(store.ledgerGeneration)")
                 .environment(\.locale, AppLanguage.locale)
                 .environment(store)
                 .environment(rates)

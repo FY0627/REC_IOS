@@ -13815,6 +13815,28 @@
         }
       }
     },
+    "演示数据" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Demo Data"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "演示数据"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "示範資料"
+          }
+        }
+      }
+    },
     "澳大利亚" : {
       "localizations" : {
         "en" : {

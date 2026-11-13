@@ -11,13 +11,16 @@ struct SimulationView: View {
     @State private var lastText: String?
     @State private var busy = false
     @State private var errorText: String?
+    /// 开着演示数据时：记在演示的中行卡上，商户是演示数据里的店
+    private let demo = DemoMode.language
 
     var body: some View {
         List {
             Section {
                 ForEach(SimulatedSpend.allCases) { spend in
                     Button { Task { await simulate(spend) } } label: {
-                        LabeledContent(spend.title, value: spend.merchant ?? "")
+                        // 演示账本（ADR 0025）里是演示数据的店，按演示的语言
+                        LabeledContent(spend.title, value: (demo.map { spend.merchant(in: $0) } ?? spend.merchant) ?? "")
                     }
                 }
             }
@@ -28,7 +31,7 @@ struct SimulationView: View {
                 LabeledContent("模拟了", value: "\(count) 笔")
                 Menu {
                     Button(role: .destructive) { Task { await clear() } } label: {
-                        Label("删掉模拟卡和它的全部流水", systemImage: "trash")
+                        Label(demo == nil ? "删掉模拟卡和它的全部流水" : "删掉模拟的流水", systemImage: "trash")
                     }
                 } label: {
                     Label("一键清除", systemImage: "trash")

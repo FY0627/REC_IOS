@@ -209,6 +209,14 @@ enum LiveCategoryActivity {
         }
     }
 
+    /// 换账本（演示数据开关，ADR 0025）：岛上和排着的都是另一个账本的，全部结束、清掉
+    @MainActor
+    static func endAll() async {
+        for activity in running() { await activity.end(nil, dismissalPolicy: .immediate) }
+        let defaults = UserDefaults.standard
+        for key in [queueKey, pickerKey, pickerRecordKey] { defaults.removeObject(forKey: key) }
+    }
+
     // MARK: 下一笔
 
     /// 岛上这一笔选好了（或者在 App 里选了、删了）：换成排着的最近一笔，跳过已经分好类、删了的；没有了就结束。

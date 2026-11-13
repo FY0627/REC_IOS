@@ -58,22 +58,84 @@ final class LedgerStore {
 
     func start() async {
         guard backend == nil else { return }
+        // 上次开着演示数据，演示账本却不在了（没写完、被清理）：回到真实账本，不留一个空账本
+        if DemoMode.isActive, !DemoMode.ledgerExists {
+            DemoMode.deactivate()
+            demoActive = false
+        }
         do {
-            // 打开数据库（含迁移）放在后台线程
-            let opened = try await Task.detached(priority: .userInitiated) { try AppServices.shared.backend() }.value
-            backend = opened
-            // 更新前只缓存了最新一份汇率：放进按天保存的汇率表（已有就跳过）
-            if let cached = ExchangeRateStore.cached() { _ = try? await opened.saveExchangeRates(cached) }
-            await adoptLedgerRates()
-            // 更新前手选的分类：回放一遍，学习不从零开始（只做一次）
-            try? await opened.seedCategoryLearning()
-            // 更新后读法变了：还没处理的待处理按新读法重读一遍（每个版本的读法只做一次）
-            try? await opened.rereadPending()
-            await refresh()
+            try await open()
             _ = try? await backend?.purgeExpiredRawContent()
         } catch {
             state = .failed((error as? LocalizedError)?.errorDescription ?? String(describing: error))
         }
+    }
+
+    /// 打开现在的账本（真实的或演示的），读出界面要的数据
+    private func open() async throws {
+        // 打开数据库（含迁移）放在后台线程
+        let opened = try await Task.detached(priority: .userInitiated) { try AppServices.shared.backend() }.value
+        backend = opened
+        // 更新前只缓存了最新一份汇率：放进按天保存的汇率表（已有就跳过）
+        if let cached = ExchangeRateStore.cached() { _ = try? await opened.saveExchangeRates(cached) }
+        await adoptLedgerRates()
+        // 更新前手选的分类：回放一遍，学习不从零开始（只做一次）
+        try? await opened.seedCategoryLearning()
+        // 更新后读法变了：还没处理的待处理按新读法重读一遍（每个版本的读法只做一次）
+        try? await opened.rereadPending()
+        await refresh()
+    }
+
+    // MARK: 演示数据（ADR 0025）
+
+    /// 开着演示数据（开关当场跟着点的变，换好之前不能再点）
+    private(set) var demoActive = DemoMode.isActive
+    private(set) var switchingLedger = false
+    /// 换了一次账本 +1：整个界面按它重建，停在另一个账本里的页面（卡片详情、编辑）都关掉
+    private(set) var ledgerGeneration = 0
+    /// 打开演示数据失败的原因（这时已经回到真实账本）
+    var demoError: String?
+
+    /// 打开：按现在的语言重新生成一份演示账本，换过去；关掉：换回真实账本，设置恢复成打开前的样子
+    func setDemo(_ on: Bool) async {
+        guard !switchingLedger, on != DemoMode.isActive else { return }
+        switchingLedger = true
+        demoActive = on
+        refreshTask?.cancel()
+        // 灵动岛上那一笔是另一个账本的
+        await LiveCategoryActivity.endAll()
+        do {
+            if on {
+                let language = DemoMode.currentLanguage
+                try await Task.detached(priority: .userInitiated) {
+                    try DemoMode.activate(language: language)
+                    let demo = try AppServices.shared.backend()
+                    _ = try await demo.seedDemo(language: language)
+                    // 净资产、外币换算用演示账本的汇率（关掉时连同别的设置一起换回去）
+                    if let rates = try await demo.latestExchangeRates() { ExchangeRateStore.save(rates) }
+                }.value
+                NotificationCenter.default.post(name: .exchangeRatesDidChange, object: nil)
+            } else {
+                DemoMode.deactivate()
+            }
+            try await open()
+        } catch {
+            let message = (error as? LocalizedError)?.errorDescription ?? String(describing: error)
+            // 演示账本没生成好：回到真实账本
+            if on {
+                demoError = message
+                DemoMode.deactivate()
+            }
+            do {
+                try await open()
+            } catch {
+                state = .failed((error as? LocalizedError)?.errorDescription ?? String(describing: error))
+            }
+        }
+        if !DemoMode.isActive { await Task.detached(priority: .utility) { DemoMode.removeFiles() }.value }
+        demoActive = DemoMode.isActive
+        ledgerGeneration += 1
+        switchingLedger = false
     }
 
     func retryStart() async {

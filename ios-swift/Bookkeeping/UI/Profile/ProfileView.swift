@@ -183,6 +183,18 @@ private struct ProfileList: View {
                         NavigationLink(value: ProfileRoute.simulation) {
                             Label("模拟消费", systemImage: "cart.badge.plus")
                         }
+                        // 官网录屏、截图用（ADR 0025）：换成一份按现在的语言生成的演示账本，关掉回到真实账本
+                        Toggle(isOn: Binding(get: { store.demoActive }, set: { on in Task { await store.setDemo(on) } })) {
+                            Label {
+                                HStack {
+                                    Text("演示数据")
+                                    if store.switchingLedger { ProgressView() }
+                                }
+                            } icon: {
+                                Image(systemName: "theatermasks")
+                            }
+                        }
+                        .disabled(store.switchingLedger)
                         NavigationLink(value: ProfileRoute.performance) {
                             Label("性能开关与调试指标", systemImage: "speedometer")
                         }
@@ -213,6 +225,11 @@ private struct ProfileList: View {
                 Button("取消", role: .cancel) {}
             } message: {
                 Text("在系统设置里允许 REC 发送通知。")
+            }
+            .alert("演示数据", isPresented: Binding(get: { store.demoError != nil }, set: { if !$0 { store.demoError = nil } })) {
+                Button("好", role: .cancel) {}
+            } message: {
+                Text(store.demoError ?? "")
             }
             .trackingScrollUnderTopBar($scrolledUnderBar)
             .navigationTitle("我的")
