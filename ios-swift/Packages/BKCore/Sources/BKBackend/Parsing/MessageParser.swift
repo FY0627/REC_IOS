@@ -60,7 +60,7 @@ public struct ParsedMessage: Sendable {
 /// 规则解析器：纯函数，不访问数据库，不依赖网络。
 public enum MessageParser {
     /// 读法变了就加 1：还没处理的待处理项按新读法重读一遍（`IngestEngine.rereadPending`）
-    public static let version = 8
+    public static let version = 9
 
     // MARK: 识别用正则
 
@@ -104,10 +104,15 @@ public enum MessageParser {
 
     private static let amountPattern = Rx(#"(?<![\d,'#])(?<!\d\.)(?:([-+])[ \t]?)?(\d{1,2}(?:,\d{2})+,\d{3}(?:\.\d{1,3})?|\d{1,3}(?:,\d{3})+(?:\.\d{1,3})?|\d{1,3}(?:\.\d{3})+(?:,\d{1,3})?|\d{1,3}(?:'\d{3})+(?:\.\d{1,3})?|\d+(?:[.,]\d{1,3})?)(?![\d'#]|[.,]\d)"#)
 
+    /// 「在某某」后面说这笔是什么的词。「在某某发生快捷支付扣款」的「发生」不是商户名
+    private static let spendAfterPlace = #"\s*(?:发生)?\s*(?:完成(?:一笔)?(?:扣款|消费|支付|交易|付款)|预授权|冻结|消费|支付|刷卡|网上支付|快捷支付|扣款|购物)"#
+
     private static let counterpartyPatterns: [Rx] = [
         Rx(#"(?:商户名称|交易商户|商户|对方户名|对方账户名|对方名称|对方|收款方|收款人|付款方|付款人|交易对象|merchant|payee|händler)\s*[：:]\s*([^，,。；;\n()（）]{1,40})"#),
+        // 招行快捷支付「在【支付宝-某某超市】发生快捷支付扣款」：【】里是商户，不是署名。商户名里的「支付」不是动作
+        Rx(#"在\s*【([^【】\n]{2,40})】"# + spendAfterPlace),
         // 商户描述可以很长（名称 + 地址 + 城市 + 邮编），地址里可能有不带空格的逗号。「绑定在Apple Pay上的账户…」的「在」后面不是商户，不跨过账户、卡号
-        Rx(#"在\s*(?!\d)((?:(?!账户|账号|卡号|尾号)(?:[^，,。；;\n]|,(?=\S))){2,80}?)\s*(?:完成(?:一笔)?(?:扣款|消费|支付|交易|付款)|预授权|冻结|消费|支付|刷卡|网上支付|快捷支付|扣款|购物)"#),
+        Rx(#"在\s*(?!\d)((?:(?!账户|账号|卡号|尾号)(?:[^，,。；;\n]|,(?=\S))){2,80}?)"# + spendAfterPlace),
         Rx(#"([^\s，,。；;\n:：]{2,30}?)\s*向您(?:尾号\s*[*xX•]*\d{3,4})?的?(?:账户|账号|[^，,。；;\n]{0,8}?卡)?\d{0,4}(?:完成|消费退货|退款)?(?:转账|转存|汇款|存入)"#),
         // 卡组织的商户描述（名称 + 城市 + 国家）可以到 40 多个字符，例如「WEIXIN*Demo QR shop fo Testcity CN」
         Rx(#"向\s*([^您，,。；;\n][^，,。；;\n]{1,44}?)\s*(?:跨行|行内)?(?:转账|转出|付款|汇款|支付(?![-宝])|支出)"#),
@@ -760,8 +765,9 @@ public enum MessageParser {
     }
 
     /// 夹在文字中间的银行【署名】：一条通知在这里结束、下一条开始。中行的短信以「【中国银行】」结尾，前面没有句号，
-    /// 几条连在一起交过来时不在这里断开，就成了同一句里的几个金额。返回每个署名的「】」
-    private static let middleSignature = Rx(#"(?<=[^\n])【([^【】\n]{2,24})】(?=\S)"#)
+    /// 几条连在一起交过来时不在这里断开，就成了同一句里的几个金额。返回每个署名的「】」。
+    /// 「在【财付通-微信支付-平安某某】发生…」里的是商户，名字像银行也不是署名
+    private static let middleSignature = Rx(#"(?<=[^\n在])【([^【】\n]{2,24})】(?=\S)"#)
     private static func signatureBreaks(in ns: NSString) -> [NSRange] {
         middleSignature.matches(ns).compactMap { m in
             guard let name = m.group(1, in: ns), Lexicon.bankSignature.test(name) || BankCatalog.entry(signature: name) != nil else { return nil }

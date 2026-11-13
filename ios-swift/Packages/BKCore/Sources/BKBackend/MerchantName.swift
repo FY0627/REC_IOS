@@ -19,12 +19,18 @@ enum MerchantName {
         name = name.replacingOccurrences(of: #"\s*\([^()]*\)$"#, with: "", options: .regularExpression)
         // 渠道的公司全称，不是商户（「支付宝（中国）网络技术有限公司」）
         if name.hasSuffix("公司"), channels.contains(where: { name.hasPrefix($0) }) { return nil }
-        for channel in channels where name.hasPrefix(channel) {
-            let rest = name.dropFirst(channel.count).trimmingCharacters(in: .whitespaces)
-            if rest.isEmpty { return nil }
-            guard let first = rest.first, separators.contains(first) else { continue }
-            name = String(rest.dropFirst())
-            break
+        // 渠道可以套两层（「财付通-微信支付-某某」）
+        var removed = true
+        while removed {
+            removed = false
+            for channel in channels where name.hasPrefix(channel) {
+                let rest = name.dropFirst(channel.count).trimmingCharacters(in: .whitespaces)
+                if rest.isEmpty { return nil }
+                guard let first = rest.first, separators.contains(first) else { continue }
+                name = String(rest.dropFirst()).trimmingCharacters(in: .whitespaces)
+                removed = true
+                break
+            }
         }
         name = name.trimmingCharacters(in: CharacterSet(charactersIn: " " + separators))
 

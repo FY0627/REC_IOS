@@ -122,6 +122,22 @@ final class ScreenshotTests: XCTestCase {
     已存入零钱，可直接消费
     """
 
+    /// 新版红包页：发红包的人下面一行是祝福语
+    let wechatRedPacketWithGreeting = """
+    示例阿明发出红包
+    恭喜发财，大吉大利
+    8.88元
+    已存入零钱，可直接消费＞
+    """
+
+    /// 写成「发出的红包」的：钱存进了自己的零钱，是收到的
+    let wechatRedPacketSentBy = """
+    示例阿芳发出的红包
+    恭喜发财，大吉大利
+    5.20元
+    已存入零钱，可直接消费＞
+    """
+
     /// 支付宝账单详情（余额付）
     let alipayDetail = """
     示例外卖
@@ -256,6 +272,21 @@ final class ScreenshotTests: XCTestCase {
         XCTAssertEqual(packet.kind, .income)
         XCTAssertEqual(packet.direction, .inflow)
         XCTAssertEqual(packet.counterparty, "王五")
+    }
+
+    func testRedPacketWithGreetingIsFromTheSender() async throws {
+        let backend = try makeBackend()
+        let wallet = try await addWechat(backend)
+        _ = try await backend.ingestScreenshot(text: wechatRedPacketWithGreeting, capturedAt: at(15, 0))
+        _ = try await backend.ingestScreenshot(text: wechatRedPacketSentBy, capturedAt: at(15, 30))
+        let rows = try await backend.records(accountID: wallet.id).map(\.record)
+        XCTAssertEqual(rows.count, 2)
+        for (minor, name) in [(8_88, "示例阿明"), (5_20, "示例阿芳")] {
+            let packet = try XCTUnwrap(rows.first { $0.amountMinor == Int64(minor) }, name)
+            XCTAssertEqual(packet.kind, .income, name)
+            XCTAssertEqual(packet.direction, .inflow, "已存入零钱：是收到的红包，不看「发出的红包」")
+            XCTAssertEqual(packet.counterparty, name, "祝福语不是对方")
+        }
     }
 
     func testTransferPageSaysWhoReceivedTheMoney() async throws {

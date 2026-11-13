@@ -102,7 +102,9 @@ enum ScreenshotParser {
     private static let noiseRow = Rx(#"^(?:\d{1,2}[:：]\d{2}|[0-9]{1,3}%?|[45]G|LTE|WiFi|<|返回|账单详情|交易详情|详情|全部账单|全部收款明细|账单|支付成功|付款成功|交易成功|转账成功|收款成功|已收款|你已收款|微信支付|支付宝|完成|返回商家|\.{2,}|…+|·+|X|x|更多|查看账单|查看详情|联系商家|申请退款|常见问题|对此订单有疑问)$"#)
     private static let adWords = Rx(#"优惠|券|奖励|领取|广告|立即|查看|积分|抽奖|推荐|活动|开通|服务|关注|公众号|小程序|随机立减|立减"#)
     private static let titlePrefix = Rx(#"^(?:转账-转给|转账-来自|转账给|转账-|微信红包-发给|微信红包-来自|微信红包-|扫二维码付款-给|二维码收款-来自|付款给|收款方[:：]?)\s*"#)
-    private static let titleSuffix = Rx(#"(?:发出)?的红包$|(?:\.{2,}|…+)$"#)
+    private static let titleSuffix = Rx(#"(?:发出的?|的)红包$|(?:\.{2,}|…+)$"#)
+    /// 红包页上写着谁发的：「王五的红包」「某某发出红包」「某某发出的红包」。新版红包页这行下面是祝福语，不是对方
+    private static let redPacketSender = Rx(#"^(.{1,24}?)(?:发出的?|的)红包$"#)
 
     // MARK: 换汇页（银行 App）
 
@@ -236,14 +238,17 @@ enum ScreenshotParser {
         let status = values[.status]?.value ?? ""
         let isRefund = refund.test(titleText) || status.contains("退款成功") || (sign == "+" && refund.test(refundButton.replace(pageText, with: " ")))
         let toBusiness = businessReceipt.test(pageText)
+        let sender = isRedPacket ? Self.redPacketSender(rows: rows, before: amountRow, labelRows: labelRows) : nil
 
-        // 5. 方向：先看正负号，再看页面上的字。「谁已收款」先于「已收款」这类词：对方收了是自己付的
+        // 5. 方向：先看正负号，再看页面上的字。「谁已收款」先于「已收款」这类词：对方收了是自己付的。
+        // 红包存进了自己的零钱是收到的，页面上写「某某发出的红包」也一样
         var direction: FlowDirection?
         if sign == "-" { direction = .outflow } else if sign == "+" { direction = .inflow }
         if direction == nil {
             if isRefund || isTopUp { direction = .inflow }
             else if isWithdraw { direction = .outflow }
             else if let receiver { direction = receiver == "你" ? .inflow : .outflow }
+            else if isRedPacket, savedToWallet.test(pageText) { direction = .inflow }
             else if outgoingWords.test(pageText) { direction = .outflow }
             else if incomingWords.test(pageText) { direction = .inflow }
             else if purchaseWords.test(pageText) { direction = .outflow }
@@ -290,12 +295,15 @@ enum ScreenshotParser {
         let walletHint = cardTail == nil && bankHint == nil ? app : nil
 
         // 7. 商户或对方：标签 > 金额上面那一行（页面标题）> 金额下面不像广告的一行。
-        // 转账页的标题是「谁已收款」：对方收的取名字；自己收的页面上没写对方，金额下面的「零钱余额」也不是
+        // 转账页的标题是「谁已收款」：对方收的取名字；自己收的页面上没写对方，金额下面的「零钱余额」也不是。
+        // 红包页取发红包的人，不取金额上面的祝福语
         var counterparty = values[.counterparty]?.value
         if counterparty == nil || counterparty?.isEmpty == true {
-            if let receiver { counterparty = receiver == "你" || receiver == "对方" ? nil : receiver } else { counterparty = title }
+            if let receiver { counterparty = receiver == "你" || receiver == "对方" ? nil : receiver }
+            else if let sender { counterparty = sender == "你" || sender == "我" ? nil : sender }
+            else { counterparty = title }
         }
-        if counterparty == nil, receiver == nil, let amountRow, amountRow + 1 < rows.count, !labelRows.contains(amountRow + 1) {
+        if counterparty == nil, receiver == nil, sender == nil, let amountRow, amountRow + 1 < rows.count, !labelRows.contains(amountRow + 1) {
             let below = rows[amountRow + 1]
             if below.count <= 20, !noiseRow.test(below), !adWords.test(below), !failedWords.test(below), amountOnly.first(NSString(string: below)) == nil { counterparty = below }
         }
@@ -408,6 +416,18 @@ enum ScreenshotParser {
             let ns = NSString(string: rows[index])
             guard let m = receivedTitle.first(ns) else { continue }
             let name = (m.group(1, in: ns) ?? m.group(2, in: ns))?.trimmingCharacters(in: .whitespaces) ?? ""
+            return name.isEmpty ? nil : name
+        }
+        return nil
+    }
+
+    /// 金额上面写着谁发的红包的一行（`redPacketSender`）：发红包的人
+    private static func redPacketSender(rows: [String], before amountRow: Int?, labelRows: Set<Int>) -> String? {
+        guard let amountRow, amountRow > 0 else { return nil }
+        for index in stride(from: amountRow - 1, through: 0, by: -1) where !labelRows.contains(index) {
+            let ns = NSString(string: rows[index])
+            guard let m = redPacketSender.first(ns) else { continue }
+            let name = m.group(1, in: ns)?.trimmingCharacters(in: .whitespaces) ?? ""
             return name.isEmpty ? nil : name
         }
         return nil

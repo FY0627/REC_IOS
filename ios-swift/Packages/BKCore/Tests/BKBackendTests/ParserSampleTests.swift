@@ -57,6 +57,27 @@ final class ParserSampleTests: XCTestCase {
         XCTAssertEqual(d.counterparty, "美团外卖")
     }
 
+    /// 招行快捷支付把商户写在【】里：不是银行署名，是商户。学分类时只看渠道后面的商户
+    func testBracketedMerchantIsTheCounterparty() throws {
+        let samples: [(text: String, sender: String?, counterparty: String, key: String)] = [
+            ("您账户3051于10月23日12:05在【支付宝-示例鲜果超市】发生快捷支付扣款，人民币32.00", "95555", "支付宝-示例鲜果超市", "示例鲜果超市"),
+            ("您账户3051于10月23日18:40在【财付通-微信支付-示例面馆】发生快捷支付扣款，人民币18.50【招商银行】", nil, "财付通-微信支付-示例面馆", "示例面馆"),
+            // 商户名里有像银行的字（「平安」）也不在这里断句
+            ("您账户3051于10月23日20:10在【财付通-微信支付-平安示例药房】发生快捷支付扣款，人民币45.60", "95555", "财付通-微信支付-平安示例药房", "平安示例药房"),
+        ]
+        for sample in samples {
+            let d = try XCTUnwrap(single(sample.text, sender: sample.sender), sample.text)
+            XCTAssertEqual(d.cardTail, "3051", sample.text)
+            XCTAssertEqual(d.kind, .purchase, sample.text)
+            XCTAssertEqual(d.direction, .outflow, sample.text)
+            XCTAssertEqual(d.bankHint, "cmb", sample.text)
+            XCTAssertEqual(d.counterparty, sample.counterparty)
+            XCTAssertEqual(MerchantName.key(d.counterparty), sample.key)
+        }
+        let plain = try XCTUnwrap(single("您账户3051于10月23日12:05在示例鲜果超市发生快捷支付扣款，人民币32.00", sender: "95555"))
+        XCTAssertEqual(plain.counterparty, "示例鲜果超市", "「发生」不是商户名的一部分")
+    }
+
     func testEnglishCardPurchaseInEuro() throws {
         let d = try XCTUnwrap(single("Your card ending 3305 was charged EUR 12,50 at REWE MARKT on 24.10.2026 13:02. Available balance: EUR 1.204,30."))
         XCTAssertEqual(d.cardTail, "3305")
