@@ -13,7 +13,7 @@ enum CategoryCheckupReplay {
     /// 看连续选几次就自动归类会怎样：现在是 3 次，另外算 2 次
     static let streaks = [CategoryLearner.autoStreak, 2]
 
-    static func run(_ db: SQLiteConnection, now: Date) throws -> CategoryCheckup {
+    static func run(_ db: SQLiteConnection, now: Date, calendar: Calendar) throws -> CategoryCheckup {
         let categories = try CategoryDAO.all(db)
         let tree = CategoryTree(categories)
         let records = try RecordDAO.categorized(db, includingAuto: true)
@@ -23,7 +23,7 @@ enum CategoryCheckupReplay {
         return try replay.immediateTransaction {
             try replay.execute("DELETE FROM categories")
             for category in categories { try CategoryDAO.insert(replay, category, now: now) }
-            let learner = CategoryLearner(db: replay)
+            let learner = CategoryLearner(db: replay, calendar: calendar)
             var result = CategoryCheckup(autoFiling: streaks.map { CategoryCheckup.AutoFiling(streak: $0) })
             for record in records {
                 if let chosen = chosenCategory(record, tree: tree) {

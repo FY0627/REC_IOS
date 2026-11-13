@@ -447,7 +447,7 @@ public final class LedgerBackend: Sendable {
                 if let group = record.orderGroupID {
                     try RecordDAO.setCategory(db, ids: try RecordDAO.inOrderGroup(db, groups: [group]).map(\.id), categoryID: categoryID)
                 }
-                try CategoryLearner(db: db).learn(record, categoryID: categoryID, replacing: original.categoryID, at: now)
+                try CategoryLearner(db: db, calendar: self.calendar).learn(record, categoryID: categoryID, replacing: original.categoryID, at: now)
             }
         }
     }
@@ -532,7 +532,9 @@ public final class LedgerBackend: Sendable {
             var ids = [record.id]
             if let group = record.orderGroupID { ids = try RecordDAO.inOrderGroup(db, groups: [group]).map(\.id) }
             try RecordDAO.setCategory(db, ids: ids, categoryID: categoryID)
-            if record.categoryID != categoryID { try CategoryLearner(db: db).learn(record, categoryID: categoryID, replacing: record.categoryID, at: now) }
+            if record.categoryID != categoryID {
+                try CategoryLearner(db: db, calendar: self.calendar).learn(record, categoryID: categoryID, replacing: record.categoryID, at: now)
+            }
             if let note { _ = try RecordDAO.updateNote(db, id: record.id, note: String(note.prefix(500))) }
         }
     }
@@ -541,27 +543,39 @@ public final class LedgerBackend: Sendable {
     public func categorySuggestions(recordID: String) async throws -> CategorySuggestions {
         try await database.read { db in
             guard let record = try RecordDAO.find(db, id: recordID) else { throw BackendError.notFound }
-            return try CategoryLearner(db: db).suggestions(for: record, tree: CategoryTree(try CategoryDAO.all(db)))
+            return try CategoryLearner(db: db, calendar: self.calendar).suggestions(for: record, tree: CategoryTree(try CategoryDAO.all(db)))
         }
     }
 
     /// 分类建议体检：已经选好分类的流水重新推荐一遍，看建议准不准（`CategoryCheckupReplay`）。只读，不改账本
     public func categoryCheckup() async throws -> CategoryCheckup {
         let now = clock()
-        return try await database.read { db in try CategoryCheckupReplay.run(db, now: now) }
+        let calendar = calendar
+        return try await database.read { db in try CategoryCheckupReplay.run(db, now: now, calendar: calendar) }
     }
 
     static let learningSeededKey = "category.learning_seeded"
+    /// 按时段记是后来加的（ADR 0026）：以前学过的再按流水补一遍时段
+    static let slotLearningSeededKey = "category.slot_learning_seeded"
 
-    /// 把已有的手选记录按时间回放一遍，学习不从零开始。只做一次
+    /// 把已有的手选记录按时间回放一遍，学习不从零开始。只做一次；以前回放过的只补上时段
     public func seedCategoryLearning() async throws {
+        let calendar = calendar
         try await database.write { db in
-            guard try SettingsDAO.get(db, Self.learningSeededKey) == nil else { return }
-            let learner = CategoryLearner(db: db)
+            let seeded = try SettingsDAO.get(db, Self.learningSeededKey) != nil
+            guard try !seeded || SettingsDAO.get(db, Self.slotLearningSeededKey) == nil else { return }
+            let tree = CategoryTree(try CategoryDAO.all(db))
+            let learner = CategoryLearner(db: db, calendar: calendar, times: try MealTimes.load(db, tree: tree, calendar: calendar))
             for record in try RecordDAO.categorized(db) {
-                if let categoryID = record.categoryID { try learner.learn(record, categoryID: categoryID, at: record.effectiveAt) }
+                guard let categoryID = record.categoryID else { continue }
+                if seeded {
+                    try learner.learnSlot(record, categoryID: categoryID, at: record.effectiveAt)
+                } else {
+                    try learner.learn(record, categoryID: categoryID, at: record.effectiveAt)
+                }
             }
             try SettingsDAO.set(db, Self.learningSeededKey, "1")
+            try SettingsDAO.set(db, Self.slotLearningSeededKey, "1")
         }
     }
 
@@ -770,7 +784,7 @@ public final class LedgerBackend: Sendable {
                 _ = try RecordDAO.insertIfAbsent(db, r, dedupeKey: "m|" + r.id, now: now)
                 try RecordDAO.addEvidence(db, recordID: r.id, ingestID: ingestID, source: .manual, at: now)
             }
-            if let category { try CategoryLearner(db: db).learn(records[0], categoryID: category, at: now) }
+            if let category { try CategoryLearner(db: db, calendar: calendar).learn(records[0], categoryID: category, at: now) }
             try SettingsDAO.set(db, Self.lastManualAccountKey, account.id)
             return records.map(\.id)
         }

@@ -61,8 +61,9 @@ final class CategoryCheckupTests: XCTestCase {
         XCTAssertEqual(checkup.all.count, 4)
         XCTAssertEqual(checkup.automatic, 4)
 
-        // 第 1 笔没有可参考的：长按、点「饮食」、点「午餐」，3 下；第 2、3 笔这个商户选过午餐，排在第一个：长按、点「午餐」，2 下
-        XCTAssertEqual(checkup.withMerchant, CategoryCheckup.Score(count: 3, first: 2, panel: 2, notification: 3, taps: 7))
+        // 第 1 笔这个商户没选过：小词库认出「外卖」，中午排午餐第一（ADR 0026），通知上还是长按、点「饮食」、点「午餐」，3 下；
+        // 第 2、3 笔这个商户选过午餐，排在第一个：长按、点「午餐」，2 下
+        XCTAssertEqual(checkup.withMerchant, CategoryCheckup.Score(count: 3, first: 3, panel: 3, notification: 3, taps: 7))
         // 没有商户：常用的午餐排第一，饮料零食不在建议里；「饮食」在第一页，点开后饮料零食在小类的第二页：长按、饮食、更多、饮料零食，4 下
         XCTAssertEqual(checkup.withoutMerchant, CategoryCheckup.Score(count: 1, first: 0, panel: 0, notification: 1, taps: 4))
         XCTAssertEqual(checkup.all.taps, 11)
@@ -86,6 +87,7 @@ final class CategoryCheckupTests: XCTestCase {
         }
         let checkup = try await backend.categoryCheckup()
         XCTAssertEqual(checkup.autoFiling.last, CategoryCheckup.AutoFiling(streak: 2, filed: 1, wrong: 1), "连续 2 次就自动归的话，第 3 笔会归错")
-        XCTAssertEqual(checkup.withMerchant.first, 1)
+        // 第 1 笔小词库认出「餐」，中午排午餐第一；第 2 笔选过午餐排第一；第 3 笔改成了晚餐
+        XCTAssertEqual(checkup.withMerchant.first, 2)
     }
 }

@@ -568,7 +568,7 @@ struct IngestEngine {
         try linkTransfer(record, counterpartyTail: draft.counterpartyTail, accounts: accounts)
         try linkRefund(record)
         try closeHold(of: record, holdTime: draft.holdTime)
-        try Categorizer(db: db).categorize(recordID: record.id)
+        try Categorizer(db: db, calendar: calendar).categorize(recordID: record.id)
         return .recorded(record.id)
     }
 
@@ -658,9 +658,9 @@ struct IngestEngine {
         try AccountDAO.noteSuccess(db, id: twin.accountID, at: now, source: meta.source)
         if updated.counterparty != twin.counterparty {
             if let chosen = updated.categoryID, !updated.categoryAuto {
-                try CategoryLearner(db: db).learn(updated, categoryID: chosen, at: now)
+                try CategoryLearner(db: db, calendar: calendar).learn(updated, categoryID: chosen, at: now)
             } else if updated.categoryID == nil {
-                try Categorizer(db: db).categorize(recordID: twin.id)
+                try Categorizer(db: db, calendar: calendar).categorize(recordID: twin.id)
             }
         }
         try closeHold(of: updated, holdTime: holdTime)
@@ -878,7 +878,7 @@ struct IngestEngine {
         if updated != twin { try RecordDAO.update(db, updated) }
         try RecordDAO.addEvidence(db, recordID: twin.id, ingestID: meta.ingestID, source: meta.source, at: now)
         try AccountDAO.noteSuccess(db, id: updated.accountID, at: now, source: meta.source)
-        if updated.counterparty != twin.counterparty, updated.categoryID == nil { try Categorizer(db: db).categorize(recordID: twin.id) }
+        if updated.counterparty != twin.counterparty, updated.categoryID == nil { try Categorizer(db: db, calendar: calendar).categorize(recordID: twin.id) }
         return .merged(twin.id)
     }
 }

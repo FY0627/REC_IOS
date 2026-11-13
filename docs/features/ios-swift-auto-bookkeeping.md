@@ -217,16 +217,17 @@
 
 ## 自动归类（分类）
 
-见 [ADR 0014](../decisions/0014-ios-swift-entry-types-and-categories.md)、[ADR 0017](../decisions/0017-ios-swift-learned-categories.md)。入账后在同一个事务里（`BKBackend/Categorizer.swift`）：
+见 [ADR 0014](../decisions/0014-ios-swift-entry-types-and-categories.md)、[ADR 0017](../decisions/0017-ios-swift-learned-categories.md)、[ADR 0026](../decisions/0026-ios-swift-meal-time-learning-and-lexicon.md)。入账后在同一个事务里（`BKBackend/Categorizer.swift`）：
 
 - 转帐（自己的账户之间、还款、存取现金）不用分类；
 - 手续费、扣息、工资、利息直接归到对应的分类；退款跟着原交易的分类；
 - 同一个商户**连续 3 次**选了同一个分类：下一笔自动归到这个分类，流水标题旁写「自动」，详情写「自动归类」（`BKBackend/CategoryLearner.swift`）。用户改掉一笔后，这个商户重新数；
-- 其余都是待分类：流水行上标着「待分类」，点这一笔直接打开选分类（「待处理」里也列着）。不按时间猜三餐；没确认对方的转账不自动归类，也不记住对方。
+  按时段（早餐、午餐、晚餐的饭点，其余不是饭点，`BKBackend/MealTime.swift`）分开数：先看这个时段连续选的，再看不分时段的；学到的是三餐之一时换成这个时段的那一餐，不是饭点不自动归（ADR 0026）；
+- 其余都是待分类：流水行上标着「待分类」，点这一笔直接打开选分类（「待处理」里也列着）。没确认对方的转账不自动归类，也不记住对方。
 
 **商户**（`BKBackend/MerchantName.swift`）：交易对方去掉支付渠道（「财付通-」「支付宝-」「WEIXIN*」）、地址、城市、邮编、国家和分店。只有渠道、收款码（`ALP*QRCode0055`、`Scan QR code`）、转账和红包（「财付通-微信支付-微信转账」）、打码的账号、纯数字不是商户；没写商户的通知（中行）也一样。看不出商户的不学习，绝不自动归类，只按常用分类排序。
 
-**候选**（`LedgerBackend.categorySuggestions`，最多 4 个）：这个商户选过的分类，最近选的在前；不够用最近 200 笔里用得最多的分类补齐，再不够按分类的顺序。隐藏的分类、手续费、扣息不当候选。
+**候选**（`LedgerBackend.categorySuggestions`，最多 4 个）：这个商户这个时段选过的、不分时段选过的（三餐换成这个时段的那一餐），最近选的在前；这个商户什么都没选过时，小词库（`BKBackend/CategoryLexicon.swift`）按交易对方里的词猜一个排第一；不够用最近 200 笔里用得最多的分类补齐（这个时段用得多的在前），再不够按分类的顺序。隐藏的分类、手续费、扣息不当候选。
 
 - 待分类面板：候选在完整格子上面的「建议」里。这个商户选过的预先选好，点一笔再点「确定」就够了（没确认对方的转账不预先选）。
 - 记账结果通知：见下。

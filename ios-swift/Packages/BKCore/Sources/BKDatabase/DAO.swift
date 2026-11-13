@@ -331,19 +331,26 @@ public enum RecordDAO {
         try db.query("SELECT \(rowColumns) \(rowFrom) ORDER BY r.effective_at, r.id", [], mapRow)
     }
 
-    /// 最近 `recent` 笔里用得最多的分类，多的在前。通知写明的（手续费、扣息、工资、利息）和退款不算，那不是用户选的
-    public static func frequentCategories(_ db: SQLiteConnection, type: CategoryType, recent: Int = 200) throws -> [String] {
+    /// 这个分类最近的流水，新的在前（算饭点用，ADR 0026）
+    public static func recent(_ db: SQLiteConnection, categoryID: String, limit: Int) throws -> [LedgerRecord] {
+        try db.query(
+            "SELECT \(columns) FROM records r WHERE r.status = 'posted' AND r.category_id = ? ORDER BY r.effective_at DESC, r.id DESC LIMIT ?",
+            [categoryID, limit], map
+        )
+    }
+
+    /// 这个类型最近 `recent` 笔有分类的流水，新的在前；通知写明的（手续费、扣息、工资、利息）和退款不算。
+    /// 常用分类按时段排时用（ADR 0026）
+    public static func recentCategorized(_ db: SQLiteConnection, type: CategoryType, recent: Int = 200) throws -> [LedgerRecord] {
         try db.query(
             """
-            SELECT category_id FROM (
-                SELECT r.category_id, r.effective_at FROM records r JOIN categories c ON c.id = r.category_id
-                WHERE r.status = 'posted' AND c.type = ?
-                    AND r.kind NOT IN ('fee', 'interestCharge', 'salary', 'interestIncome', 'refund', 'reversal')
-                ORDER BY r.effective_at DESC, r.id DESC LIMIT ?
-            ) GROUP BY category_id ORDER BY COUNT(*) DESC, MAX(effective_at) DESC, category_id
+            SELECT \(columns) FROM records r JOIN categories c ON c.id = r.category_id
+            WHERE r.status = 'posted' AND c.type = ?
+                AND r.kind NOT IN ('fee', 'interestCharge', 'salary', 'interestIncome', 'refund', 'reversal')
+            ORDER BY r.effective_at DESC, r.id DESC LIMIT ?
             """,
-            [type.rawValue, recent]
-        ) { $0.string(0) }
+            [type.rawValue, recent], map
+        )
     }
 
     /// 待分类：已入账的支出、收入还没有分类（合成一单的只留一行）
@@ -1241,10 +1248,13 @@ public enum MerchantCategoryDAO {
         public var lastPickedAt: Date
     }
 
-    /// 学到的全部，按商户、最近选的在前（导出用）
+    /// 学到的全部，按商户、最近选的在前（导出用）。分时段记的（商户后面接着时段，ADR 0026）不列
     public static func all(_ db: SQLiteConnection) throws -> [Entry] {
         try db.query(
-            "SELECT merchant, category_id, picks, streak, last_picked_at FROM merchant_categories ORDER BY merchant, streak DESC, last_picked_at DESC, category_id",
+            """
+            SELECT merchant, category_id, picks, streak, last_picked_at FROM merchant_categories WHERE instr(merchant, char(31)) = 0
+            ORDER BY merchant, streak DESC, last_picked_at DESC, category_id
+            """,
             []
         ) { Entry(merchant: $0.string(0), categoryID: $0.string(1), picks: Int($0.int(2)), streak: Int($0.int(3)), lastPickedAt: $0.date(4)) }
     }

@@ -8,11 +8,13 @@ import BKDatabase
 /// 2. 手续费、扣息、工资、利息：通知里写明了，直接归到对应的分类；
 /// 3. 退款：跟着原来那笔的分类（从那个分类里减掉）；
 /// 4. 同一个商户连续选过同一个分类：归到这个分类，流水标成自动归类（`CategoryLearner`，ADR 0017）；
+///    先看这个时段连续选的；学到的是三餐之一时，换成这个时段的那一餐（ADR 0026）；
 /// 5. 剩下的是「待分类」，由用户选。没确认对方的转账也是，不管选过什么。
 ///
-/// 不按时间猜三餐。所有函数都在 `Database.write` 的闭包里执行。
+/// 没学过的商户不猜（小词库只排推荐，`CategoryLexicon`）。所有函数都在 `Database.write` 的闭包里执行。
 struct Categorizer {
     let db: SQLiteConnection
+    let calendar: Calendar
 
     /// 入账后的自动归类；已经有分类的不动
     func categorize(recordID: String) throws {
@@ -21,7 +23,7 @@ struct Categorizer {
         let tree = CategoryTree(try CategoryDAO.all(db))
         if let category = try category(for: record, tree: tree) {
             try RecordDAO.setCategory(db, ids: [record.id], categoryID: category.id)
-        } else if let learned = try CategoryLearner(db: db).autoCategory(for: record, tree: tree) {
+        } else if let learned = try CategoryLearner(db: db, calendar: calendar).autoCategory(for: record, tree: tree) {
             try RecordDAO.setCategory(db, ids: [record.id], categoryID: learned.id, auto: true)
         }
     }
