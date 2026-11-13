@@ -7,7 +7,7 @@ import BKModel
 ///
 /// - 只用在有灵动岛的手机（`DynamicIsland`，按机型）。没有灵动岛、系统里关了实时活动、开启失败时返回 false，照常发记账结果通知（长按选分类，ADR 0020）；
 /// - 两个记账动作遵循 `LiveActivityIntent`，在它们的 perform 里开启：系统只让用户经快捷指令、Siri、小组件运行的动作从后台开启；
-/// - 开启后马上发一次会提醒的更新，让岛自动展开、锁屏亮屏。不出声：银行短信已经响过，和记账结果通知一样；
+/// - 开启时岛收着，不发会提醒的更新：那样岛会自己展开，几秒后不管有没有在点都会收回。长按展开再选；
 /// - 只留一个：又记了一笔要选的，就换成这一笔，原来那一笔排着（`LiveCategoryQueue`）；
 /// - 不设时长：用户不选就留着，自己上滑收起；系统最长 8 小时后结束。这一笔在 App 里选了分类、删了，打开或离开 App 时换下一笔（`reconcile`）。
 ///
@@ -33,10 +33,8 @@ enum LiveCategoryActivity {
     private static let pickerKey = "liveCategory.picker"
     private static let pickerRecordKey = "liveCategory.pickerRecord"
     private static let queueKey = "liveCategory.queue"
-    /// 选好的分类在岛上显示多久再结束
+    /// 选好的分类在岛上显示多久，再换成下一笔或结束
     private static let chosenDisplay: Duration = .milliseconds(1200)
-    /// 提醒更新的声音：一段没有声音的文件（系统要求提醒带声音）
-    private static let silentSound = "Silence.wav"
     /// 转帐、退款不弹：转帐不用分类，退款跟着原交易；没确认对方的转账选了分类就是转给别人
     private static let skippedKinds: Set<TransactionKind> = [.transferIn, .transferOut, .refund, .reversal]
 
@@ -58,7 +56,8 @@ enum LiveCategoryActivity {
 
     // MARK: 开启
 
-    /// 在岛上选这一笔的分类：已经有一个就换成这一笔（原来没选的那一笔排着），然后发一次会提醒的更新。
+    /// 在岛上选这一笔的分类：已经有一个就换成这一笔（原来没选的那一笔排着）。
+    /// 不发会提醒的更新：那样岛会自己展开，几秒后不管有没有在点都会收回。岛收着（左边图标、右边金额），长按展开再选。
     /// 成功返回 true，这一笔不再发记账成功通知
     @MainActor
     static func show(recordID: String, suggestions: CategorySuggestions, header: Header) async -> Bool {
@@ -71,7 +70,6 @@ enum LiveCategoryActivity {
         store(picker, recordID: recordID)
         let record = LiveCategoryQueue.Entry(recordID: recordID, merchant: header.merchant, account: header.account, amount: header.amount)
         let content = ActivityContent(state: makeState(record, picker: picker), staleDate: nil)
-        let alert = makeAlert(record)
         let current = running()
         var queue = loadQueue()
         if let showing = current.first?.content.state {
@@ -84,14 +82,13 @@ enum LiveCategoryActivity {
         queue.remove(recordID)
         saveQueue(queue)
         if let activity = current.first {
-            await present(activity, content.state, alert: alert)
+            await present(activity, content.state)
             for extra in current.dropFirst() { await extra.end(nil, dismissalPolicy: .immediate) }
             note(L("实时活动已更新"))
             return true
         }
         do {
-            let activity = try Activity.request(attributes: CategoryActivityAttributes(), content: content, pushType: nil)
-            await activity.update(content, alertConfiguration: alert)
+            _ = try Activity.request(attributes: CategoryActivityAttributes(), content: content, pushType: nil)
             note(L("实时活动已开启"))
             return true
         } catch {
@@ -144,7 +141,7 @@ enum LiveCategoryActivity {
         do {
             try await backend.setCategory(recordID: recordID, categoryID: categoryID)
         } catch BackendError.notFound {
-            if let activity { await advance(activity, from: recordID, backend: backend, alert: true) }
+            if let activity { await advance(activity, from: recordID, backend: backend) }
             return
         } catch {
             AppServices.logger.error("live activity pick failed: \(String(describing: type(of: error)), privacy: .public)")
@@ -158,7 +155,7 @@ enum LiveCategoryActivity {
         try? await Task.sleep(until: shownAt + chosenDisplay, clock: .continuous)
         // 这期间来了新的一笔、岛已经换成它了，就不动
         guard activity.content.state.recordID == recordID else { return }
-        await advance(activity, from: recordID, backend: backend, final: shown, alert: true)
+        await advance(activity, from: recordID, backend: backend, final: shown)
     }
 
     /// 写不进账本：岛上换回这一笔的按钮
@@ -174,19 +171,14 @@ enum LiveCategoryActivity {
     /// 换岛上的内容。旧内容按它自己身上的方向滚走（`IslandMotion`），所以这次和上次方向不一样时，
     /// 先只改方向更新一次（看不出变化），再换内容
     @MainActor
-    private static func present(_ activity: Activity<CategoryActivityAttributes>, _ state: State, alert: AlertConfiguration? = nil) async {
+    private static func present(_ activity: Activity<CategoryActivityAttributes>, _ state: State) async {
         let showing = activity.content.state
         if showing.isBack != state.isBack {
             var turned = showing
             turned.back = state.back
             await activity.update(ActivityContent(state: turned, staleDate: nil))
         }
-        let content = ActivityContent(state: state, staleDate: nil)
-        if let alert {
-            await activity.update(content, alertConfiguration: alert)
-        } else {
-            await activity.update(content)
-        }
+        await activity.update(ActivityContent(state: state, staleDate: nil))
     }
 
     // MARK: 打开、离开 App
@@ -205,7 +197,7 @@ enum LiveCategoryActivity {
             } catch {
                 continue
             }
-            await advance(activity, from: recordID, backend: backend, alert: false)
+            await advance(activity, from: recordID, backend: backend)
         }
     }
 
@@ -220,11 +212,11 @@ enum LiveCategoryActivity {
     // MARK: 下一笔
 
     /// 岛上这一笔选好了（或者在 App 里选了、删了）：换成排着的最近一笔，跳过已经分好类、删了的；没有了就结束。
-    /// `alert`：在岛上点的，岛可能已经收起来了，提醒一下让它再展开；在 App 里选的不用
+    /// 在同一个岛上接着换内容，不提醒：展开着就还展开着，收着就还收着
     @MainActor
     private static func advance(
         _ activity: Activity<CategoryActivityAttributes>, from recordID: String, backend: LedgerBackend,
-        final: ActivityContent<State>? = nil, alert: Bool
+        final: ActivityContent<State>? = nil
     ) async {
         clearStored(recordID)
         var queue = loadQueue()
@@ -234,7 +226,7 @@ enum LiveCategoryActivity {
             saveQueue(queue)
             let picker = makePicker(suggestions)
             store(picker, recordID: next.recordID)
-            await present(activity, makeState(next, picker: picker), alert: alert ? makeAlert(next) : nil)
+            await present(activity, makeState(next, picker: picker))
             return
         }
         saveQueue(queue)
@@ -272,15 +264,6 @@ enum LiveCategoryActivity {
 
     private static func queueEntry(_ state: State) -> LiveCategoryQueue.Entry {
         LiveCategoryQueue.Entry(recordID: state.recordID, merchant: state.merchant, account: state.account, amount: state.amount)
-    }
-
-    /// 岛自动展开、锁屏亮屏，不出声
-    private static func makeAlert(_ record: LiveCategoryQueue.Entry) -> AlertConfiguration {
-        AlertConfiguration(
-            title: LocalizedStringResource(stringLiteral: record.merchant ?? record.account),
-            body: LocalizedStringResource(stringLiteral: record.amount),
-            sound: .named(silentSound)
-        )
     }
 
     private static func loadQueue() -> LiveCategoryQueue {

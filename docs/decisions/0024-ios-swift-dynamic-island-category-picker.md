@@ -27,8 +27,8 @@ Apple 技术支持在论坛说，后台代码自己开启会被拒（`visibility
 所以已经有一个时不再开新的，而是更新它。没人说过信息、邮件、App 通知触发的自动化行不行，要真机看：
 「我的 › 开发与调试 › 灵动岛」显示上次开启的结果（开启、更新、实时活动已关闭、开启失败的原因）。
 
-**弹出**：开启后马上发一次会提醒的更新（`alertConfiguration`），岛自动展开、锁屏亮屏。系统要求提醒带声音，用一段没有声音的 `Silence.wav`：
-银行短信已经响过，和记账结果通知一样不出声。
+**弹出**：不发会提醒的更新（`alertConfiguration`）。第一版开启后马上提醒一次，岛自动展开、锁屏亮屏，但系统几秒后就收回，不管用户是不是正在点（2026-11-14 用户反馈）。
+现在岛收着出现（左边图标、右边金额），长按展开再选；选好后换成排着的下一笔也在同一个岛上换内容，不提醒，展开着就还展开着。`Silence.wav` 一起去掉。
 
 **三页**（`BKModel/LiveCategoryPicker.swift`，纯函数，Linux 上测）：
 
@@ -113,7 +113,7 @@ iOS 17 起小组件和实时活动支持 SwiftUI 的全部转场，动画最长 
 ## 影响
 
 - IPA 多一个 `PlugIns/CategoryActivity.appex`。免费账号用 iLoader 安装时每周 10 个 App ID 的额度里多用一个，要用 v2.3.10（v2.4.0 起扩展借用主 App 的描述文件，系统不运行它）；
-  TestFlight 自动签名时新扩展的 App ID 自动登记。`package-ipa.sh` 检查扩展在不在、Bundle ID、类型、构建号、架构，App 的 `NSSupportsLiveActivities`、URL scheme、`Silence.wav` 和两个按钮动作的元数据。
+  TestFlight 自动签名时新扩展的 App ID 自动登记。`package-ipa.sh` 检查扩展在不在、Bundle ID、类型、构建号、架构，App 的 `NSSupportsLiveActivities`、URL scheme 和两个按钮动作的元数据。
 - 两个记账动作从 `AppIntent` 改成 `LiveActivityIntent`。
 - 单元测试覆盖三页的逻辑、内容大小和机型规则；扩展和后台开启要真机验证（[真机验收清单](../guides/ios-swift-device-checklist.md) C7k）：
   自动化触发时能不能开启、提醒展开几秒后系统收起、点按钮后岛会不会收起、换页快不快（App 没在运行时第一下要冷启动）、展开时圆角会不会切到按钮。
