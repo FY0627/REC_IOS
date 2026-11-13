@@ -1764,6 +1764,21 @@ extension IngestTests {
         XCTAssertEqual(suggestions.quick.first?.id, daily.id, "认得是这家店")
     }
 
+    /// 推送的分钟只写一位（「11时0分」）：照样和同一笔的短信合成一笔
+    func testNoticeWithOneDigitMinuteMerges() async throws {
+        let backend = try makeBackend()
+        let account = try await addAccount(backend, last4: "0002")
+        _ = try await backend.ingest(IngestRequest(
+            text: "动账提醒\n您尾号0002的储蓄账户10月24日11时0分支出人民币132.80元。点击查看>>", source: .auto, receivedAt: now
+        ))
+        let sms = try await backend.ingest(IngestRequest(
+            text: "您账户0002于10月24日11:00在【支付宝-示例超市】发生快捷支付扣款，人民币132.80", source: .auto, receivedAt: now.addingTimeInterval(60)
+        ))
+        XCTAssertEqual(sms.mergedCount, 1, sms.summary)
+        let count = try await backend.recordCount(accountID: account.id)
+        XCTAssertEqual(count, 1)
+    }
+
     /// 推送和短信的时间差了 5 分钟：不当成同一笔，各记各的
     func testNoticeAndMessageMinutesApartStayApart() async throws {
         let backend = try makeBackend()

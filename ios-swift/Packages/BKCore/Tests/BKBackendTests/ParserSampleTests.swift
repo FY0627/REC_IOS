@@ -879,3 +879,20 @@ final class ParserSampleTests: XCTestCase {
         XCTAssertEqual(d.transactionTime, WallClock(year: 2026, month: 3, day: 19, hour: 20, minute: 5, second: 31))
     }
 }
+
+// MARK: 招行 App 推送的时间，分钟只写一位
+
+extension ParserSampleTests {
+    func testNoticeTimeWithOneDigitMinute() throws {
+        let zero = try XCTUnwrap(single("动账提醒\n您尾号0427的储蓄账户10月24日11时0分支出人民币132.80元。点击查看>>"))
+        XCTAssertEqual(zero.transactionTime?.hour, 11)
+        XCTAssertEqual(zero.transactionTime?.minute, 0)
+        XCTAssertEqual(zero.transactionTime?.isMinutePrecise, true)
+        let five = try XCTUnwrap(single("动账提醒\n您尾号0427的储蓄账户10月24日19时5分支出人民币10.00元。点击查看>>"))
+        XCTAssertEqual(five.transactionTime?.hour, 19)
+        XCTAssertEqual(five.transactionTime?.minute, 5)
+        // 冒号写法的分钟照旧要两位
+        let colon = try XCTUnwrap(single("您尾号0427账户10月24日14:30消费人民币38.00元【招商银行】"))
+        XCTAssertEqual(colon.transactionTime?.minute, 30)
+    }
+}

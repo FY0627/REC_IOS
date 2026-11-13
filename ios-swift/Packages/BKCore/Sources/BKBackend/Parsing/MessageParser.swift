@@ -60,7 +60,7 @@ public struct ParsedMessage: Sendable {
 /// 规则解析器：纯函数，不访问数据库，不依赖网络。
 public enum MessageParser {
     /// 读法变了就加 1：还没处理的待处理项按新读法重读一遍（`IngestEngine.rereadPending`）
-    public static let version = 10
+    public static let version = 11
 
     // MARK: 识别用正则
 
@@ -92,15 +92,16 @@ public enum MessageParser {
     private static let cjk = Rx(#"[\x{4E00}-\x{9FFF}]"#)
     /// 数字后面紧跟着一个词（「54321 testcity」）：是名称里的数字
 
-    private static let dateTimeFull = Rx(#"(20\d{2})\s*[-/.年]\s*(\d{1,2})\s*[-/.月]\s*(\d{1,2})\s*日?(?:\s*(?:T|\s)?\s*(\d{1,2})\s*[：:时点]\s*(\d{2})\s*(?:[：:分]\s*(\d{2}))?\s*(?:秒|分)?)?"#)
+    private static let dateTimeFull = Rx(#"(20\d{2})\s*[-/.年]\s*(\d{1,2})\s*[-/.月]\s*(\d{1,2})\s*日?(?:\s*(?:T|\s)?\s*(\d{1,2})\s*[：:时点]\s*(\d{2}|\d(?=\s*分))\s*(?:[：:分]\s*(\d{2}))?\s*(?:秒|分)?)?"#)
     private static let dateNumericYear = Rx(#"(?<![\d.\-/])(\d{1,2})([-/.])(\d{1,2})[-/.](20\d{2}|\d{2})(?:,?\s+(?:at\s+)?(\d{1,2}):(\d{2})(?::(\d{2}))?)?(?![\d])"#)
     private static let dateEnglishDMY = Rx(#"(?<![\d])(\d{1,2})(?:st|nd|rd|th)?[\s-]+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?[,-]?\s*(20\d{2}|\d{2}(?![\d:]))?(?:,?\s+(?:at\s+)?(\d{1,2}):(\d{2}))?"#)
     private static let dateEnglishMDY = Rx(#"\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?\s*(20\d{2})?(?:,?\s+(?:at\s+)?(\d{1,2}):(\d{2}))?"#)
     /// 「于0618发生」「于20260928的汇款」
     private static let dateCompact = Rx(#"(?<=于)(20\d{2})?(0[1-9]|1[0-2])([0-3]\d)(?!\d)"#)
-    private static let dateChinese = Rx(#"(\d{1,2})\s*月\s*(\d{1,2})\s*日(?:\s*(\d{1,2})\s*[：:时点]\s*(\d{2})\s*(?:[：:分]\s*(\d{2}))?\s*(?:秒|分)?)?"#)
+    /// 「时」后面的分钟可以只有一位（招行 App 推送「11月8日11时0分」）；冒号写法的分钟照旧要两位
+    private static let dateChinese = Rx(#"(\d{1,2})\s*月\s*(\d{1,2})\s*日(?:\s*(\d{1,2})\s*[：:时点]\s*(\d{2}|\d(?=\s*分))\s*(?:[：:分]\s*(\d{2}))?\s*(?:秒|分)?)?"#)
     private static let dateShort = Rx(#"(?<![\d.,/])(\d{1,2})([-/])(\d{1,2})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?(?![\d])"#)
-    private static let timeOnly = Rx(#"(?<![\d:.])(\d{1,2})\s*[：:]\s*(\d{2})(?:\s*[：:]\s*(\d{2}))?(?![\d:])|(\d{1,2})时(\d{2})分"#)
+    private static let timeOnly = Rx(#"(?<![\d:.])(\d{1,2})\s*[：:]\s*(\d{2})(?:\s*[：:]\s*(\d{2}))?(?![\d:])|(\d{1,2})时(\d{1,2})分"#)
 
     private static let amountPattern = Rx(#"(?<![\d,'#])(?<!\d\.)(?:([-+])[ \t]?)?(\d{1,2}(?:,\d{2})+,\d{3}(?:\.\d{1,3})?|\d{1,3}(?:,\d{3})+(?:\.\d{1,3})?|\d{1,3}(?:\.\d{3})+(?:,\d{1,3})?|\d{1,3}(?:'\d{3})+(?:\.\d{1,3})?|\d+(?:[.,]\d{1,3})?)(?![\d'#]|[.,]\d)"#)
 
