@@ -7,8 +7,8 @@ import BKModel
 ///
 /// - `supportedModes = .background`：完全在后台执行，不打开 App、不切换前台应用、
 ///   不在锁屏时拉起界面（iOS 26 起的正式接口，替代已弃用的 `openAppWhenRun`）。
-/// - 不实现 `ProvidesDialog`、不调用 `requestValue`，所有参数都是可选的，缺失时不会向用户追问。
-///   只有「我的」里打开了摘要卡片、记上没分类的一笔时，用 `requestConfirmation` 弹摘要卡片选分类（ADR 0027），默认关。
+/// - 不实现 `ProvidesDialog`、不调用 `requestValue` / `requestConfirmation`，
+///   所以成功时不会弹出 App 自己的任何交互；所有参数都是可选的，缺失时不会向用户追问。
 /// - 系统自身的提示（例如自动化的「运行时通知」开关、首次授权）不受 App 控制，见文档说明。
 /// - 遵循 `LiveActivityIntent`：记上没分类的一笔时要从后台开启灵动岛选分类（ADR 0024），系统只让这种动作在后台开启实时活动。
 struct RecordBankMessageIntent: LiveActivityIntent {
@@ -86,9 +86,8 @@ struct RecordBankMessageIntent: LiveActivityIntent {
         // 日志只记录结果类别，不记录正文、金额、发件人
         AppServices.logger.info("ingest outcome=\(result.outcome.rawValue, privacy: .public) class=\(result.classification.rawValue, privacy: .public) recorded=\(result.recordedCount) pending=\(result.pendingCount)")
         await MainActor.run { NotificationCenter.default.post(name: .ledgerDidChange, object: nil) }
-        // 记账结果通知（「我的」里打开后才发）；打开了摘要卡片时，没分类的在卡片上选（ADR 0027）
-        let cards = await IngestNotifier.post(result, backend: backend, snippets: true)
-        await CategorySnippet.present(cards, from: self)
+        // 记账结果通知（「我的」里打开后才发）
+        await IngestNotifier.post(result, backend: backend)
         return .result(value: result.summary)
     }
 }

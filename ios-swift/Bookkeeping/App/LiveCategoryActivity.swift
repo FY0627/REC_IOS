@@ -1,5 +1,6 @@
 import ActivityKit
 import Foundation
+import UIKit
 import BKBackend
 import BKModel
 
@@ -8,8 +9,10 @@ import BKModel
 /// - 只用在有灵动岛的手机（`DynamicIsland`，按机型）。没有灵动岛、系统里关了实时活动、开启失败时返回 false，照常发记账结果通知（长按选分类，ADR 0020）；
 /// - 两个记账动作遵循 `LiveActivityIntent`，在它们的 perform 里开启：系统只让用户经快捷指令、Siri、小组件运行的动作从后台开启；
 /// - 不发会提醒的更新：那样岛会自己展开，几秒后不管有没有在点都会收回。长按展开再选；
-/// - 但 App 不在前台时新开启的，系统有时还是先展开几秒再收回，没有接口关掉、也留不住。展开的岛不管是谁展开的都放按钮：
-///   以前开启时先不放按钮（942d21e、225ee18），系统一展开就是一个空的大岛；
+/// - 但 App 不在前台时新开启的，系统有时还是先展开几秒再收回，没有接口关掉、也留不住，也没有公开是几秒。
+///   所以新开启的岛先是一张提醒（`ContentState.reminder`，「还有 3 笔待分类」），单点打开 App 这一笔的选分类面板；
+///   `openingTime`（「开发与调试」里调）后 App 自己更新一次换成按钮，之后长按展开就能在岛上选。
+///   App 是在后台被拉起来的，要一段后台时间撑到那时；没撑到的，打开或离开 App 时换（`reconcile`）；
 /// - 只留一个：又记了一笔要选的，就换成这一笔，原来那一笔排着（`LiveCategoryQueue`）；
 /// - 不设时长：用户不选就留着，自己上滑收起；系统最长 8 小时后结束。这一笔在 App 里选了分类、删了，打开或离开 App 时换下一笔（`reconcile`）。
 ///
@@ -37,6 +40,13 @@ enum LiveCategoryActivity {
     private static let queueKey = "liveCategory.queue"
     /// 选好的分类在岛上显示多久，再换成下一笔或结束
     private static let chosenDisplay: Duration = .milliseconds(1200)
+    /// 新开启的岛先放提醒多久，再换成按钮。系统自己展开几秒没有公开的数字，「开发与调试」里按真机上看到的调（1–15 秒）
+    static let openingKey = "liveCategory.openingSeconds"
+    static let defaultOpening = 5
+    private static var openingTime: TimeInterval {
+        let seconds = UserDefaults.standard.integer(forKey: openingKey)
+        return TimeInterval((1...15).contains(seconds) ? seconds : defaultOpening)
+    }
     /// 转帐、退款不弹：转帐不用分类，退款跟着原交易；没确认对方的转账选了分类就是转给别人
     private static let skippedKinds: Set<TransactionKind> = [.transferIn, .transferOut, .refund, .reversal]
 
@@ -60,7 +70,7 @@ enum LiveCategoryActivity {
 
     /// 在岛上选这一笔的分类：已经有一个就换成这一笔（原来没选的那一笔排着）。
     /// 不发会提醒的更新：那样岛会自己展开，几秒后不管有没有在点都会收回。岛收着（左边图标、右边金额），长按展开再选；
-    /// 系统自己先展开几秒时，展开的岛上就是按钮。成功返回 true，这一笔不再发记账成功通知
+    /// 新开启的系统有时先展开几秒：这时展开的是提醒，还有几笔待分类。成功返回 true，这一笔不再发记账成功通知
     @MainActor
     static func show(recordID: String, suggestions: CategorySuggestions, header: Header) async -> Bool {
         guard DynamicIsland.isPresent(model: modelIdentifier) else { return false }
@@ -71,7 +81,10 @@ enum LiveCategoryActivity {
         let picker = makePicker(suggestions)
         store(picker, recordID: recordID)
         let record = LiveCategoryQueue.Entry(recordID: recordID, merchant: header.merchant, account: header.account, amount: header.amount)
-        let content = ActivityContent(state: makeState(record, picker: picker), staleDate: nil)
+        var state = makeState(record, picker: picker)
+        // 刚开启或者还在刚开启那几秒里换成这一笔：系统可能正展开着，放提醒（`present` 过了时间会去掉）
+        state.reminder = await reminderText()
+        let content = ActivityContent(state: state, staleDate: nil)
         let current = running()
         var queue = loadQueue()
         if let showing = current.first?.content.state {
@@ -90,7 +103,12 @@ enum LiveCategoryActivity {
             return true
         }
         do {
-            _ = try Activity.request(attributes: CategoryActivityAttributes(), content: content, pushType: nil)
+            let activity = try Activity.request(
+                attributes: CategoryActivityAttributes(),
+                content: ActivityContent(state: content.state, staleDate: Date(timeIntervalSinceNow: openingTime)),
+                pushType: nil
+            )
+            fillButtonsLater(activity)
             note(L("实时活动已开启"))
             return true
         } catch {
@@ -171,23 +189,66 @@ enum LiveCategoryActivity {
     }
 
     /// 换岛上的内容。旧内容按它自己身上的方向滚走（`IslandMotion`），所以这次和上次方向不一样时，
-    /// 先只改方向更新一次（看不出变化），再换内容
+    /// 先只改方向更新一次（看不出变化），再换内容。
+    /// 还在刚开启那几秒里（系统可能还展开着）：换了内容也还是提醒，到原来的时间再换成按钮；过了时间不再有提醒
     @MainActor
     private static func present(_ activity: Activity<CategoryActivityAttributes>, _ state: State) async {
-        let showing = activity.content.state
-        if showing.isBack != state.isBack {
-            var turned = showing
+        let showing = activity.content
+        let openingUntil = openingDeadline(showing)
+        var state = state
+        state.reminder = openingUntil == nil ? nil : (state.reminder ?? showing.state.reminder)
+        if showing.state.isBack != state.isBack {
+            var turned = showing.state
             turned.back = state.back
-            await activity.update(ActivityContent(state: turned, staleDate: nil))
+            turned.reminder = state.reminder
+            await activity.update(ActivityContent(state: turned, staleDate: openingUntil))
         }
+        await activity.update(ActivityContent(state: state, staleDate: openingUntil))
+    }
+
+    /// 还在刚开启那几秒里：换成按钮的时间（开启时写在 `staleDate` 上）；已经过了、不是刚开启的是 nil
+    private static func openingDeadline(_ content: ActivityContent<State>) -> Date? {
+        guard content.state.isOpening, let until = content.staleDate, until > Date() else { return nil }
+        return until
+    }
+
+    /// 刚开启的岛到 `openingTime` 换成按钮：不提醒、不展开。
+    /// App 是被快捷指令在后台拉起来的，动作返回后很快会被挂起，所以先要一段后台时间撑到那时
+    @MainActor
+    private static func fillButtonsLater(_ activity: Activity<CategoryActivityAttributes>) {
+        let time = BackgroundTime(name: "liveCategory.opening")
+        let wait = openingTime
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(wait))
+            await fillButtons(activity)
+            time.end()
+        }
+    }
+
+    /// 还是提醒就换成按钮。这期间换成了别的一笔也一样换（换的时候留着提醒）
+    @MainActor
+    private static func fillButtons(_ activity: Activity<CategoryActivityAttributes>) async {
+        guard activity.activityState == .active || activity.activityState == .stale, activity.content.state.isOpening else { return }
+        var state = activity.content.state
+        state.reminder = nil
         await activity.update(ActivityContent(state: state, staleDate: nil))
+    }
+
+    /// 「还有 3 笔待分类」：账本里没分类的支出、收入，算上这一笔。读不出来时只写「待分类」
+    private static func reminderText() async -> String {
+        guard let backend = await openBackend(), let count = try? await backend.uncategorizedCount(), count > 0 else { return L("待分类") }
+        return L("还有 \(count) 笔待分类")
     }
 
     // MARK: 打开、离开 App
 
-    /// 岛上这一笔已经在 App 里选了分类或者删了：换成排着的下一笔，没有了就结束
+    /// 岛上这一笔已经在 App 里选了分类或者删了：换成排着的下一笔，没有了就结束。
+    /// 刚开启的岛过了时间还是提醒（App 没撑到就被挂起了）：现在换成按钮
     @MainActor
     static func reconcile() async {
+        for activity in running() where activity.content.state.isOpening && openingDeadline(activity.content) == nil {
+            await fillButtons(activity)
+        }
         let current = running().filter { $0.content.state.chosen == nil }
         guard !current.isEmpty, let backend = await openBackend() else { return }
         for activity in current {
@@ -281,7 +342,7 @@ enum LiveCategoryActivity {
     }
 
     /// 分类名称和固定的字按 App 里选的语言写好，扩展照着显示
-    static func makePicker(_ suggestions: CategorySuggestions) -> LiveCategoryPicker {
+    private static func makePicker(_ suggestions: CategorySuggestions) -> LiveCategoryPicker {
         let type = suggestions.groups.first?.parent.type ?? .expense
         // 「只记%@」：插进去的就是「%@」，留给 `LiveCategoryPicker` 换成大类名称
         let labels = LiveCategoryPicker.Labels(all: L("全部"), more: L("更多"), only: L("只记\("%@")"), type: type.displayName.loc)
@@ -339,6 +400,24 @@ enum LiveCategoryActivity {
 
     private static func milliseconds(_ duration: Duration) -> Int {
         Int(duration / .milliseconds(1))
+    }
+}
+
+/// 一段后台时间：App 在后台被拉起来、动作已经返回，还要等几秒再更新岛。用完或系统收回时结束
+@MainActor
+private final class BackgroundTime {
+    private var id = UIBackgroundTaskIdentifier.invalid
+
+    init(name: String) {
+        id = UIApplication.shared.beginBackgroundTask(withName: name) { [weak self] in
+            MainActor.assumeIsolated { self?.end() }
+        }
+    }
+
+    func end() {
+        guard id != .invalid else { return }
+        UIApplication.shared.endBackgroundTask(id)
+        id = .invalid
     }
 }
 

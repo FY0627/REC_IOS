@@ -125,11 +125,6 @@ WIDGET_EXEC=$(read_widget CFBundleExecutable)
 grep -q "PickLiveCategoryIntent" "$ACTIONS" || fail "App Intents 元数据里没有 PickLiveCategoryIntent，岛上点分类不会写账本"
 grep -q "ShowLiveCategoryPageIntent" "$ACTIONS" || fail "App Intents 元数据里没有 ShowLiveCategoryPageIntent，岛上换不了页"
 ok "灵动岛扩展 PlugIns/CategoryActivity.appex（${WIDGET_ID}）"
-# 摘要卡片选分类（ADR 0027）：卡片和卡片上的两个按钮都是 App 里的动作
-for intent in CategorySnippetIntent PickSnippetCategoryIntent ShowSnippetPageIntent; do
-  grep -q "$intent" "$ACTIONS" || fail "App Intents 元数据里没有 ${intent}，摘要卡片弹不出来或按钮没反应"
-done
-ok "App Intents 元数据包含摘要卡片的三个动作"
 
 [[ ! -d "$APP/_CodeSignature" ]] && ok "未签名（CI 不使用任何证书，由 iLoader 签名）" || ok "存在 _CodeSignature（将被 iLoader 替换）"
 [[ ! -f "$APP/embedded.mobileprovision" ]] || fail "不应包含描述文件"

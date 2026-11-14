@@ -1,6 +1,6 @@
 # 0027 iOS Swift 版：摘要卡片上选分类（和灵动岛对比）
 
-- 状态：试用中（`ios-swift/`），和 [ADR 0024](0024-ios-swift-dynamic-island-category-picker.md) 的灵动岛对比，用户看哪种好
+- 状态：已放弃（2026-11-14）。c0257a3 做出来给用户对比，用户试了觉得难用，代码已删掉，留在 [ADR 0024](0024-ios-swift-dynamic-island-category-picker.md) 的灵动岛
 - 日期：2026-11-14
 
 ## 背景
@@ -30,7 +30,12 @@
 `requestConfirmation` 不到 1 秒就返回错误时当作没弹出来（人点不了这么快），这一笔和后面的照常发记账结果通知。
 「开发与调试 › 摘要卡片」写上次的结果（完成、稍后、没弹出来和错误）。
 
-## 还不知道（真机验收清单 B14–B17）
+## 放弃
+
+用户在真机上试了说「好难用」，要回到灵动岛：新开启的岛先放提醒、之后长按选（ADR 0024「开启时先放提醒」）。
+摘要卡片的代码、开关、`package-ipa.sh` 的检查和翻译都删掉；`IngestNotifier.post` 回到不返回值。下面是当时还没验证的。
+
+## 当时还不知道
 
 - 自动化（信息、App 通知触发、锁屏时）里能不能弹，还是只有轻点背面这种用户自己运行的快捷指令能弹；
 - 卡片在的时候快捷指令一直在运行，屏幕上会不会一直有快捷指令的运行标志；
@@ -41,4 +46,4 @@
 - 新文件：`Bookkeeping/App/CategorySnippet.swift`（弹卡片、`CategorySnippetStore`）、`Bookkeeping/Intents/CategorySnippetIntent.swift`（卡片和两个按钮的动作）、
   `Bookkeeping/UI/Snippet/CategorySnippetView.swift`；`IngestNotifier.post` 返回要在卡片上选的几笔，`IngestNotifier.send` 拆出来发一笔的通知。
 - `package-ipa.sh` 检查三个动作在 App Intents 元数据里。
-- 对比完留下一种：留摘要卡片就把灵动岛的开关默认关或者去掉，反过来就删掉这份的代码。
+- 对比完留下一种：用户选了灵动岛，这份的代码已删掉。

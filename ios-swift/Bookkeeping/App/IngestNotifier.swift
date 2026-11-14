@@ -17,7 +17,6 @@ import BKModel
 ///
 /// 有灵动岛的手机（ADR 0024）：选「全部」时，没分类的支出、收入改在灵动岛上选（`LiveCategoryActivity`），这一笔不发通知；
 /// 没有灵动岛、关了实时活动、开启失败时照常发这条通知。
-/// 摘要卡片（ADR 0027）：打开后改在快捷指令弹出的摘要卡片上选（`CategorySnippet`），由记账动作返回前弹；和灵动岛只开一个。
 enum IngestNotifier {
     enum Mode: String, CaseIterable, Identifiable {
         case all
@@ -35,13 +34,10 @@ enum IngestNotifier {
     }
 
     static let modeKey = "notify.ingestResult"
-    /// 有灵动岛的手机在岛上选分类（ADR 0024），默认开。「我的」里和摘要卡片只开一个
+    /// 有灵动岛的手机在岛上选分类（ADR 0024），默认开；开关在「开发与调试」里，关了在通知上选
     static let islandKey = "notify.island"
-    /// 在摘要卡片上选分类（ADR 0027），默认关
-    static let snippetKey = "notify.snippet"
 
     static var islandOn: Bool { UserDefaults.standard.object(forKey: islandKey) as? Bool ?? true }
-    static var snippetOn: Bool { UserDefaults.standard.bool(forKey: snippetKey) }
 
     static var mode: Mode {
         UserDefaults.standard.string(forKey: modeKey).flatMap(Mode.init) ?? .off
@@ -57,47 +53,32 @@ enum IngestNotifier {
         }
     }
 
-    /// `screenshot`：用户自己交的付款截图（ADR 0021）。和已有的一笔合并、认不出是付款页也说一声，敲了背面总要知道有没有记上。
-    /// `snippets`：调用的是记账动作，能弹摘要卡片。打开了摘要卡片时，要在卡片上选的几笔不发通知，交回去由动作弹（`CategorySnippet.present`）
-    @discardableResult
-    static func post(_ result: IngestResult, backend: LedgerBackend, screenshot: Bool = false, snippets: Bool = false) async -> [CategorySnippet.Record] {
+    /// `screenshot`：用户自己交的付款截图（ADR 0021）。和已有的一笔合并、认不出是付款页也说一声，敲了背面总要知道有没有记上
+    static func post(_ result: IngestResult, backend: LedgerBackend, screenshot: Bool = false) async {
         let mode = mode
-        guard mode != .off else { return [] }
+        guard mode != .off else { return }
         let center = UNUserNotificationCenter.current()
         if screenshot, result.items.isEmpty, mode == .all || result.outcome == .filtered {
             let content = UNMutableNotificationContent()
             content.body = result.outcome == .duplicateInput ? L("这张截图已经记过了") : L("截图里没有认出付款")
             content.threadIdentifier = "ingest"
             try? await center.add(UNNotificationRequest(identifier: "screenshot-\(UUID().uuidString)", content: content, trigger: nil))
-            return []
+            return
         }
-        var cards: [CategorySnippet.Record] = []
         for (index, item) in result.items.enumerated() {
             let suggestions = await categorySuggestions(for: item, backend: backend, screenshot: screenshot)
             let id = "ingest-\(result.ingestID ?? UUID().uuidString)-\(index)"
-            if let recordID = item.recordID, LiveCategoryActivity.eligible(item, suggestions: suggestions) {
-                // 摘要卡片（ADR 0027）：动作返回前一张一张弹，这一笔不发通知
-                if snippets, snippetOn {
-                    cards.append(CategorySnippet.Record(
-                        recordID: recordID, header: header(item), suggestions: suggestions,
-                        item: item, notificationID: id, screenshot: screenshot
-                    ))
-                    continue
-                }
-                // 有灵动岛时在岛上选分类（ADR 0024），这一笔不再发记账成功通知；没开成照常发
-                if islandOn, await LiveCategoryActivity.show(recordID: recordID, suggestions: suggestions, header: header(item)) {
-                    continue
-                }
+            // 有灵动岛时在岛上选分类（ADR 0024），这一笔不再发记账成功通知；没开成照常发
+            if islandOn, let recordID = item.recordID, LiveCategoryActivity.eligible(item, suggestions: suggestions),
+               await LiveCategoryActivity.show(recordID: recordID, suggestions: suggestions, header: header(item)) {
+                continue
             }
             await send(item, id: id, suggestions: suggestions, mode: mode, screenshot: screenshot)
         }
-        return cards
     }
 
-    /// 一笔的记账结果通知。摘要卡片没弹出来时也走这里（`CategorySnippet.present`）
-    static func send(_ item: IngestItem, id: String, suggestions: CategorySuggestions, mode: Mode? = nil, screenshot: Bool) async {
-        let mode = mode ?? self.mode
-        guard mode != .off else { return }
+    /// 一笔的记账结果通知
+    private static func send(_ item: IngestItem, id: String, suggestions: CategorySuggestions, mode: Mode, screenshot: Bool) async {
         guard let body = message(item, failuresOnly: mode == .failures, autoCategory: suggestions.autoCategory?.name.loc, screenshot: screenshot) else { return }
         let content = UNMutableNotificationContent()
         content.body = body
@@ -244,8 +225,8 @@ enum IngestNotifier {
         item.accountTitle?.loc ?? item.cardTail.map { L("尾号 \($0) 卡") } ?? L("未知尾号的卡")
     }
 
-    /// 灵动岛、摘要卡片顶上一行：商户、账户、金额
-    static func header(_ item: IngestItem) -> LiveCategoryActivity.Header {
+    /// 灵动岛顶上一行：商户、账户、金额
+    private static func header(_ item: IngestItem) -> LiveCategoryActivity.Header {
         LiveCategoryActivity.Header(merchant: item.counterparty, account: accountText(item), amount: amountText(item) ?? "")
     }
 

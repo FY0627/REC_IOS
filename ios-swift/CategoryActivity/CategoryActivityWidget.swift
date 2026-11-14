@@ -13,8 +13,9 @@ struct CategoryActivityBundle: WidgetBundle {
 
 /// 灵动岛选分类（ADR 0024）：自动记账记上一笔没分类的支出或收入后，App 开启这个实时活动，在岛上和锁屏上选分类。
 ///
-/// - 展开（长按岛展开；App 不在前台时新开启的，系统有时也先展开几秒）：摄像头两边是顶上一行（第 1 页商户，第 2、3 页返回和标题；右边金额），
-///   下面是按钮，一行 5 个。不管谁展开都一样有按钮，没有「只有图标和金额」的展开；
+/// - 展开（长按岛展开）：摄像头两边是顶上一行（第 1 页商户，第 2、3 页返回和标题；右边金额），下面是按钮，一行 5 个；
+/// - 刚开启：App 不在前台时新开启的，系统有时先自己展开几秒，App 关不掉。这几秒展开的是一张提醒（`ContentState.reminder`）：
+///   顶上商户和金额，下面「还有 3 笔待分类」，单点打开 App 这一笔的选分类面板。几秒后 App 更新一次去掉提醒，长按展开才是按钮；
 /// - 按钮：分类是主题色的圆和图标，「全部」「更多」是白色的圆，字在圆下面；
 /// - 收起：左边是分类图标（还没选是统一的图标），右边是金额；minimal 只放图标；
 /// - 锁屏：黑色卡片，同样的三页和按钮；
@@ -30,7 +31,9 @@ struct CategoryActivityWidget: Widget {
                 .activitySystemActionForegroundColor(.white)
                 .widgetURL(CategoryActivityLink.url(recordID: context.state.recordID))
         } dynamicIsland: { context in
-            DynamicIsland {
+            // 刚开启：展开的是提醒。过了换按钮的时间（`staleDate`）App 还没换、系统又刚好重画时放按钮
+            let reminder = context.isStale ? nil : context.state.reminder
+            return DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
                     HeaderLeading(state: context.state, inline: false)
                         .islandSwap(context.state.headerKey, back: context.state.isBack)
@@ -42,8 +45,12 @@ struct CategoryActivityWidget: Widget {
                         .islandHeader(.trailing)
                 }
                 DynamicIslandExpandedRegion(.bottom) {
-                    PickerBody(state: context.state)
-                        .islandSwap(context.state.screenKey, back: context.state.isBack)
+                    if let reminder {
+                        ReminderRow(text: reminder, tint: context.state.tintColor)
+                    } else {
+                        PickerBody(state: context.state)
+                            .islandSwap(context.state.screenKey, back: context.state.isBack)
+                    }
                 }
             } compactLeading: {
                 Image(systemName: context.state.chosen?.symbol ?? LiveCategoryPicker.unpickedSymbol)
@@ -209,6 +216,27 @@ struct HeaderLeading: View {
                 .foregroundStyle(.white)
                 .lineLimit(1)
         }
+    }
+}
+
+/// 刚开启时展开的岛下面：一句提醒，还有几笔待分类。单点整个岛打开 App 这一笔的选分类面板（`widgetURL`）
+struct ReminderRow: View {
+    let text: String
+    let tint: Color
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "tray.full.fill")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(tint)
+            Text(text)
+                .font(IslandLayout.lineFont)
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+        .frame(maxWidth: .infinity, minHeight: 36)
+        .dynamicTypeSize(...IslandLayout.largestType)
     }
 }
 

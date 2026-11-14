@@ -8,8 +8,7 @@ import BKModel
 ///
 /// 用法：快捷指令「截屏 → 记录付款截图」，设到轻点背面，付完款敲两下背面。以前的截图在 App 的「记一笔」里从相册选。
 /// 也接受「从图像中提取文本」得到的文字，一行一行，和截图一样解析。
-/// 和「记录银行动账通知」一样在后台执行，不打开 App、不弹对话框；结果发记账结果通知（「我的 › 通知」），
-/// 打开了摘要卡片时没分类的一笔在卡片上选（ADR 0027）。
+/// 和「记录银行动账通知」一样在后台执行，不打开 App、不弹对话框；结果发记账结果通知（「我的 › 通知」）。
 /// 截图识别完就丢掉，只保存识别出的文字（和短信一样按保留期限清理），用来核对和处理待处理。
 /// 遵循 `LiveActivityIntent`：和「记录银行动账通知」一样，要从后台开启灵动岛选分类（ADR 0024）
 struct RecordPaymentScreenshotIntent: LiveActivityIntent {
@@ -63,8 +62,7 @@ struct RecordPaymentScreenshotIntent: LiveActivityIntent {
         // 日志只记录结果类别，不记录截图上的文字
         AppServices.logger.info("screenshot outcome=\(result.outcome.rawValue, privacy: .public) recorded=\(result.recordedCount) merged=\(result.mergedCount) pending=\(result.pendingCount)")
         await MainActor.run { NotificationCenter.default.post(name: .ledgerDidChange, object: nil) }
-        let cards = await IngestNotifier.post(result, backend: backend, screenshot: true, snippets: true)
-        await CategorySnippet.present(cards, from: self)
+        await IngestNotifier.post(result, backend: backend, screenshot: true)
         return .result(value: result.summary)
     }
 }

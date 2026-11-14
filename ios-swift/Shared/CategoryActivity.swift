@@ -24,8 +24,12 @@ struct CategoryActivityAttributes: ActivityAttributes {
         var tint: String?
         /// 这次换内容是「返回」：岛上往回滚，新的从上面下来。nil 和 false 一样，往前滚
         var back: Bool?
+        /// 刚开启（系统可能自己展开几秒）：展开的岛上是这句提醒，例如「还有 3 笔待分类」，不放按钮，单点打开 App 这一笔的选分类面板。
+        /// 几秒后 App 更新一次去掉它（`LiveCategoryActivity.fillButtons`），长按展开才是按钮。nil 时放按钮
+        var reminder: String?
 
         var isBack: Bool { back ?? false }
+        var isOpening: Bool { reminder != nil }
     }
 }
 

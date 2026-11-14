@@ -763,15 +763,9 @@ t("灵动岛按钮", "動態島按鈕", "Dynamic Island Buttons")
 t("换页 %lld ms", "換頁 %lld ms", "Page %lld ms")
 t("选分类：显示 %lld ms，写账本 %lld ms", "選分類：顯示 %lld ms，寫入帳本 %lld ms", "Pick: shown %lld ms, saved %lld ms")
 t("启动后 %lld ms", "啟動後 %lld ms", "%lld ms after launch")
-
-# MARK: 摘要卡片选分类（ADR 0027）
-
-t("摘要卡片", "摘要卡片", "Snippet")
-t("摘要卡片选分类", "摘要卡片選擇分類", "Choose Category in Snippet")
-t("摘要卡片换页", "摘要卡片換頁", "Change Snippet Page")
-t("商户", "商家", "Merchant")
-t("稍后", "稍後", "Later")
-t("没弹出来：%@", "沒有顯示：%@", "Not shown: %@")
+t("还有 %lld 笔待分类", "還有 %lld 筆待分類", P("%lld left to categorize", "%lld left to categorize"))
+t("灵动岛提醒时长", "動態島提醒時長", "Dynamic Island Reminder Time")
+t("%lld 秒", "%lld 秒", P("%lld second", "%lld seconds"))
 
 # MARK: 新手引导（OnboardingView）
 
