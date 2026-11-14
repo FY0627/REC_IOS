@@ -7,7 +7,9 @@ import BKModel
 ///
 /// - 只用在有灵动岛的手机（`DynamicIsland`，按机型）。没有灵动岛、系统里关了实时活动、开启失败时返回 false，照常发记账结果通知（长按选分类，ADR 0020）；
 /// - 两个记账动作遵循 `LiveActivityIntent`，在它们的 perform 里开启：系统只让用户经快捷指令、Siri、小组件运行的动作从后台开启；
-/// - 开启时岛收着，不发会提醒的更新：那样岛会自己展开，几秒后不管有没有在点都会收回。长按展开再选；
+/// - 不发会提醒的更新：那样岛会自己展开，几秒后不管有没有在点都会收回。长按展开再选；
+/// - 但 App 不在前台时新开启的，系统照样先展开几秒（推送开启的也这样），没有接口关掉。
+///   所以开启时展开的岛上只放图标和金额（`ContentState.opening`），`openingTime` 后系统把活动标成过时、重画，按钮才出来；
 /// - 只留一个：又记了一笔要选的，就换成这一笔，原来那一笔排着（`LiveCategoryQueue`）；
 /// - 不设时长：用户不选就留着，自己上滑收起；系统最长 8 小时后结束。这一笔在 App 里选了分类、删了，打开或离开 App 时换下一笔（`reconcile`）。
 ///
@@ -35,6 +37,8 @@ enum LiveCategoryActivity {
     private static let queueKey = "liveCategory.queue"
     /// 选好的分类在岛上显示多久，再换成下一笔或结束
     private static let chosenDisplay: Duration = .milliseconds(1200)
+    /// 新开启时系统自己展开几秒：这么久以后才放按钮（`staleDate`）。真机上看系统几秒收回再调
+    private static let openingTime: TimeInterval = 5
     /// 转帐、退款不弹：转帐不用分类，退款跟着原交易；没确认对方的转账选了分类就是转给别人
     private static let skippedKinds: Set<TransactionKind> = [.transferIn, .transferOut, .refund, .reversal]
 
@@ -58,6 +62,7 @@ enum LiveCategoryActivity {
 
     /// 在岛上选这一笔的分类：已经有一个就换成这一笔（原来没选的那一笔排着）。
     /// 不发会提醒的更新：那样岛会自己展开，几秒后不管有没有在点都会收回。岛收着（左边图标、右边金额），长按展开再选。
+    /// 新开启的系统还是会先展开几秒：这几秒里只有图标和金额，没有按钮。
     /// 成功返回 true，这一笔不再发记账成功通知
     @MainActor
     static func show(recordID: String, suggestions: CategorySuggestions, header: Header) async -> Bool {
@@ -87,8 +92,14 @@ enum LiveCategoryActivity {
             note(L("实时活动已更新"))
             return true
         }
+        var opening = content.state
+        opening.opening = true
         do {
-            _ = try Activity.request(attributes: CategoryActivityAttributes(), content: content, pushType: nil)
+            _ = try Activity.request(
+                attributes: CategoryActivityAttributes(),
+                content: ActivityContent(state: opening, staleDate: Date(timeIntervalSinceNow: openingTime)),
+                pushType: nil
+            )
             note(L("实时活动已开启"))
             return true
         } catch {
@@ -127,6 +138,7 @@ enum LiveCategoryActivity {
             var state = activity.content.state
             state.chosen = await loadPicker(recordID)?.option(categoryID) ?? LiveCategoryPicker.Option(id: categoryID, name: "", symbol: "checkmark")
             state.back = false
+            state.opening = nil
             let chosen = ActivityContent(state: state, staleDate: nil)
             await present(activity, state)
             shown = chosen
@@ -169,16 +181,21 @@ enum LiveCategoryActivity {
     }
 
     /// 换岛上的内容。旧内容按它自己身上的方向滚走（`IslandMotion`），所以这次和上次方向不一样时，
-    /// 先只改方向更新一次（看不出变化），再换内容
+    /// 先只改方向更新一次（看不出变化），再换内容。
+    /// 刚开启、系统可能还展开着（例如推送刚开了岛，接着截图合并到这一笔）：换了内容也先不放按钮，到原来的时间再放
     @MainActor
     private static func present(_ activity: Activity<CategoryActivityAttributes>, _ state: State) async {
-        let showing = activity.content.state
-        if showing.isBack != state.isBack {
-            var turned = showing
+        let showing = activity.content
+        let openingUntil = showing.state.isOpening ? showing.staleDate.flatMap { $0 > Date() ? $0 : nil } : nil
+        var state = state
+        state.opening = openingUntil == nil ? nil : true
+        if showing.state.isBack != state.isBack {
+            var turned = showing.state
             turned.back = state.back
-            await activity.update(ActivityContent(state: turned, staleDate: nil))
+            turned.opening = state.opening
+            await activity.update(ActivityContent(state: turned, staleDate: openingUntil))
         }
-        await activity.update(ActivityContent(state: state, staleDate: nil))
+        await activity.update(ActivityContent(state: state, staleDate: openingUntil))
     }
 
     // MARK: 打开、离开 App
