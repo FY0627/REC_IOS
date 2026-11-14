@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import BKModel
 
 /// 选分类：大类排成格子，点一下就选上；有小类的大类名称旁有个小箭头，点它也先选上大类，同时在下面展开小类
@@ -23,8 +24,8 @@ struct CategoryGrid: View {
 
     @Environment(LedgerStore.self) private var store
     @State private var expanded: String?
-    /// 长按拖动中；松手或被打断时回到 false，这时放下
-    @GestureState private var lifting = false
+    /// 手指按在能拖的格子上；松手或被打断时回到 false，拖起来了就这时放下
+    @GestureState private var touching = false
 
     static let columns = CategoryGridLayout.columns
 
@@ -81,11 +82,9 @@ struct CategoryGrid: View {
                 withAnimation(.snappy(duration: 0.3)) { expanded = parent }
             }
         }
-        .onChange(of: lifting) { _, now in
+        .onChange(of: touching) { _, now in
             if !now { drop() }
         }
-        .sensoryFeedback(.impact(weight: .medium), trigger: lifting) { _, now in now }
-        .sensoryFeedback(.selection, trigger: arrangement?.lift?.target) { _, target in target != nil }
         if let node = nodes.first(where: { $0.id == expanded }) {
             let children = arranged(node.children, key: node.id).filter { $0.id != arrangement?.leaving }
             let childLevel = Level(parentID: node.id, ids: children.map(\.id), tops: tops, holders: holders)
@@ -182,29 +181,28 @@ struct CategoryGrid: View {
         .accessibilityAddTraits(.isButton)
         .accessibilityAction { action() }
         if let level {
-            face.gesture(arrangeGesture(cell.id, level: level, action: action))
+            // 点一下、长按到时间浮起来、跟着手指走是三个手势：长按和点一下互斥，跟手指的一直同时在跑，
+            // 不和长按串成一个（串起来时手指一按下就算开始，点一下永远轮不到）
+            face
+                .onTapGesture(perform: action)
+                .onLongPressGesture(minimumDuration: 0.3) { pickUp(cell.id, level: level) }
+                .simultaneousGesture(followGesture(cell.id))
         } else {
             face.onTapGesture(perform: action)
         }
     }
 
-    /// 长按到时间浮起来，跟着手指走；没按够时间就是点一下
-    private func arrangeGesture(_ id: String, level: Level, action: @escaping () -> Void) -> some Gesture {
-        LongPressGesture(minimumDuration: 0.3)
-            .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .global))
-            .updating($lifting) { value, state, _ in
-                if case .second(true, _) = value { state = true }
-            }
-            .onChanged { value in
-                guard case .second(true, let drag) = value else { return }
-                if arrangement?.lift == nil { pickUp(id, level: level) }
-                if let drag { follow(id, drag) }
-            }
-            .exclusively(before: TapGesture().onEnded { action() })
+    /// 手指按下就开始跟：还没浮起来时什么也不做，浮起来后让位、找目标
+    private func followGesture(_ id: String) -> some Gesture {
+        DragGesture(minimumDistance: 0, coordinateSpace: .global)
+            .updating($touching) { _, state, _ in state = true }
+            .onChanged { follow(id, $0) }
     }
 
     private func pickUp(_ id: String, level: Level) {
-        guard let arrangement, let category = store.categoryTree.category(id), let index = level.ids.firstIndex(of: id) else { return }
+        // 已经松手了就不浮起来：没有下一次松手来放下它
+        guard touching, let arrangement, arrangement.lift == nil, let category = store.categoryTree.category(id),
+              let index = level.ids.firstIndex(of: id) else { return }
         // 小类那一行第一格是大类自己
         let offset = level.parentID == nil ? 0 : 1
         let frame = level.parentID == nil ? arrangement.topFrame : arrangement.childFrame
@@ -237,13 +235,20 @@ struct CategoryGrid: View {
         } else {
             lift.target = nil
         }
-        guard lift != arrangement.lift else { return }
+        guard let before = arrangement.lift, lift != before else { return }
+        // 让一次位轻震一下；悬到能放的大类上再震一下
+        if lift.order != before.order {
+            arrangement.feedback(.move)
+        } else if let target = lift.target, target != before.target {
+            arrangement.feedback(.target)
+        }
         withAnimation(.snappy(duration: 0.25)) { arrangement.lift = lift }
     }
 
     /// 松手：浮起来的图标先回到格子（或缩进拖到的大类），再存进账本
     private func drop() {
         guard let arrangement, let lift = arrangement.lift, arrangement.settling == nil else { return }
+        arrangement.feedback(.drop)
         if let target = lift.target, let index = lift.tops.firstIndex(of: target) {
             withAnimation(.snappy(duration: 0.2)) {
                 arrangement.settle(at: CategoryGridLayout.center(of: index, count: lift.tops.count, in: arrangement.topFrame), into: true)
@@ -426,6 +431,32 @@ final class CategoryArrangement {
     @ObservationIgnored var topFrame: CGRect = .zero
     @ObservationIgnored var childFrame: CGRect = .zero
 
+    /// 震动：浮起来、让位、悬到能放的大类上、放下
+    enum Feedback {
+        case lift, move, target, drop
+    }
+
+    @ObservationIgnored private var liftHaptic = UIImpactFeedbackGenerator(style: .medium)
+    @ObservationIgnored private var tickHaptic = UISelectionFeedbackGenerator()
+    @ObservationIgnored private var lightHaptic = UIImpactFeedbackGenerator(style: .light)
+
+    func feedback(_ kind: Feedback) {
+        switch kind {
+        case .lift:
+            liftHaptic.impactOccurred()
+            tickHaptic.prepare()
+            lightHaptic.prepare()
+        case .move:
+            tickHaptic.selectionChanged()
+            tickHaptic.prepare()
+        case .target:
+            lightHaptic.impactOccurred()
+            lightHaptic.prepare()
+        case .drop:
+            lightHaptic.impactOccurred()
+        }
+    }
+
     static func topKey(_ type: CategoryType) -> String { "top." + type.rawValue }
 
     func order(_ key: String) -> [String]? {
@@ -440,6 +471,7 @@ final class CategoryArrangement {
         settling = nil
         self.lift = lift
         active = true
+        feedback(.lift)
     }
 
     func follow(_ point: CGPoint, start: CGPoint) {
