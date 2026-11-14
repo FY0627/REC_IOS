@@ -765,6 +765,7 @@ t("选分类：显示 %lld ms，写账本 %lld ms", "選分類：顯示 %lld ms�
 t("启动后 %lld ms", "啟動後 %lld ms", "%lld ms after launch")
 t("刚刚记了一笔", "剛剛記了一筆", "Just Recorded")
 t("已分类", "已分類", "Categorized")
+t("实时活动提醒", "即時動態提醒", "Live Activity Reminder")
 t("灵动岛提醒时长", "動態島提醒時長", "Dynamic Island Reminder Time")
 t("%lld 秒", "%lld 秒", P("%lld second", "%lld seconds"))
 

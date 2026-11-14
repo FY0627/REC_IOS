@@ -7785,6 +7785,28 @@
         }
       }
     },
+    "实时活动提醒" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Live Activity Reminder"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "实时活动提醒"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "即時動態提醒"
+          }
+        }
+      }
+    },
     "实际入账" : {
       "localizations" : {
         "en" : {

@@ -22,7 +22,7 @@ struct CategoryActivityBundle: WidgetBundle {
 ///   商户、金额和按钮一起往上走，这三样从下面上来；接着圆环里的对勾从左往右画出来（`ChosenCheck`）；
 ///   没有下一笔时这三样再往上走掉，岛跟着收回去；
 /// - 收起：只有左边的分类图标（还没选是统一的标签图标），右边空着、不放金额；minimal 只放图标；
-/// - 锁屏：黑色卡片，同样的三页和按钮；
+/// - 锁屏：黑色卡片，同样的三页和按钮；没有灵动岛的手机只放提醒（`ContentState.reminderOnly`），这张卡片也是屏幕上方弹出的横幅；
 /// - 换页、选好、换下一笔：整页上下滚过去，返回时反过来（`IslandMotion`）。
 ///
 /// 按钮都是 `LiveActivityIntent`，在 App 进程里运行，不打开 App。单点岛或卡片打开 App 里这一笔的选分类面板。
@@ -42,6 +42,7 @@ struct CategoryActivityWidget: Widget {
                 DynamicIslandExpandedRegion(.leading) {
                     if notice != nil {
                         NoticeIcon(tint: state.tintColor)
+                            .badgeSlot(.leading)
                     } else {
                         IslandLeading(state: state)
                             .islandSwap(state.headerKey, back: state.isBack)
@@ -50,6 +51,7 @@ struct CategoryActivityWidget: Widget {
                 DynamicIslandExpandedRegion(.trailing) {
                     if let notice {
                         NoticeCount(count: notice.count, tint: state.tintColor)
+                            .badgeSlot(.trailing)
                     } else {
                         IslandTrailing(state: state)
                             .islandSwap(state.amountKey, back: state.isBack)
@@ -57,9 +59,9 @@ struct CategoryActivityWidget: Widget {
                 }
                 DynamicIslandExpandedRegion(.center) {
                     if let notice {
-                        BadgeText(caption: notice.caption, title: notice.title)
+                        IslandBadgeText(caption: notice.caption, title: notice.title)
                     } else if let chosen = state.chosen {
-                        BadgeText(caption: state.chosenCaption ?? "", title: chosen.name)
+                        IslandBadgeText(caption: state.chosenCaption ?? "", title: chosen.name)
                             .opacity(state.isLeaving ? 0 : 1)
                             .islandSwap(state.chosenKey, back: false)
                             .transition(IslandMotion.page(back: false))
@@ -130,8 +132,15 @@ enum IslandLayout {
     static let largestType: DynamicTypeSize = .large
     /// 刚开启的提醒：左边收据图标和右边圆环的大小
     static let noticeBadge: CGFloat = 44
-    /// 提醒的图标和圆环往下放一点，和摄像头下面的两行字上下对齐（照 AirPods 连上时的样子）
-    static let noticeDrop: CGFloat = 12
+    /// 提醒和选好的图标、圆环往下放，下沿和摄像头下面那两行字的下沿对齐（照 AirPods 连上时的样子）。
+    /// 真机截图量的：往下 12 时圆的下沿比字高约 10 点
+    static let noticeDrop: CGFloat = 21
+    /// 图标和圆环再往岛中间收 3 点：圆心离岛的边 19 + 3 + 22 = 44，和岛 44 点的圆角同心，圆到岛边一圈一样宽
+    static let badgeInset: CGFloat = 3
+    /// 中间两行字离左边的图标再远一点：真机上只隔了约 8 点，太挤
+    static let badgeTextGap: CGFloat = 10
+    /// 锁屏卡片的边距：苹果规范里锁屏实时活动的标准边距是 14 点
+    static let lockMargin: CGFloat = 14
     /// 提醒和选好的圆环的线宽
     static let ringLine: CGFloat = 4.5
     /// 选好时圆环里的对勾：边长和线宽
@@ -198,9 +207,10 @@ extension View {
         .animation(IslandMotion.scroll, value: key)
     }
 
-    /// 提醒和选好的样子左边的图标、右边的圆环：靠边，往下放一点，和中间两行字上下对齐
+    /// 提醒和选好的样子左边的图标、右边的圆环：靠边（和岛的圆角同心，`badgeInset`），往下放，下沿和中间两行字的下沿对齐
     func badgeSlot(_ edge: HorizontalEdge) -> some View {
-        frame(maxWidth: .infinity, alignment: edge == .leading ? .leading : .trailing)
+        padding(edge == .leading ? .leading : .trailing, IslandLayout.badgeInset)
+            .frame(maxWidth: .infinity, alignment: edge == .leading ? .leading : .trailing)
             .padding(.top, IslandLayout.noticeDrop)
     }
 
@@ -304,7 +314,6 @@ struct NoticeIcon: View {
             .font(.system(size: 32))
             .foregroundStyle(tint)
             .frame(width: IslandLayout.noticeBadge, height: IslandLayout.noticeBadge)
-            .badgeSlot(.leading)
     }
 }
 
@@ -329,6 +338,17 @@ struct BadgeText: View {
     }
 }
 
+/// 摄像头下面的两行字：离左边的图标远一点（`badgeTextGap`）
+struct IslandBadgeText: View {
+    let caption: String
+    let title: String
+
+    var body: some View {
+        BadgeText(caption: caption, title: title)
+            .padding(.leading, IslandLayout.badgeTextGap)
+    }
+}
+
 /// 刚开启时展开的岛的右边：主题色圆环，里面是待分类的笔数
 struct NoticeCount: View {
     let count: Int
@@ -336,7 +356,7 @@ struct NoticeCount: View {
 
     var body: some View {
         Circle()
-            .stroke(tint, lineWidth: IslandLayout.ringLine)
+            .strokeBorder(tint, lineWidth: IslandLayout.ringLine)
             .frame(width: IslandLayout.noticeBadge, height: IslandLayout.noticeBadge)
             .overlay {
                 Text(verbatim: String(count))
@@ -347,7 +367,6 @@ struct NoticeCount: View {
                     .minimumScaleFactor(0.5)
                     .padding(6)
             }
-            .badgeSlot(.trailing)
     }
 }
 
@@ -375,8 +394,9 @@ struct ChosenCheck: View {
     let cover: Color?
 
     var body: some View {
+        // strokeBorder：线画在 44 的框里面。以前用 stroke，一半线宽画到框外，整页滚动的裁切把圆切成了八边形
         Circle()
-            .stroke(tint, lineWidth: IslandLayout.ringLine)
+            .strokeBorder(tint, lineWidth: IslandLayout.ringLine)
             .frame(width: IslandLayout.noticeBadge, height: IslandLayout.noticeBadge)
             .overlay {
                 ZStack {
@@ -525,6 +545,14 @@ struct LockScreenCard: View {
     let state: CategoryActivityAttributes.ContentState
 
     var body: some View {
+        if state.isReminderOnly, let notice = state.notice {
+            ReminderCard(notice: notice, tint: state.tintColor)
+        } else {
+            pickerCard
+        }
+    }
+
+    private var pickerCard: some View {
         VStack(spacing: 6) {
             HStack {
                 HeaderLeading(state: state, inline: true)
@@ -539,6 +567,24 @@ struct LockScreenCard: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
+        .dynamicTypeSize(...IslandLayout.largestType)
+        .environment(\.colorScheme, .dark)
+    }
+}
+
+/// 没有灵动岛的手机：锁屏卡片只放提醒，和岛上的提醒一样（左边收据图标，中间「刚刚记了一笔 / 待分类」，右边圆环里是待分类的笔数）。
+/// 记上一笔时 App 发一次带提醒的更新，系统把这张卡片当横幅在屏幕上方弹一下。四边是苹果规范的 14 点
+struct ReminderCard: View {
+    let notice: CategoryActivityAttributes.Notice
+    let tint: Color
+
+    var body: some View {
+        HStack(alignment: .bottom, spacing: 12) {
+            NoticeIcon(tint: tint)
+            BadgeText(caption: notice.caption, title: notice.title)
+            NoticeCount(count: notice.count, tint: tint)
+        }
+        .padding(IslandLayout.lockMargin)
         .dynamicTypeSize(...IslandLayout.largestType)
         .environment(\.colorScheme, .dark)
     }

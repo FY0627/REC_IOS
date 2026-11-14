@@ -6,7 +6,10 @@ import BKModel
 
 /// 灵动岛选分类（ADR 0024）：自动记账记上一笔没分类的支出或收入后，开启一个实时活动，在岛上选分类，全程不打开 App。
 ///
-/// - 只用在有灵动岛的手机（`DynamicIsland`，按机型）。没有灵动岛、系统里关了实时活动、开启失败时返回 false，照常发记账结果通知（长按选分类，ADR 0020）；
+/// - 有灵动岛的手机（`DynamicIsland`，按机型）在岛上选；
+/// - 没有灵动岛的手机只放提醒（`ContentState.reminderOnly`）：锁屏卡片是提醒，记上一笔时发一次带提醒的更新，
+///   系统把这张卡片当横幅在屏幕上方弹一下（苹果文档：没有灵动岛时，只有带 `AlertConfiguration` 的更新才弹横幅）；不放按钮，单点打开 App 这一笔；
+/// - 系统里关了实时活动、开启失败时返回 false，照常发记账结果通知（长按选分类，ADR 0020）；
 /// - 两个记账动作遵循 `LiveActivityIntent`，在它们的 perform 里开启：系统只让用户经快捷指令、Siri、小组件运行的动作从后台开启；
 /// - 不发会提醒的更新：那样岛会自己展开，几秒后不管有没有在点都会收回。长按展开再选；
 /// - 但 App 不在前台时新开启的，系统有时还是先展开几秒再收回，没有接口关掉、也留不住，也没有公开是几秒。
@@ -45,6 +48,8 @@ enum LiveCategoryActivity {
     private static let checkDelay: Duration = .milliseconds(450)
     /// 没有下一笔：整页往上走掉（0.35 秒）以后再结束
     private static let leaveTime: Duration = .milliseconds(350)
+    /// 没有灵动岛时提醒横幅的声音：一段没有声音的文件（提醒必须带声音；短信、推送本身已经响过，截图是自己敲的）
+    private static let silentSound = "Silence.wav"
     /// 新开启的岛先放提醒多久，再换成按钮。系统自己展开几秒没有公开的数字，「开发与调试」里按真机上看到的调（1–15 秒，用户在真机上量的是 3 秒）
     static let openingKey = "liveCategory.openingSeconds"
     static let defaultOpening = 3
@@ -78,7 +83,7 @@ enum LiveCategoryActivity {
     /// 新开启的系统有时先展开几秒：这时展开的是提醒，还有几笔待分类。成功返回 true，这一笔不再发记账成功通知
     @MainActor
     static func show(recordID: String, suggestions: CategorySuggestions, header: Header) async -> Bool {
-        guard DynamicIsland.isPresent(model: modelIdentifier) else { return false }
+        let island = DynamicIsland.isPresent(model: modelIdentifier)
         guard ActivityAuthorizationInfo().areActivitiesEnabled else {
             note(L("实时活动已关闭"))
             return false
@@ -87,8 +92,10 @@ enum LiveCategoryActivity {
         store(picker, recordID: recordID)
         let record = LiveCategoryQueue.Entry(recordID: recordID, merchant: header.merchant, account: header.account, amount: header.amount)
         var state = makeState(record, picker: picker)
-        // 刚开启或者还在刚开启那几秒里换成这一笔：系统可能正展开着，放提醒（`present` 过了时间会去掉）
+        // 刚开启或者还在刚开启那几秒里换成这一笔：系统可能正展开着，放提醒（`present` 过了时间会去掉）。
+        // 没有灵动岛的一直是提醒
         state.notice = await makeNotice()
+        state.reminderOnly = island ? nil : true
         let content = ActivityContent(state: state, staleDate: nil)
         let current = running()
         var queue = loadQueue()
@@ -102,7 +109,11 @@ enum LiveCategoryActivity {
         queue.remove(recordID)
         saveQueue(queue)
         if let activity = current.first {
-            await present(activity, content.state)
+            if island {
+                await present(activity, content.state)
+            } else {
+                await announce(activity, content.state)
+            }
             for extra in current.dropFirst() { await extra.end(nil, dismissalPolicy: .immediate) }
             note(L("实时活动已更新"))
             return true
@@ -110,10 +121,14 @@ enum LiveCategoryActivity {
         do {
             let activity = try Activity.request(
                 attributes: CategoryActivityAttributes(),
-                content: ActivityContent(state: content.state, staleDate: Date(timeIntervalSinceNow: openingTime)),
+                content: ActivityContent(state: content.state, staleDate: island ? Date(timeIntervalSinceNow: openingTime) : nil),
                 pushType: nil
             )
-            fillButtonsLater(activity)
+            if island {
+                fillButtonsLater(activity)
+            } else {
+                await announce(activity, content.state)
+            }
             note(L("实时活动已开启"))
             return true
         } catch {
@@ -207,7 +222,13 @@ enum LiveCategoryActivity {
         let showing = activity.content
         let openingUntil = openingDeadline(showing)
         var state = state
-        state.notice = openingUntil == nil ? nil : (state.notice ?? showing.state.notice)
+        if showing.state.isReminderOnly {
+            // 没有灵动岛：一直是提醒
+            state.reminderOnly = true
+            state.notice = state.notice ?? showing.state.notice
+        } else {
+            state.notice = openingUntil == nil ? nil : (state.notice ?? showing.state.notice)
+        }
         if showing.state.isBack != state.isBack {
             var turned = showing.state
             turned.back = state.back
@@ -215,6 +236,18 @@ enum LiveCategoryActivity {
             await activity.update(ActivityContent(state: turned, staleDate: openingUntil))
         }
         await activity.update(ActivityContent(state: state, staleDate: openingUntil))
+    }
+
+    /// 没有灵动岛：换成这一笔的提醒，发一次带提醒的更新，锁屏卡片当横幅弹一下（不出声）。手表上显示 title 和 body
+    @MainActor
+    private static func announce(_ activity: Activity<CategoryActivityAttributes>, _ state: State) async {
+        let notice = state.notice ?? CategoryActivityAttributes.Notice(caption: L("刚刚记了一笔"), title: L("待分类"), count: 1)
+        let alert = AlertConfiguration(
+            title: LocalizedStringResource(stringLiteral: notice.caption),
+            body: LocalizedStringResource(stringLiteral: notice.title),
+            sound: .named(silentSound)
+        )
+        await activity.update(ActivityContent(state: state, staleDate: nil), alertConfiguration: alert)
     }
 
     /// 还在刚开启那几秒里：换成按钮的时间（开启时写在 `staleDate` 上）；已经过了、不是刚开启的是 nil
@@ -239,7 +272,8 @@ enum LiveCategoryActivity {
     /// 还是提醒就换成按钮。这期间换成了别的一笔也一样换（换的时候留着提醒）
     @MainActor
     private static func fillButtons(_ activity: Activity<CategoryActivityAttributes>) async {
-        guard activity.activityState == .active || activity.activityState == .stale, activity.content.state.isOpening else { return }
+        guard activity.activityState == .active || activity.activityState == .stale, activity.content.state.isOpening,
+              !activity.content.state.isReminderOnly else { return }
         var state = activity.content.state
         state.notice = nil
         await activity.update(ActivityContent(state: state, staleDate: nil))
@@ -302,7 +336,10 @@ enum LiveCategoryActivity {
             saveQueue(queue)
             let picker = makePicker(suggestions)
             store(picker, recordID: next.recordID)
-            await present(activity, makeState(next, picker: picker))
+            var state = makeState(next, picker: picker)
+            // 没有灵动岛：提醒里的笔数跟着变
+            if activity.content.state.isReminderOnly { state.notice = await makeNotice() }
+            await present(activity, state)
             return
         }
         saveQueue(queue)

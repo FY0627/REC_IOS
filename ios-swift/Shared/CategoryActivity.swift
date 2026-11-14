@@ -35,8 +35,12 @@ struct CategoryActivityAttributes: ActivityAttributes {
         /// 选好了、没有下一笔：整页往上走掉，接着结束
         var leaving: Bool?
 
+        /// 这台手机没有灵动岛：只放提醒（`notice`），锁屏卡片和它在屏幕上方弹出的横幅是同一张提醒，没有按钮，单点打开 App 这一笔
+        var reminderOnly: Bool?
+
         var isBack: Bool { back ?? false }
         var isOpening: Bool { notice != nil }
+        var isReminderOnly: Bool { reminderOnly ?? false }
         var isChecked: Bool { checked ?? false }
         var isLeaving: Bool { leaving ?? false }
     }

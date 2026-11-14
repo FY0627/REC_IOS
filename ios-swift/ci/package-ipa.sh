@@ -122,6 +122,7 @@ WIDGET_EXEC=$(read_widget CFBundleExecutable)
 [[ "$(read_key NSSupportsLiveActivities)" == "true" ]] || fail "App 的 Info.plist 没有打开 NSSupportsLiveActivities，开不了实时活动"
 # 单点灵动岛打开这一笔：URL scheme 就是 Bundle ID（Shared/CategoryActivity.swift 的 CategoryActivityLink）
 [[ "$(read_key CFBundleURLTypes:0:CFBundleURLSchemes:0)" == "$BUNDLE_ID" ]] || fail "App 的 URL scheme 不是 ${BUNDLE_ID}，单点灵动岛打不开这一笔"
+[[ -f "$APP/Silence.wav" ]] || fail "缺少 Silence.wav（没有灵动岛的手机上提醒横幅用的静音）"
 grep -q "PickLiveCategoryIntent" "$ACTIONS" || fail "App Intents 元数据里没有 PickLiveCategoryIntent，岛上点分类不会写账本"
 grep -q "ShowLiveCategoryPageIntent" "$ACTIONS" || fail "App Intents 元数据里没有 ShowLiveCategoryPageIntent，岛上换不了页"
 ok "灵动岛扩展 PlugIns/CategoryActivity.appex（${WIDGET_ID}）"

@@ -15,8 +15,8 @@ import BKModel
 /// （账本的保护等级是 `completeUntilFirstUserAuthentication`，和自动化入账一样）。
 /// 点「打开 App」或点通知本身，打开 App 里这一笔的选分类面板（`CategorizeRequest`）。
 ///
-/// 有灵动岛的手机（ADR 0024）：选「全部」时，没分类的支出、收入改在灵动岛上选（`LiveCategoryActivity`），这一笔不发通知；
-/// 没有灵动岛、关了实时活动、开启失败时照常发这条通知。
+/// 实时活动（ADR 0024）：选「全部」时，没分类的支出、收入不发这条通知。有灵动岛的手机在岛上选（`LiveCategoryActivity`）；
+/// 没有灵动岛的手机弹一张待分类的提醒横幅（锁屏卡片），单点打开 App 这一笔。关了实时活动、开启失败时照常发这条通知。
 enum IngestNotifier {
     enum Mode: String, CaseIterable, Identifiable {
         case all

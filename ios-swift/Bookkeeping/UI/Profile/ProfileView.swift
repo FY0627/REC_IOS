@@ -210,16 +210,20 @@ private struct ProfileList: View {
                         // 上次点岛上的按钮 App 这边花了多久：剩下的等待是系统叫起 App、重画岛
                         LabeledContent("灵动岛按钮", value: liveActivityTap.isEmpty ? "—" : liveActivityTap)
                         // 灵动岛的设置（ADR 0024）只放这里：关了在通知上选；新开启的岛先放提醒，过多久换成按钮。
-                        // 系统自己展开几秒没有公开的数字，按真机上看到的调
-                        if hasIsland {
-                            Toggle(isOn: $islandOn) {
+                        // 没有灵动岛的手机是待分类的提醒横幅，开关一样。系统自己展开几秒没有公开的数字，按真机上看到的调
+                        Toggle(isOn: $islandOn) {
+                            if hasIsland {
                                 Label("灵动岛选分类", systemImage: "iphone.gen3")
+                            } else {
+                                Label("实时活动提醒", systemImage: "iphone.gen3")
                             }
-                            .onChange(of: islandOn) { _, on in
-                                // 岛上正在选的也收起，留在待分类
-                                guard !on else { return }
-                                Task { await LiveCategoryActivity.endAll() }
-                            }
+                        }
+                        .onChange(of: islandOn) { _, on in
+                            // 岛上正在选的也收起，留在待分类
+                            guard !on else { return }
+                            Task { await LiveCategoryActivity.endAll() }
+                        }
+                        if hasIsland {
                             Stepper(value: $islandOpening, in: 1...15) {
                                 LabeledContent {
                                     Text("\(islandOpening) 秒")
