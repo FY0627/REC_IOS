@@ -763,7 +763,7 @@ t("灵动岛按钮", "動態島按鈕", "Dynamic Island Buttons")
 t("换页 %lld ms", "換頁 %lld ms", "Page %lld ms")
 t("选分类：显示 %lld ms，写账本 %lld ms", "選分類：顯示 %lld ms，寫入帳本 %lld ms", "Pick: shown %lld ms, saved %lld ms")
 t("启动后 %lld ms", "啟動後 %lld ms", "%lld ms after launch")
-t("还有 %lld 笔待分类", "還有 %lld 筆待分類", P("%lld left to categorize", "%lld left to categorize"))
+t("刚刚记了一笔", "剛剛記了一筆", "Just Recorded")
 t("灵动岛提醒时长", "動態島提醒時長", "Dynamic Island Reminder Time")
 t("%lld 秒", "%lld 秒", P("%lld second", "%lld seconds"))
 

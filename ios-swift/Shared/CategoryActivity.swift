@@ -24,12 +24,29 @@ struct CategoryActivityAttributes: ActivityAttributes {
         var tint: String?
         /// 这次换内容是「返回」：岛上往回滚，新的从上面下来。nil 和 false 一样，往前滚
         var back: Bool?
-        /// 刚开启（系统可能自己展开几秒）：展开的岛上是这句提醒，例如「还有 3 笔待分类」，不放按钮，单点打开 App 这一笔的选分类面板。
-        /// 几秒后 App 更新一次去掉它（`LiveCategoryActivity.fillButtons`），长按展开才是按钮。nil 时放按钮
-        var reminder: String?
+        /// 刚开启（系统可能自己展开约 3 秒）：展开的岛是一张提醒，不放商户、金额和按钮，单点打开 App 这一笔的选分类面板。
+        /// 几秒后 App 更新一次去掉它（`LiveCategoryActivity.fillButtons`），长按展开才是按钮。nil 时放按钮。
+        /// （以前叫 `reminder`、是一句话；还开着的旧活动里那个键不再读）
+        var notice: Notice?
+        /// 选好以后对勾画出来了：选中的分类先滚进来，过一会儿再加上对勾，对勾一笔画出来
+        var checked: Bool?
+        /// 选好了、没有下一笔：整页往上走掉，接着结束
+        var leaving: Bool?
 
         var isBack: Bool { back ?? false }
-        var isOpening: Bool { reminder != nil }
+        var isOpening: Bool { notice != nil }
+        var isChecked: Bool { checked ?? false }
+        var isLeaving: Bool { leaving ?? false }
+    }
+
+    /// 刚开启时的提醒（像 AirPods 连上时那样）：左边收据图标，中间两行字，右边圆环里是待分类的笔数
+    struct Notice: Codable, Hashable {
+        /// 灰色小字：「刚刚记了一笔」
+        var caption: String
+        /// 白色大字：「待分类」
+        var title: String
+        /// 账本里没分类的笔数，算上这一笔
+        var count: Int
     }
 }
 

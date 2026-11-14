@@ -4185,6 +4185,28 @@
         }
       }
     },
+    "刚刚记了一笔" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Just Recorded"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "刚刚记了一笔"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "剛剛記了一筆"
+          }
+        }
+      }
+    },
     "创兴银行" : {
       "localizations" : {
         "en" : {
@@ -17849,40 +17871,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "繳信用卡費"
-          }
-        }
-      }
-    },
-    "还有 %lld 笔待分类" : {
-      "localizations" : {
-        "en" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld left to categorize"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld left to categorize"
-                }
-              }
-            }
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "还有 %lld 笔待分类"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "還有 %lld 筆待分類"
           }
         }
       }

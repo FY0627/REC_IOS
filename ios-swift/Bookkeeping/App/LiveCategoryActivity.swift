@@ -10,7 +10,8 @@ import BKModel
 /// - 两个记账动作遵循 `LiveActivityIntent`，在它们的 perform 里开启：系统只让用户经快捷指令、Siri、小组件运行的动作从后台开启；
 /// - 不发会提醒的更新：那样岛会自己展开，几秒后不管有没有在点都会收回。长按展开再选；
 /// - 但 App 不在前台时新开启的，系统有时还是先展开几秒再收回，没有接口关掉、也留不住，也没有公开是几秒。
-///   所以新开启的岛先是一张提醒（`ContentState.reminder`，「还有 3 笔待分类」），单点打开 App 这一笔的选分类面板；
+///   所以新开启的岛先是一张提醒（`ContentState.notice`：照 AirPods 连上时的样子，「刚刚记了一笔 / 待分类」和待分类的笔数，
+///   不放商户、金额），单点打开 App 这一笔的选分类面板；
 ///   `openingTime`（「开发与调试」里调）后 App 自己更新一次换成按钮，之后长按展开就能在岛上选。
 ///   App 是在后台被拉起来的，要一段后台时间撑到那时；没撑到的，打开或离开 App 时换（`reconcile`）；
 /// - 只留一个：又记了一笔要选的，就换成这一笔，原来那一笔排着（`LiveCategoryQueue`）；
@@ -38,8 +39,12 @@ enum LiveCategoryActivity {
     private static let pickerKey = "liveCategory.picker"
     private static let pickerRecordKey = "liveCategory.pickerRecord"
     private static let queueKey = "liveCategory.queue"
-    /// 选好的分类在岛上显示多久，再换成下一笔或结束
-    private static let chosenDisplay: Duration = .milliseconds(1200)
+    /// 选好的分类在岛上显示多久，再换成下一笔或往上走掉、结束
+    private static let chosenDisplay: Duration = .milliseconds(1400)
+    /// 选中的分类滚进来（0.35 秒）以后再加上对勾，对勾一笔画出来
+    private static let checkDelay: Duration = .milliseconds(450)
+    /// 没有下一笔：整页往上走掉（0.35 秒）以后再结束
+    private static let leaveTime: Duration = .milliseconds(350)
     /// 新开启的岛先放提醒多久，再换成按钮。系统自己展开几秒没有公开的数字，「开发与调试」里按真机上看到的调（1–15 秒，用户在真机上量的是 3 秒）
     static let openingKey = "liveCategory.openingSeconds"
     static let defaultOpening = 3
@@ -83,7 +88,7 @@ enum LiveCategoryActivity {
         let record = LiveCategoryQueue.Entry(recordID: recordID, merchant: header.merchant, account: header.account, amount: header.amount)
         var state = makeState(record, picker: picker)
         // 刚开启或者还在刚开启那几秒里换成这一笔：系统可能正展开着，放提醒（`present` 过了时间会去掉）
-        state.reminder = await reminderText()
+        state.notice = await makeNotice()
         let content = ActivityContent(state: state, staleDate: nil)
         let current = running()
         var queue = loadQueue()
@@ -134,22 +139,21 @@ enum LiveCategoryActivity {
         noteTap([L("换页 \(milliseconds(since: started)) ms")], started: started)
     }
 
-    /// 点到一个分类：先在岛上显示选中的分类，再写进账本（学习和通知上选分类一样）——等写完再显示，点了要多等一会。
-    /// 显示约 1 秒后换成排着的下一笔；没有了就结束、马上消失。
+    /// 点到一个分类：先在岛上显示选中的分类（商户、金额和按钮一起往上走），再写进账本（学习和通知上选分类一样）——等写完再显示，点了要多等一会。
+    /// 写好了再加上对勾，对勾一笔画出来；显示约 1.4 秒后换成排着的下一笔；没有了整页往上走掉，再结束。
     /// 写不进去（开机后还没解锁过）时岛换回按钮，可以再点或单点打开 App；这一笔已经删了就直接换下一笔
     @MainActor
     static func pick(recordID: String, categoryID: String) async {
         let started = ContinuousClock.now
         let activity = find(recordID)
-        var shown: ActivityContent<State>?
         var shownAt = started
         if let activity {
             var state = activity.content.state
             state.chosen = await loadPicker(recordID)?.option(categoryID) ?? LiveCategoryPicker.Option(id: categoryID, name: "", symbol: "checkmark")
             state.back = false
-            let chosen = ActivityContent(state: state, staleDate: nil)
+            state.checked = nil
+            state.leaving = nil
             await present(activity, state)
-            shown = chosen
             shownAt = .now
         }
         let shownTime = milliseconds(since: started)
@@ -171,11 +175,16 @@ enum LiveCategoryActivity {
         }
         noteTap([L("选分类：显示 \(shownTime) ms，写账本 \(milliseconds(since: started)) ms")], started: started)
         NotificationCenter.default.post(name: .ledgerDidChange, object: nil)
-        guard let activity, let shown else { return }
+        guard let activity else { return }
+        // 选中的分类滚到位以后加上对勾。这期间来了新的一笔、岛已经换成它了，就不动
+        try? await Task.sleep(until: shownAt + checkDelay, clock: .continuous)
+        guard activity.content.state.recordID == recordID, activity.content.state.chosen != nil else { return }
+        var checked = activity.content.state
+        checked.checked = true
+        await present(activity, checked)
         try? await Task.sleep(until: shownAt + chosenDisplay, clock: .continuous)
-        // 这期间来了新的一笔、岛已经换成它了，就不动
         guard activity.content.state.recordID == recordID else { return }
-        await advance(activity, from: recordID, backend: backend, final: shown)
+        await advance(activity, from: recordID, backend: backend, leave: true)
     }
 
     /// 写不进账本：岛上换回这一笔的按钮
@@ -184,6 +193,7 @@ enum LiveCategoryActivity {
         guard let activity, activity.content.state.recordID == recordID else { return }
         var state = activity.content.state
         state.chosen = nil
+        state.checked = nil
         state.back = true
         await present(activity, state)
     }
@@ -196,11 +206,11 @@ enum LiveCategoryActivity {
         let showing = activity.content
         let openingUntil = openingDeadline(showing)
         var state = state
-        state.reminder = openingUntil == nil ? nil : (state.reminder ?? showing.state.reminder)
+        state.notice = openingUntil == nil ? nil : (state.notice ?? showing.state.notice)
         if showing.state.isBack != state.isBack {
             var turned = showing.state
             turned.back = state.back
-            turned.reminder = state.reminder
+            turned.notice = state.notice
             await activity.update(ActivityContent(state: turned, staleDate: openingUntil))
         }
         await activity.update(ActivityContent(state: state, staleDate: openingUntil))
@@ -230,14 +240,15 @@ enum LiveCategoryActivity {
     private static func fillButtons(_ activity: Activity<CategoryActivityAttributes>) async {
         guard activity.activityState == .active || activity.activityState == .stale, activity.content.state.isOpening else { return }
         var state = activity.content.state
-        state.reminder = nil
+        state.notice = nil
         await activity.update(ActivityContent(state: state, staleDate: nil))
     }
 
-    /// 「还有 3 笔待分类」：账本里没分类的支出、收入，算上这一笔。读不出来时只写「待分类」
-    private static func reminderText() async -> String {
-        guard let backend = await openBackend(), let count = try? await backend.uncategorizedCount(), count > 0 else { return L("待分类") }
-        return L("还有 \(count) 笔待分类")
+    /// 刚开启的提醒：「刚刚记了一笔」「待分类」，圆环里是账本里没分类的支出、收入的笔数，算上这一笔；读不出来时写 1
+    private static func makeNotice() async -> CategoryActivityAttributes.Notice {
+        var count = 1
+        if let backend = await openBackend(), let total = try? await backend.uncategorizedCount() { count = max(total, 1) }
+        return CategoryActivityAttributes.Notice(caption: L("刚刚记了一笔"), title: L("待分类"), count: count)
     }
 
     // MARK: 打开、离开 App
@@ -275,11 +286,12 @@ enum LiveCategoryActivity {
     // MARK: 下一笔
 
     /// 岛上这一笔选好了（或者在 App 里选了、删了）：换成排着的最近一笔，跳过已经分好类、删了的；没有了就结束。
-    /// 在同一个岛上接着换内容，不提醒：展开着就还展开着，收着就还收着
+    /// 在同一个岛上接着换内容，不提醒：展开着就还展开着，收着就还收着。
+    /// `leave`：在岛上选好的，没有下一笔时整页先往上走掉再结束，和岛收回去的方向一样
     @MainActor
     private static func advance(
         _ activity: Activity<CategoryActivityAttributes>, from recordID: String, backend: LedgerBackend,
-        final: ActivityContent<State>? = nil
+        leave: Bool = false
     ) async {
         clearStored(recordID)
         var queue = loadQueue()
@@ -293,7 +305,15 @@ enum LiveCategoryActivity {
             return
         }
         saveQueue(queue)
-        await activity.end(final, dismissalPolicy: .immediate)
+        guard leave else {
+            await activity.end(nil, dismissalPolicy: .immediate)
+            return
+        }
+        var leaving = activity.content.state
+        leaving.leaving = true
+        await present(activity, leaving)
+        try? await Task.sleep(for: leaveTime)
+        await activity.end(ActivityContent(state: leaving, staleDate: nil), dismissalPolicy: .immediate)
     }
 
     /// 排着的这一笔还要选：还在、还没分类、有分类可选

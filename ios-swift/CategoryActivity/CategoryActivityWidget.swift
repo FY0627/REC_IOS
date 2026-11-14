@@ -14,10 +14,13 @@ struct CategoryActivityBundle: WidgetBundle {
 /// 灵动岛选分类（ADR 0024）：自动记账记上一笔没分类的支出或收入后，App 开启这个实时活动，在岛上和锁屏上选分类。
 ///
 /// - 展开（长按岛展开）：摄像头两边是顶上一行（第 1 页商户，第 2、3 页返回和标题；右边金额），下面是按钮，一行 5 个；
-/// - 刚开启：App 不在前台时新开启的，系统有时先自己展开几秒，App 关不掉。这几秒展开的是一张提醒（`ContentState.reminder`）：
-///   顶上商户和金额，下面「还有 3 笔待分类」，单点打开 App 这一笔的选分类面板。几秒后 App 更新一次去掉提醒，长按展开才是按钮；
+/// - 刚开启：App 不在前台时新开启的，系统有时先自己展开约 3 秒，App 关不掉。这几秒展开的是一张提醒（`ContentState.notice`），
+///   照 AirPods 连上时的样子：左边主题色收据图标，摄像头下面灰色「刚刚记了一笔」、白色「待分类」，右边主题色圆环里是待分类的笔数。
+///   不放商户、金额（别人可能看到），摄像头旁边也不放标签图标；单点打开 App 这一笔的选分类面板。几秒后 App 更新一次去掉提醒，长按展开才是按钮；
 /// - 按钮：分类是主题色的圆和图标，「全部」「更多」是白色的圆，字在圆下面；
-/// - 收起：左边是分类图标（还没选是统一的图标），右边是金额；minimal 只放图标；
+/// - 选好：商户、金额和按钮一起往上走，选中的分类从下面上来；再过一会儿对勾一笔画出来（SF Symbols 的 Draw On）；
+///   没有下一笔时整页再往上走掉，岛跟着收回去；
+/// - 收起：只有左边的分类图标（还没选是统一的标签图标），右边空着、不放金额；minimal 只放图标；
 /// - 锁屏：黑色卡片，同样的三页和按钮；
 /// - 换页、选好、换下一笔：整页上下滚过去，返回时反过来（`IslandMotion`）。
 ///
@@ -32,22 +35,33 @@ struct CategoryActivityWidget: Widget {
                 .widgetURL(CategoryActivityLink.url(recordID: context.state.recordID))
         } dynamicIsland: { context in
             // 刚开启：展开的是提醒。过了换按钮的时间（`staleDate`）App 还没换、系统又刚好重画时放按钮
-            let reminder = context.isStale ? nil : context.state.reminder
+            let notice = context.isStale ? nil : context.state.notice
             return DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    HeaderLeading(state: context.state, inline: false)
-                        .islandSwap(context.state.headerKey, back: context.state.isBack)
-                        .islandHeader(.leading)
+                    if notice != nil {
+                        NoticeIcon(tint: context.state.tintColor)
+                    } else {
+                        HeaderLeading(state: context.state, inline: false)
+                            .islandSwap(context.state.headerKey, back: context.state.isBack)
+                            .islandHeader(.leading)
+                    }
                 }
                 DynamicIslandExpandedRegion(.trailing) {
-                    AmountText(amount: context.state.amount)
-                        .islandSwap(context.state.recordID, back: context.state.isBack)
-                        .islandHeader(.trailing)
+                    if let notice {
+                        NoticeCount(count: notice.count, tint: context.state.tintColor)
+                    } else {
+                        HeaderAmount(state: context.state)
+                            .islandSwap(context.state.amountKey, back: context.state.isBack)
+                            .islandHeader(.trailing)
+                    }
+                }
+                DynamicIslandExpandedRegion(.center) {
+                    if let notice {
+                        NoticeText(notice: notice)
+                    }
                 }
                 DynamicIslandExpandedRegion(.bottom) {
-                    if let reminder {
-                        ReminderRow(text: reminder, tint: context.state.tintColor)
-                    } else {
+                    if notice == nil {
                         PickerBody(state: context.state)
                             .islandSwap(context.state.screenKey, back: context.state.isBack)
                     }
@@ -57,12 +71,8 @@ struct CategoryActivityWidget: Widget {
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(context.state.tintColor)
             } compactTrailing: {
-                Text(context.state.amount)
-                    .font(.subheadline.weight(.semibold))
-                    .monospacedDigit()
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.6)
-                    .frame(maxWidth: 76)
+                // 平时不放金额，只留左边的图标
+                EmptyView()
             } minimal: {
                 Image(systemName: context.state.chosen?.symbol ?? LiveCategoryPicker.unpickedSymbol)
                     .font(.system(size: 15, weight: .semibold))
@@ -110,6 +120,10 @@ enum IslandLayout {
     static let lineFont = Font.headline
     /// 字号跟系统走，但不超过这一档：再大两行按钮放不进 160 点
     static let largestType: DynamicTypeSize = .large
+    /// 刚开启的提醒：左边收据图标和右边圆环的大小
+    static let noticeBadge: CGFloat = 44
+    /// 提醒的图标和圆环往下放一点，和摄像头下面的两行字上下对齐（照 AirPods 连上时的样子）
+    static let noticeDrop: CGFloat = 12
 }
 
 extension CategoryActivityAttributes.ContentState {
@@ -133,13 +147,17 @@ extension CategoryActivityAttributes.ContentState {
 }
 
 extension CategoryActivityAttributes.ContentState {
-    /// 下面的按钮：换页、选好、换下一笔时变
-    var screenKey: String { "\(recordID)|\(screen.page.token)|\(chosen?.id ?? "")" }
+    /// 下面的按钮：换页、选好、走掉、换下一笔时变。对勾画出来不算（只是加上对勾，不整页滚）
+    var screenKey: String { "\(recordID)|\(screen.page.token)|\(chosen?.id ?? "")|\(isLeaving ? "leave" : "")" }
 
-    /// 左上角：返回和标题跟着页变；商户只在换下一笔时变（第 1 页选好了还是这个商户，不用动）
+    /// 左上角：返回和标题跟着页变；商户在选好时和按钮一起往上走掉，换下一笔时换
     var headerKey: String {
-        chosen == nil && screen.back != nil ? "\(recordID)|\(screen.page.token)" : recordID
+        if chosen != nil { return "\(recordID)|chosen" }
+        return screen.back != nil ? "\(recordID)|\(screen.page.token)" : recordID
     }
+
+    /// 右上角的金额：选好时和按钮一起往上走掉，换下一笔时换
+    var amountKey: String { chosen != nil ? "\(recordID)|chosen" : recordID }
 }
 
 /// 换页、选好、换下一笔：像翻桌面那样整页滚过去，只是上下滚。
@@ -181,7 +199,10 @@ struct HeaderLeading: View {
     let inline: Bool
 
     var body: some View {
-        if state.chosen == nil, let back = state.screen.back {
+        if state.chosen != nil {
+            // 选好了：商户和按钮一起往上走掉，这里空着（占着高度，岛不变矮）
+            Color.clear
+        } else if let back = state.screen.back {
             Button(intent: ShowLiveCategoryPageIntent(recordID: state.recordID, page: back)) {
                 HStack(spacing: 8) {
                     Image(systemName: "chevron.backward")
@@ -219,24 +240,74 @@ struct HeaderLeading: View {
     }
 }
 
-/// 刚开启时展开的岛下面：一句提醒，还有几笔待分类。单点整个岛打开 App 这一笔的选分类面板（`widgetURL`）
-struct ReminderRow: View {
-    let text: String
+/// 刚开启时展开的岛（照 AirPods 连上时的样子）的左边：主题色收据图标，比摄像头低一点，和中间两行字、右边圆环对齐。
+/// 单点整个岛打开 App 这一笔的选分类面板（`widgetURL`）
+struct NoticeIcon: View {
     let tint: Color
 
     var body: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "tray.full.fill")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(tint)
-            Text(text)
-                .font(IslandLayout.lineFont)
+        Image(systemName: "receipt.fill")
+            .font(.system(size: 32))
+            .foregroundStyle(tint)
+            .frame(width: IslandLayout.noticeBadge, height: IslandLayout.noticeBadge)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.top, IslandLayout.noticeDrop)
+    }
+}
+
+/// 刚开启时展开的岛的中间（摄像头下面）：灰色「刚刚记了一笔」，下面白色「待分类」
+struct NoticeText: View {
+    let notice: CategoryActivityAttributes.Notice
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(notice.caption)
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(.white.opacity(0.55))
+            Text(notice.title)
+                .font(.title3.weight(.semibold))
                 .foregroundStyle(.white)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
         }
-        .frame(maxWidth: .infinity, minHeight: 36)
+        .lineLimit(1)
+        .minimumScaleFactor(0.8)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .dynamicTypeSize(...IslandLayout.largestType)
+    }
+}
+
+/// 刚开启时展开的岛的右边：主题色圆环，里面是待分类的笔数
+struct NoticeCount: View {
+    let count: Int
+    let tint: Color
+
+    var body: some View {
+        Circle()
+            .stroke(tint, lineWidth: 4.5)
+            .frame(width: IslandLayout.noticeBadge, height: IslandLayout.noticeBadge)
+            .overlay {
+                Text(verbatim: String(count))
+                    .font(.system(size: 20, weight: .bold, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(tint)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.5)
+                    .padding(6)
+            }
+            .frame(maxWidth: .infinity, alignment: .trailing)
+            .padding(.top, IslandLayout.noticeDrop)
+    }
+}
+
+/// 顶上一行右边的金额；选好了和按钮一起往上走掉，这里空着
+struct HeaderAmount: View {
+    let state: CategoryActivityAttributes.ContentState
+
+    var body: some View {
+        if state.chosen != nil {
+            Color.clear
+        } else {
+            AmountText(amount: state.amount)
+        }
     }
 }
 
@@ -259,7 +330,10 @@ struct PickerBody: View {
 
     var body: some View {
         Group {
-            if let chosen = state.chosen {
+            if state.isLeaving {
+                // 选好了、没有下一笔：整页往上走掉，岛接着收回去
+                Color.clear
+            } else if let chosen = state.chosen {
                 HStack(spacing: 10) {
                     Image(systemName: chosen.symbol)
                         .font(.system(size: 17, weight: .semibold))
@@ -270,9 +344,17 @@ struct PickerBody: View {
                         .font(.headline)
                         .foregroundStyle(.white)
                         .lineLimit(1)
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 15, weight: .bold))
-                        .foregroundStyle(state.tintColor)
+                    // 对勾晚一点单独加上，加上时一笔画出来（Draw On）；先占着位置，加上时这一行不挪
+                    ZStack {
+                        if state.isChecked {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 18, weight: .bold))
+                                .foregroundStyle(state.tintColor)
+                                .transition(.symbolEffect(.drawOn))
+                        }
+                    }
+                    .frame(width: 22, height: 22)
+                    .animation(.easeOut(duration: 0.45), value: state.isChecked)
                 }
                 .frame(maxWidth: .infinity, minHeight: IslandLayout.cell.height)
             } else {
@@ -355,8 +437,8 @@ struct LockScreenCard: View {
                 HeaderLeading(state: state, inline: true)
                     .islandSwap(state.headerKey, back: state.isBack)
                 Spacer(minLength: 8)
-                AmountText(amount: state.amount)
-                    .islandSwap(state.recordID, back: state.isBack)
+                HeaderAmount(state: state)
+                    .islandSwap(state.amountKey, back: state.isBack)
             }
             .frame(height: 30)
             PickerBody(state: state)
