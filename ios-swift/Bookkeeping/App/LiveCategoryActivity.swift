@@ -150,6 +150,7 @@ enum LiveCategoryActivity {
         if let activity {
             var state = activity.content.state
             state.chosen = await loadPicker(recordID)?.option(categoryID) ?? LiveCategoryPicker.Option(id: categoryID, name: "", symbol: "checkmark")
+            state.chosenCaption = L("已分类")
             state.back = false
             state.checked = nil
             state.leaving = nil

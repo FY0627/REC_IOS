@@ -18,8 +18,9 @@ struct CategoryActivityBundle: WidgetBundle {
 ///   照 AirPods 连上时的样子：左边主题色收据图标，摄像头下面灰色「刚刚记了一笔」、白色「待分类」，右边主题色圆环里是待分类的笔数。
 ///   不放商户、金额（别人可能看到），摄像头旁边也不放标签图标；单点打开 App 这一笔的选分类面板。几秒后 App 更新一次去掉提醒，长按展开才是按钮；
 /// - 按钮：分类是主题色的圆和图标，「全部」「更多」是白色的圆，字在圆下面；
-/// - 选好：商户、金额和按钮一起往上走，选中的分类从下面上来；再过一会儿对勾一笔画出来（SF Symbols 的 Draw On）；
-///   没有下一笔时整页再往上走掉，岛跟着收回去；
+/// - 选好：和提醒一样的样子（岛也矮回提醒的高度）：左边主题色圆里是选中的分类图标，中间灰色「已分类」、白色分类名，右边主题色圆环。
+///   商户、金额和按钮一起往上走，这三样从下面上来；接着圆环里的对勾从左往右画出来（`ChosenCheck`）；
+///   没有下一笔时这三样再往上走掉，岛跟着收回去；
 /// - 收起：只有左边的分类图标（还没选是统一的标签图标），右边空着、不放金额；minimal 只放图标；
 /// - 锁屏：黑色卡片，同样的三页和按钮；
 /// - 换页、选好、换下一笔：整页上下滚过去，返回时反过来（`IslandMotion`）。
@@ -35,35 +36,41 @@ struct CategoryActivityWidget: Widget {
                 .widgetURL(CategoryActivityLink.url(recordID: context.state.recordID))
         } dynamicIsland: { context in
             // 刚开启：展开的是提醒。过了换按钮的时间（`staleDate`）App 还没换、系统又刚好重画时放按钮
-            let notice = context.isStale ? nil : context.state.notice
+            let state = context.state
+            let notice = context.isStale ? nil : state.notice
             return DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
                     if notice != nil {
-                        NoticeIcon(tint: context.state.tintColor)
+                        NoticeIcon(tint: state.tintColor)
                     } else {
-                        HeaderLeading(state: context.state, inline: false)
-                            .islandSwap(context.state.headerKey, back: context.state.isBack)
-                            .islandHeader(.leading)
+                        IslandLeading(state: state)
+                            .islandSwap(state.headerKey, back: state.isBack)
                     }
                 }
                 DynamicIslandExpandedRegion(.trailing) {
                     if let notice {
-                        NoticeCount(count: notice.count, tint: context.state.tintColor)
+                        NoticeCount(count: notice.count, tint: state.tintColor)
                     } else {
-                        HeaderAmount(state: context.state)
-                            .islandSwap(context.state.amountKey, back: context.state.isBack)
-                            .islandHeader(.trailing)
+                        IslandTrailing(state: state)
+                            .islandSwap(state.amountKey, back: state.isBack)
                     }
                 }
                 DynamicIslandExpandedRegion(.center) {
                     if let notice {
-                        NoticeText(notice: notice)
+                        BadgeText(caption: notice.caption, title: notice.title)
+                    } else if let chosen = state.chosen {
+                        BadgeText(caption: state.chosenCaption ?? "", title: chosen.name)
+                            .opacity(state.isLeaving ? 0 : 1)
+                            .islandSwap(state.chosenKey, back: false)
+                            .transition(IslandMotion.page(back: false))
                     }
                 }
                 DynamicIslandExpandedRegion(.bottom) {
-                    if notice == nil {
-                        PickerBody(state: context.state)
-                            .islandSwap(context.state.screenKey, back: context.state.isBack)
+                    // 选好了没有按钮，岛矮回提醒的高度
+                    if notice == nil, state.chosen == nil {
+                        PickerBody(state: state)
+                            .islandSwap(state.screenKey, back: state.isBack)
+                            .transition(IslandMotion.page(back: state.isBack))
                     }
                 }
             } compactLeading: {
@@ -96,8 +103,9 @@ struct CategoryActivityWidget: Widget {
 /// 顶上一行的东西放在下面 28 点里、左右各往里缩 10 点，返回、商户和金额不碰上面两个角。
 /// 锁屏没有摄像头：10 + 30 + 6 + 92 + 10 = 148
 ///
-/// 每一页（还有选好的样子）都占两行按钮的高度：第 1 页只有一行时上下居中，空出来的地方留白。
-/// 以前第 1 页一行、「全部」两行，换页时岛跟着变高变矮，系统缩放岛时整块重排，金额也跟着动，动画乱；现在一笔从开始到选好岛的大小不变
+/// 每一页都占两行按钮的高度：第 1 页只有一行时上下居中，空出来的地方留白。
+/// 以前第 1 页一行、「全部」两行，换页时岛跟着变高变矮，系统缩放岛时整块重排，金额也跟着动，动画乱；现在选分类的几页岛的大小不变。
+/// 选好时整个换成提醒的样子，岛矮回提醒的高度（锁屏卡片大小不变）
 enum IslandLayout {
     static let cell = CGSize(width: 60, height: 44)
     static let circle: CGFloat = 28
@@ -124,6 +132,11 @@ enum IslandLayout {
     static let noticeBadge: CGFloat = 44
     /// 提醒的图标和圆环往下放一点，和摄像头下面的两行字上下对齐（照 AirPods 连上时的样子）
     static let noticeDrop: CGFloat = 12
+    /// 提醒和选好的圆环的线宽
+    static let ringLine: CGFloat = 4.5
+    /// 选好时圆环里的对勾：边长和线宽
+    static let check: CGFloat = 22
+    static let checkLine: CGFloat = 3.2
 }
 
 extension CategoryActivityAttributes.ContentState {
@@ -150,14 +163,17 @@ extension CategoryActivityAttributes.ContentState {
     /// 下面的按钮：换页、选好、走掉、换下一笔时变。对勾画出来不算（只是加上对勾，不整页滚）
     var screenKey: String { "\(recordID)|\(screen.page.token)|\(chosen?.id ?? "")|\(isLeaving ? "leave" : "")" }
 
-    /// 左上角：返回和标题跟着页变；商户在选好时和按钮一起往上走掉，换下一笔时换
+    /// 选好的样子（左边分类图标、中间「已分类」、右边对勾）：选好时从下面上来，走掉时往上走
+    var chosenKey: String { "\(recordID)|\(isLeaving ? "leave" : "chosen")" }
+
+    /// 左边：返回和标题跟着页变；商户在选好时和按钮一起往上走掉，换成选中的分类图标；换下一笔时换
     var headerKey: String {
-        if chosen != nil { return "\(recordID)|chosen" }
+        if chosen != nil { return chosenKey }
         return screen.back != nil ? "\(recordID)|\(screen.page.token)" : recordID
     }
 
-    /// 右上角的金额：选好时和按钮一起往上走掉，换下一笔时换
-    var amountKey: String { chosen != nil ? "\(recordID)|chosen" : recordID }
+    /// 右边：金额在选好时和按钮一起往上走掉，换成对勾；换下一笔时换
+    var amountKey: String { chosen != nil ? chosenKey : recordID }
 }
 
 /// 换页、选好、换下一笔：像翻桌面那样整页滚过去，只是上下滚。
@@ -182,12 +198,50 @@ extension View {
         .animation(IslandMotion.scroll, value: key)
     }
 
+    /// 提醒和选好的样子左边的图标、右边的圆环：靠边，往下放一点，和中间两行字上下对齐
+    func badgeSlot(_ edge: HorizontalEdge) -> some View {
+        frame(maxWidth: .infinity, alignment: edge == .leading ? .leading : .trailing)
+            .padding(.top, IslandLayout.noticeDrop)
+    }
+
     /// 岛上顶上一行：占 32 高，东西放在下面 28 里，再往岛中间缩 10 点，不碰岛的上面两个角
     func islandHeader(_ edge: HorizontalEdge) -> some View {
         let side: Edge.Set = edge == .leading ? .leading : .trailing
         return frame(height: IslandLayout.headerLine, alignment: .center)
             .padding(side, IslandLayout.headerInset)
             .padding(.top, IslandLayout.header - IslandLayout.headerLine)
+    }
+}
+
+/// 展开的岛左边：还没选是顶上一行（`HeaderLeading`）；选好了是主题色圆里的分类图标，和提醒的收据图标一个位置；走掉时空着（占着位置）
+struct IslandLeading: View {
+    let state: CategoryActivityAttributes.ContentState
+
+    var body: some View {
+        if let chosen = state.chosen {
+            ChosenIcon(symbol: chosen.symbol, tint: state.tintColor)
+                .opacity(state.isLeaving ? 0 : 1)
+                .badgeSlot(.leading)
+        } else {
+            HeaderLeading(state: state, inline: false)
+                .islandHeader(.leading)
+        }
+    }
+}
+
+/// 展开的岛右边：还没选是金额；选好了是圆环和对勾，和提醒的圆环一个位置
+struct IslandTrailing: View {
+    let state: CategoryActivityAttributes.ContentState
+
+    var body: some View {
+        if state.chosen != nil {
+            ChosenCheck(checked: state.isChecked, tint: state.tintColor, cover: .black)
+                .opacity(state.isLeaving ? 0 : 1)
+                .badgeSlot(.trailing)
+        } else {
+            AmountText(amount: state.amount)
+                .islandHeader(.trailing)
+        }
     }
 }
 
@@ -250,21 +304,21 @@ struct NoticeIcon: View {
             .font(.system(size: 32))
             .foregroundStyle(tint)
             .frame(width: IslandLayout.noticeBadge, height: IslandLayout.noticeBadge)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.top, IslandLayout.noticeDrop)
+            .badgeSlot(.leading)
     }
 }
 
-/// 刚开启时展开的岛的中间（摄像头下面）：灰色「刚刚记了一笔」，下面白色「待分类」
-struct NoticeText: View {
-    let notice: CategoryActivityAttributes.Notice
+/// 提醒和选好的岛的中间（摄像头下面）：上面灰色小字，下面白色大字，靠左。提醒是「刚刚记了一笔」「待分类」，选好是「已分类」和分类名
+struct BadgeText: View {
+    let caption: String
+    let title: String
 
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
-            Text(notice.caption)
+            Text(caption)
                 .font(.subheadline.weight(.medium))
                 .foregroundStyle(.white.opacity(0.55))
-            Text(notice.title)
+            Text(title)
                 .font(.title3.weight(.semibold))
                 .foregroundStyle(.white)
         }
@@ -282,7 +336,7 @@ struct NoticeCount: View {
 
     var body: some View {
         Circle()
-            .stroke(tint, lineWidth: 4.5)
+            .stroke(tint, lineWidth: IslandLayout.ringLine)
             .frame(width: IslandLayout.noticeBadge, height: IslandLayout.noticeBadge)
             .overlay {
                 Text(verbatim: String(count))
@@ -293,8 +347,63 @@ struct NoticeCount: View {
                     .minimumScaleFactor(0.5)
                     .padding(6)
             }
-            .frame(maxWidth: .infinity, alignment: .trailing)
-            .padding(.top, IslandLayout.noticeDrop)
+            .badgeSlot(.trailing)
+    }
+}
+
+/// 选好的样子左边：主题色圆里是白色的分类图标
+struct ChosenIcon: View {
+    let symbol: String
+    let tint: Color
+
+    var body: some View {
+        Image(systemName: symbol)
+            .font(.system(size: 20, weight: .semibold))
+            .foregroundStyle(.white)
+            .frame(width: IslandLayout.noticeBadge, height: IslandLayout.noticeBadge)
+            .background(tint, in: Circle())
+    }
+}
+
+/// 选好的样子右边：主题色圆环（和提醒的一样），里面的对勾从左往右画出来。
+/// 灵动岛里不播 SF Symbols 的 Draw On（真机试过，对勾直接出现），这里用一块和岛一样黑的方块（`cover`）盖住对勾，
+/// 加上对勾时（`ContentState.checked`）把方块往右挪开，对勾从左往右露出来。对勾是从左往右写的，露出来的样子就像一笔画出来。
+/// 锁屏卡片的底是半透明的，盖不住，`cover` 是 nil，对勾直接出现
+struct ChosenCheck: View {
+    let checked: Bool
+    let tint: Color
+    let cover: Color?
+
+    var body: some View {
+        Circle()
+            .stroke(tint, lineWidth: IslandLayout.ringLine)
+            .frame(width: IslandLayout.noticeBadge, height: IslandLayout.noticeBadge)
+            .overlay {
+                ZStack {
+                    CheckShape()
+                        .stroke(tint, style: StrokeStyle(lineWidth: IslandLayout.checkLine, lineCap: .round, lineJoin: .round))
+                        .opacity(cover == nil && !checked ? 0 : 1)
+                    if let cover {
+                        cover.offset(x: checked ? IslandLayout.check : 0)
+                    }
+                }
+                .frame(width: IslandLayout.check, height: IslandLayout.check)
+                .clipped()
+                .animation(.easeInOut(duration: 0.4), value: checked)
+            }
+    }
+}
+
+/// 对勾：24 × 24 里从 (5, 12.5) 往右下到 (9.5, 17)，再往右上到 (19, 7.5)，和设计画布上的一样
+struct CheckShape: Shape {
+    private static let points = [CGPoint(x: 5, y: 12.5), CGPoint(x: 9.5, y: 17), CGPoint(x: 19, y: 7.5)]
+
+    func path(in rect: CGRect) -> Path {
+        let scale = min(rect.width, rect.height) / 24
+        let origin = CGPoint(x: rect.midX - 12 * scale, y: rect.midY - 12 * scale)
+        var path = Path()
+        path.addLines(Self.points.map { CGPoint(x: origin.x + $0.x * scale, y: origin.y + $0.y * scale) })
+        return path
     }
 }
 
@@ -324,7 +433,7 @@ struct AmountText: View {
     }
 }
 
-/// 按钮；选好了显示选中的分类。不管几行都占两行的高度，内容上下居中（`IslandLayout.grid`）
+/// 按钮；锁屏上选好了显示选中的分类。不管几行都占两行的高度，内容上下居中（`IslandLayout.grid`）
 struct PickerBody: View {
     let state: CategoryActivityAttributes.ContentState
 
@@ -334,29 +443,13 @@ struct PickerBody: View {
                 // 选好了、没有下一笔：整页往上走掉，岛接着收回去
                 Color.clear
             } else if let chosen = state.chosen {
-                HStack(spacing: 10) {
-                    Image(systemName: chosen.symbol)
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .frame(width: 34, height: 34)
-                        .background(state.tintColor, in: Circle())
-                    Text(chosen.name)
-                        .font(.headline)
-                        .foregroundStyle(.white)
-                        .lineLimit(1)
-                    // 对勾晚一点单独加上，加上时一笔画出来（Draw On）；先占着位置，加上时这一行不挪
-                    ZStack {
-                        if state.isChecked {
-                            Image(systemName: "checkmark")
-                                .font(.system(size: 18, weight: .bold))
-                                .foregroundStyle(state.tintColor)
-                                .transition(.symbolEffect(.drawOn))
-                        }
-                    }
-                    .frame(width: 22, height: 22)
-                    .animation(.easeOut(duration: 0.45), value: state.isChecked)
+                // 锁屏卡片：和岛上选好的样子一样，排成一行（岛上选好时不放按钮这一块）
+                HStack(spacing: 12) {
+                    ChosenIcon(symbol: chosen.symbol, tint: state.tintColor)
+                    BadgeText(caption: state.chosenCaption ?? "", title: chosen.name)
+                    ChosenCheck(checked: state.isChecked, tint: state.tintColor, cover: nil)
                 }
-                .frame(maxWidth: .infinity, minHeight: IslandLayout.cell.height)
+                .padding(.horizontal, 6)
             } else {
                 CellGrid(recordID: state.recordID, cells: state.screen.cells, tint: state.tintColor)
             }

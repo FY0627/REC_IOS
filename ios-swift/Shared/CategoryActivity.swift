@@ -28,7 +28,9 @@ struct CategoryActivityAttributes: ActivityAttributes {
         /// 几秒后 App 更新一次去掉它（`LiveCategoryActivity.fillButtons`），长按展开才是按钮。nil 时放按钮。
         /// （以前叫 `reminder`、是一句话；还开着的旧活动里那个键不再读）
         var notice: Notice?
-        /// 选好以后对勾画出来了：选中的分类先滚进来，过一会儿再加上对勾，对勾一笔画出来
+        /// 选好时中间的灰色小字：「已分类」，下面白色大字是分类名。以前开的活动没有，空着
+        var chosenCaption: String?
+        /// 选好以后画对勾：选中的分类先滚进来，过一会儿 App 再更新一次，对勾从左往右画出来
         var checked: Bool?
         /// 选好了、没有下一笔：整页往上走掉，接着结束
         var leaving: Bool?
