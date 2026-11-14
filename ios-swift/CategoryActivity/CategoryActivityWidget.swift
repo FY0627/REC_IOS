@@ -130,22 +130,22 @@ enum IslandLayout {
     static let lineFont = Font.headline
     /// 字号跟系统走，但不超过这一档：再大两行按钮放不进 160 点
     static let largestType: DynamicTypeSize = .large
-    /// 刚开启的提醒：左边收据图标和右边圆环的大小
-    static let noticeBadge: CGFloat = 44
-    /// 提醒和选好的图标、圆环往下放，下沿和摄像头下面那两行字的下沿对齐（照 AirPods 连上时的样子）。
-    /// 真机截图量的：往下 12 时圆的下沿比字高约 10 点
-    static let noticeDrop: CGFloat = 21
-    /// 图标和圆环再往岛中间收 3 点：圆心离岛的边 19 + 3 + 22 = 44，和岛 44 点的圆角同心，圆到岛边一圈一样宽
-    static let badgeInset: CGFloat = 3
+    /// 提醒和选好：左边的图标、右边的圆环有多大。做满摄像头两边（HIG：内容紧贴原深感摄像头，四周不留太多空）：
+    /// 真机截图量的（9cde1b8，圆 44）：圆心离岛边 41、上沿离岛顶 31、下沿离岛顶 74.5，两行字的下沿离岛顶 76，岛高约 95。
+    /// 放大到 56、不往里收：圆心离岛边约 44，和岛 44 点的圆角同心（圆到岛边一圈一样宽）；
+    /// 上沿离岛顶约 20，到摄像头旁边；下沿约 76，和两行字的下沿对齐。岛不变高（两行字那边更高）
+    static let noticeBadge: CGFloat = 56
+    /// 图标和圆环从顶上的边距往下放多少：上沿离岛顶约 10 + 10 = 20
+    static let noticeDrop: CGFloat = 10
     /// 中间两行字离左边的图标再远一点：真机上只隔了约 8 点，太挤
     static let badgeTextGap: CGFloat = 10
     /// 锁屏卡片的边距：苹果规范里锁屏实时活动的标准边距是 14 点
     static let lockMargin: CGFloat = 14
     /// 提醒和选好的圆环的线宽
-    static let ringLine: CGFloat = 4.5
+    static let ringLine: CGFloat = 5.5
     /// 选好时圆环里的对勾：边长和线宽
-    static let check: CGFloat = 22
-    static let checkLine: CGFloat = 3.2
+    static let check: CGFloat = 28
+    static let checkLine: CGFloat = 4
 }
 
 extension CategoryActivityAttributes.ContentState {
@@ -207,10 +207,9 @@ extension View {
         .animation(IslandMotion.scroll, value: key)
     }
 
-    /// 提醒和选好的样子左边的图标、右边的圆环：靠边（和岛的圆角同心，`badgeInset`），往下放，下沿和中间两行字的下沿对齐
+    /// 提醒和选好的样子左边的图标、右边的圆环：靠边（和岛的圆角同心，见 `noticeBadge`），往下放，下沿和中间两行字的下沿对齐
     func badgeSlot(_ edge: HorizontalEdge) -> some View {
-        padding(edge == .leading ? .leading : .trailing, IslandLayout.badgeInset)
-            .frame(maxWidth: .infinity, alignment: edge == .leading ? .leading : .trailing)
+        frame(maxWidth: .infinity, alignment: edge == .leading ? .leading : .trailing)
             .padding(.top, IslandLayout.noticeDrop)
     }
 
@@ -311,7 +310,7 @@ struct NoticeIcon: View {
 
     var body: some View {
         Image(systemName: "receipt.fill")
-            .font(.system(size: 32))
+            .font(.system(size: 42))
             .foregroundStyle(tint)
             .frame(width: IslandLayout.noticeBadge, height: IslandLayout.noticeBadge)
     }
@@ -360,12 +359,12 @@ struct NoticeCount: View {
             .frame(width: IslandLayout.noticeBadge, height: IslandLayout.noticeBadge)
             .overlay {
                 Text(verbatim: String(count))
-                    .font(.system(size: 20, weight: .bold, design: .rounded))
+                    .font(.system(size: 24, weight: .bold, design: .rounded))
                     .monospacedDigit()
                     .foregroundStyle(tint)
                     .lineLimit(1)
                     .minimumScaleFactor(0.5)
-                    .padding(6)
+                    .padding(8)
             }
     }
 }
@@ -377,7 +376,7 @@ struct ChosenIcon: View {
 
     var body: some View {
         Image(systemName: symbol)
-            .font(.system(size: 20, weight: .semibold))
+            .font(.system(size: 26, weight: .semibold))
             .foregroundStyle(.white)
             .frame(width: IslandLayout.noticeBadge, height: IslandLayout.noticeBadge)
             .background(tint, in: Circle())
@@ -387,6 +386,7 @@ struct ChosenIcon: View {
 /// 选好的样子右边：主题色圆环（和提醒的一样），里面的对勾从左往右画出来。
 /// 灵动岛里不播 SF Symbols 的 Draw On（真机试过，对勾直接出现），这里用一块和岛一样黑的方块（`cover`）盖住对勾，
 /// 加上对勾时（`ContentState.checked`）把方块往右挪开，对勾从左往右露出来。对勾是从左往右写的，露出来的样子就像一笔画出来。
+/// 没画之前对勾是透明的：选好的样子从下面上来时系统是淡入，对勾和方块各自半透明，方块挡不住，对勾会透出来（真机上看到过）。
 /// 锁屏卡片的底是半透明的，盖不住，`cover` 是 nil，对勾直接出现
 struct ChosenCheck: View {
     let checked: Bool
@@ -402,7 +402,7 @@ struct ChosenCheck: View {
                 ZStack {
                     CheckShape()
                         .stroke(tint, style: StrokeStyle(lineWidth: IslandLayout.checkLine, lineCap: .round, lineJoin: .round))
-                        .opacity(cover == nil && !checked ? 0 : 1)
+                        .opacity(checked ? 1 : 0)
                     if let cover {
                         cover.offset(x: checked ? IslandLayout.check : 0)
                     }
