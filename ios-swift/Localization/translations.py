@@ -594,7 +594,6 @@ t("落日", "落日", "Sunset")
 
 t("添加大类", "新增主分類", "Add Category")
 t("已隐藏", "已隱藏", "Hidden")
-t("%lld 个小类", "%lld 個子分類", P("%lld subcategory", "%lld subcategories"))
 t("分类已删除", "分類已刪除", "Category Deleted")
 t("隐藏（记账时不出现）", "隱藏（記帳時不顯示）", "Hide (Not Shown When Recording)")
 t("添加小类", "新增子分類", "Add Subcategory")

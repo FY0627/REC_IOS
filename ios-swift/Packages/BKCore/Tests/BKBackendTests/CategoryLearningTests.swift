@@ -290,6 +290,20 @@ final class CategoryLearningTests: XCTestCase {
         XCTAssertNil(suggestions.picker.first)
     }
 
+    func testNotificationGroupsFollowArrangedCategories() async throws {
+        let backend = try await makeBackend()
+        let tops = CategoryTree(try await backend.categories()).nodes(.expense, includeHidden: true).map(\.id)
+        let medical = try await category(backend, "医疗")
+        try await backend.reorderCategories([medical.id] + tops.filter { $0 != medical.id })
+        let snack = try await category(backend, "饮料零食")
+        try await backend.moveCategory(id: snack.id, toParent: medical.id)
+        let next = try await spend(backend, at: "测试小馆")
+        let suggestions = try await backend.categorySuggestions(recordID: try XCTUnwrap(next.recordID))
+        XCTAssertEqual(suggestions.groups.first?.parent.id, medical.id, "分类页拖到第一个，通知和灵动岛上也是第一个")
+        XCTAssertEqual(suggestions.groups.first?.children.map(\.id), [snack.id], "拖进医疗的小类跟着到医疗下面")
+        XCTAssertFalse(suggestions.groups.first { $0.parent.name == "饮食" }?.children.contains { $0.id == snack.id } ?? true)
+    }
+
     func testAutoCategorizedRecordHasNoFirstPick() async throws {
         let backend = try await makeBackend()
         let lunch = try await category(backend, "午餐")

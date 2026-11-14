@@ -117,7 +117,8 @@ docker run --rm -v "<仓库>/ios-swift/Packages/BKCore:/pkg:ro" bk-swift bash -l
 - 首页一笔钱只占一行：转帐两边合成「招行 → 工行」，同一条通知拆出的手续费写在那一笔下面，合成的一单只占一行；失败、冻结只在卡片详情里。
   标题按「备注 → 交易对方 → 分类名」，图标是分类图标（`UI/Common/{RecordRowView,RecordDisplay}.swift`）。
   首页按收到那天分组，每一笔只写时间（`Fmt.recordClock`）；通知写的交易日期不是那天时才写上日期。完整时间在流水详情里。
-- 分类在「我的 › 分类」里自己管（`UI/Profile/CategoryManagerView.swift`），选分类的格子在 `UI/Common/CategoryGrid.swift`
+- 分类在「我的 › 分类」里自己管（`UI/Profile/CategoryManagerView.swift`），选分类的格子在 `UI/Common/CategoryGrid.swift`；
+  分类页用同一个格子（`CategoryGrid` 的 `arrangement`），长按拖动排顺序、把小类拖到别的大类上，存进账本（`reorderCategories`、`moveCategory`）
   （放在列表的分组里：点有小类的大类先选上它，小类在下一行展开，分组的框往下变大，大类那一行不动；只会有一个选中）。
   自动记账把手续费、扣息、工资、利息和退款归类；同一个商户连续 3 次选同一个分类后，下一笔自动归类，标题旁写「自动」
   （在本机学习，[ADR 0017](../docs/decisions/0017-ios-swift-learned-categories.md)）。

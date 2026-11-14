@@ -580,6 +580,81 @@ final class LedgerTypeTests: XCTestCase {
         XCTAssertFalse(categories.contains { $0.id == sport.id })
     }
 
+    /// 「我的 › 分类」长按拖动排顺序：存进账本，同一层没写到的排在后面
+    func testReorderCategoriesKeepsNewOrder() async throws {
+        let backend = try makeBackend()
+        let tops = CategoryTree(try await backend.categories()).nodes(.expense, includeHidden: true).map(\.id)
+        let other = try await category(backend, "其他")
+        let fee = try await category(backend, "手续费")
+        try await backend.reorderCategories([other.id, fee.id] + tops.filter { $0 != other.id && $0 != fee.id })
+        var tree = CategoryTree(try await backend.categories())
+        XCTAssertEqual(tree.nodes(.expense).prefix(3).map(\.category.name), ["其他", "手续费", "饮食"])
+
+        let dinner = try await category(backend, "晚餐")
+        let snack = try await category(backend, "饮料零食")
+        try await backend.reorderCategories([snack.id, dinner.id])
+        tree = CategoryTree(try await backend.categories())
+        XCTAssertEqual(tree.nodes(.expense).first { $0.category.name == "饮食" }?.children.map(\.name), ["饮料零食", "晚餐", "早餐", "午餐"],
+                       "没写到的按原来的顺序排在后面")
+        XCTAssertEqual(tree.nodes(.expense).first?.category.name, "其他", "排小类不动大类")
+
+        let food = try await category(backend, "饮食")
+        do {
+            try await backend.reorderCategories([food.id, dinner.id])
+            XCTFail("大类和小类不能一起排")
+        } catch BackendError.invalidCategory {}
+        let salary = try await category(backend, "工资", type: .income)
+        do {
+            try await backend.reorderCategories([food.id, salary.id])
+            XCTFail("支出和收入不能一起排")
+        } catch BackendError.invalidCategory {}
+        do {
+            try await backend.reorderCategories([food.id, food.id])
+            XCTFail("重复的")
+        } catch BackendError.invalidCategory {}
+        do {
+            try await backend.reorderCategories(["missing"])
+            XCTFail("没有这个分类")
+        } catch BackendError.notFound {}
+    }
+
+    /// 把小类拖到别的大类上：挪进那个大类，排在最后；流水跟着这个小类走
+    func testMoveSubcategoryToAnotherParent() async throws {
+        let backend = try makeBackend()
+        let cash = try await backend.addAccount(.pocket(name: "现金", type: .cash, currency: .cny, paletteID: "ocean"))
+        let breakfast = try await category(backend, "早餐")
+        let traffic = try await category(backend, "交通")
+        try await backend.addRecord(ManualEntry(type: .expense, accountID: cash.id, amountMinor: 12_00, currency: .cny, categoryID: breakfast.id, time: now))
+        try await backend.moveCategory(id: breakfast.id, toParent: traffic.id)
+        var tree = CategoryTree(try await backend.categories())
+        XCTAssertEqual(tree.nodes(.expense).first { $0.id == traffic.id }?.children.map(\.name), ["公交地铁", "打车", "加油停车", "火车飞机", "早餐"])
+        XCTAssertEqual(tree.nodes(.expense).first { $0.category.name == "饮食" }?.children.map(\.name), ["午餐", "晚餐", "饮料零食"])
+        let row = try await backend.records().first
+        XCTAssertEqual(row?.category?.fullName, "交通 · 早餐")
+
+        let transit = try await category(backend, "公交地铁")
+        try await backend.reorderCategories([breakfast.id, transit.id])
+        tree = CategoryTree(try await backend.categories())
+        XCTAssertEqual(tree.nodes(.expense).first { $0.id == traffic.id }?.children.map(\.name), ["早餐", "公交地铁", "打车", "加油停车", "火车飞机"],
+                       "挪进去以后在新的大类里也能排")
+
+        let fee = try await category(backend, "手续费")
+        do {
+            try await backend.moveCategory(id: breakfast.id, toParent: fee.id)
+            XCTFail("系统分类下面不能放小类")
+        } catch BackendError.invalidCategory {}
+        let food = try await category(backend, "饮食")
+        do {
+            try await backend.moveCategory(id: food.id, toParent: traffic.id)
+            XCTFail("有小类的大类不能挪进别的大类")
+        } catch BackendError.invalidCategory {}
+        let salary = try await category(backend, "工资", type: .income)
+        do {
+            try await backend.moveCategory(id: breakfast.id, toParent: salary.id)
+            XCTFail("不能挪到收入的大类下面")
+        } catch BackendError.invalidCategory {}
+    }
+
     func testStatsGroupByTopLevelCategory() async throws {
         let backend = try makeBackend()
         let cash = try await backend.addAccount(.pocket(name: "现金", type: .cash, currency: .cny, paletteID: "ocean"))

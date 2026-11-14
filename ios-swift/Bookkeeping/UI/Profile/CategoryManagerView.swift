@@ -5,28 +5,20 @@ import BKBackend
 /// 「我的 › 分类」：支出、收入、转帐三组。分类全由自己定：增加、删除、改名、换图标、排序、隐藏，
 /// 小类可以挪到别的大类下面，两个分类可以合并。删除时选原来的记录改记到哪；不选就回到待分类，记录不删。
 /// 转帐和系统分类（手续费、扣息）自动记账要用，只能改名、换图标。
+///
+/// 分类排成和记账页一样的格子（同一个 `CategoryGrid`）：点一下打开分类，有小类的先展开；
+/// 长按拖动排顺序，小类拖到别的大类上就挪进去，都存进账本，记账页、通知、灵动岛跟着变
 struct CategoryManagerView: View {
     @Environment(LedgerStore.self) private var store
     @State private var type: CategoryType = .expense
     @State private var adding = false
-    @State private var errorText: String?
+    @State private var opened: String?
+    @State private var arrangement = CategoryArrangement()
 
     var body: some View {
-        let nodes = store.categoryTree.nodes(type, includeHidden: true)
         List {
             Section {
-                ForEach(nodes) { node in
-                    NavigationLink {
-                        CategoryDetailView(categoryID: node.id)
-                    } label: {
-                        CategoryManagerRow(category: node.category, childCount: node.children.count)
-                    }
-                }
-                .onMove { from, to in
-                    var ids = nodes.map(\.id)
-                    ids.move(fromOffsets: from, toOffset: to)
-                    Task { await run { try await store.reorderCategories(ids) } }
-                }
+                CategoryGrid(type: type, arrangement: arrangement) { opened = $0 }
                 if type != .transfer {
                     Button("添加大类", systemImage: "plus") { adding = true }
                 }
@@ -40,30 +32,25 @@ struct CategoryManagerView: View {
                 .listRowInsets(EdgeInsets())
                 .padding(.bottom, 8)
             }
-            if let errorText {
-                Section { Text(errorText).foregroundStyle(.red) }
+            if let failure = arrangement.failure {
+                Section { Text(failure).foregroundStyle(.red) }
             }
         }
         .navigationTitle("分类")
-        .toolbar { EditButton() }
+        // 拖动时列表不滚，浮起来的图标盖在整个列表上
+        .scrollDisabled(arrangement.active)
+        .overlay { CategoryDragOverlay(arrangement: arrangement) }
+        .navigationDestination(item: $opened) { id in
+            CategoryDetailView(categoryID: id)
+        }
         .sheet(isPresented: $adding) {
             NewCategorySheet(type: type, parentID: nil)
-        }
-    }
-
-    private func run(_ action: () async throws -> Void) async {
-        do {
-            try await action()
-            errorText = nil
-        } catch {
-            errorText = L("操作失败：\(error.localizedDescription)")
         }
     }
 }
 
 private struct CategoryManagerRow: View {
     let category: LedgerCategory
-    var childCount = 0
 
     var body: some View {
         HStack(spacing: 12) {
@@ -74,8 +61,6 @@ private struct CategoryManagerRow: View {
                 Text("已隐藏").font(.footnote).foregroundStyle(.secondary)
             } else if category.locked {
                 Image(systemName: "lock").font(.footnote).foregroundStyle(.secondary)
-            } else if childCount > 0 {
-                Text("\(childCount) 个小类").font(.footnote).foregroundStyle(.secondary)
             }
         }
     }

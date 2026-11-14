@@ -630,10 +630,20 @@ public final class LedgerBackend: Sendable {
         }
     }
 
-    /// 同一层里的新顺序
+    /// 同一层（同一种类型的大类，或同一个大类下面的小类）的新顺序：`ids` 按给的顺序排在前面，没写到的按原来的顺序排在后面。
+    /// 「我的 › 分类」长按拖动后存在这里；记账页、通知、灵动岛都按这个顺序
     public func reorderCategories(_ ids: [String]) async throws {
+        guard !ids.isEmpty else { return }
         try await database.write { db in
-            for (index, id) in ids.enumerated() { try CategoryDAO.setSortOrder(db, id: id, sortOrder: index) }
+            let all = try CategoryDAO.all(db)
+            let listed = try ids.map { id in
+                guard let category = all.first(where: { $0.id == id }) else { throw BackendError.notFound }
+                return category
+            }
+            guard let first = listed.first, Set(ids).count == ids.count,
+                  listed.allSatisfy({ $0.type == first.type && $0.parentID == first.parentID }) else { throw BackendError.invalidCategory }
+            let rest = all.filter { $0.type == first.type && $0.parentID == first.parentID && !ids.contains($0.id) }.map(\.id)
+            for (index, id) in (ids + rest).enumerated() { try CategoryDAO.setSortOrder(db, id: id, sortOrder: index) }
         }
     }
 
