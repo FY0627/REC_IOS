@@ -24,8 +24,8 @@ struct CategoryActivityAttributes: ActivityAttributes {
         var tint: String?
         /// 这次换内容是「返回」：岛上往回滚，新的从上面下来。nil 和 false 一样，往前滚
         var back: Bool?
-        /// 刚从后台开启：系统会先把岛展开几秒，这时展开的岛上只放左边图标、右边金额，不放按钮。
-        /// 到 `staleDate` 系统把活动标成过时、重画一次（`isStale`），按钮才出来。nil 和 false 一样，放按钮
+        /// 刚从后台开启：展开的岛上只放左边图标、右边金额，不放按钮，系统就不会自己展开。
+        /// 几秒后 App 更新一次去掉它，按钮才出来（`LiveCategoryActivity.fillButtons`）。nil 和 false 一样，放按钮
         var opening: Bool?
 
         var isBack: Bool { back ?? false }

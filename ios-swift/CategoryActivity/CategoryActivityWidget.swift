@@ -14,8 +14,8 @@ struct CategoryActivityBundle: WidgetBundle {
 /// 灵动岛选分类（ADR 0024）：自动记账记上一笔没分类的支出或收入后，App 开启这个实时活动，在岛上和锁屏上选分类。
 ///
 /// - 展开（长按岛展开）：摄像头两边是顶上一行（第 1 页商户，第 2、3 页返回和标题；右边金额），下面是按钮，一行 5 个；
-/// - 刚开启：App 不在前台时开启的，系统先自己展开几秒，App 关不掉。这几秒里只有左边图标、右边金额，没有按钮（`ContentState.opening`），
-///   不会点到一半被收回；到 `staleDate` 系统重画，按钮才出来；
+/// - 刚开启：App 不在前台时开启的，系统会先自己展开几秒，App 关不掉。所以开启时只有左边图标、右边金额，没有按钮（`ContentState.opening`），
+///   这样就看不出展开；几秒后 App 更新一次，按钮才出来；
 /// - 按钮：分类是主题色的圆和图标，「全部」「更多」是白色的圆，字在圆下面；
 /// - 收起：左边是分类图标（还没选是统一的图标），右边是金额；minimal 只放图标；
 /// - 锁屏：黑色卡片，同样的三页和按钮；
@@ -31,7 +31,7 @@ struct CategoryActivityWidget: Widget {
                 .activitySystemActionForegroundColor(.white)
                 .widgetURL(CategoryActivityLink.url(recordID: context.state.recordID))
         } dynamicIsland: { context in
-            // 刚开启、系统自己展开的那几秒：和收起时一样只有图标和金额，过时后系统重画才放按钮
+            // 刚开启：和收起时一样只有图标和金额，App 补上按钮前不放。过了补按钮的时间（`staleDate`）还没补上、又刚好重画时也放
             let opening = context.state.isOpening && !context.isStale
             return DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {

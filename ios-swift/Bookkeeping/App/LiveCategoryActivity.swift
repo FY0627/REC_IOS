@@ -1,5 +1,6 @@
 import ActivityKit
 import Foundation
+import UIKit
 import BKBackend
 import BKModel
 
@@ -9,7 +10,8 @@ import BKModel
 /// - 两个记账动作遵循 `LiveActivityIntent`，在它们的 perform 里开启：系统只让用户经快捷指令、Siri、小组件运行的动作从后台开启；
 /// - 不发会提醒的更新：那样岛会自己展开，几秒后不管有没有在点都会收回。长按展开再选；
 /// - 但 App 不在前台时新开启的，系统照样先展开几秒（推送开启的也这样），没有接口关掉。
-///   所以开启时展开的岛上只放图标和金额（`ContentState.opening`），`openingTime` 后系统把活动标成过时、重画，按钮才出来；
+///   所以开启时展开的岛上只放图标和金额（`ContentState.opening`），这样系统就不会展开；`openingTime` 后 App 自己更新一次补上按钮
+///   （系统到 `staleDate` 不会重画）。App 是在后台被拉起来的，要一段后台时间撑到那时；没撑到的，打开或离开 App 时补；
 /// - 只留一个：又记了一笔要选的，就换成这一笔，原来那一笔排着（`LiveCategoryQueue`）；
 /// - 不设时长：用户不选就留着，自己上滑收起；系统最长 8 小时后结束。这一笔在 App 里选了分类、删了，打开或离开 App 时换下一笔（`reconcile`）。
 ///
@@ -37,7 +39,7 @@ enum LiveCategoryActivity {
     private static let queueKey = "liveCategory.queue"
     /// 选好的分类在岛上显示多久，再换成下一笔或结束
     private static let chosenDisplay: Duration = .milliseconds(1200)
-    /// 新开启时系统自己展开几秒：这么久以后才放按钮（`staleDate`）。真机上看系统几秒收回再调
+    /// 新开启时系统自己展开几秒：这么久以后才放按钮（到时间 App 自己更新；`staleDate` 记着这个时间）
     private static let openingTime: TimeInterval = 5
     /// 转帐、退款不弹：转帐不用分类，退款跟着原交易；没确认对方的转账选了分类就是转给别人
     private static let skippedKinds: Set<TransactionKind> = [.transferIn, .transferOut, .refund, .reversal]
@@ -95,11 +97,12 @@ enum LiveCategoryActivity {
         var opening = content.state
         opening.opening = true
         do {
-            _ = try Activity.request(
+            let activity = try Activity.request(
                 attributes: CategoryActivityAttributes(),
                 content: ActivityContent(state: opening, staleDate: Date(timeIntervalSinceNow: openingTime)),
                 pushType: nil
             )
+            fillButtonsLater(activity)
             note(L("实时活动已开启"))
             return true
         } catch {
@@ -186,7 +189,7 @@ enum LiveCategoryActivity {
     @MainActor
     private static func present(_ activity: Activity<CategoryActivityAttributes>, _ state: State) async {
         let showing = activity.content
-        let openingUntil = showing.state.isOpening ? showing.staleDate.flatMap { $0 > Date() ? $0 : nil } : nil
+        let openingUntil = openingDeadline(showing)
         var state = state
         state.opening = openingUntil == nil ? nil : true
         if showing.state.isBack != state.isBack {
@@ -198,11 +201,42 @@ enum LiveCategoryActivity {
         await activity.update(ActivityContent(state: state, staleDate: openingUntil))
     }
 
+    /// 刚开启、还没补上按钮：补按钮的时间（开启时写在 `staleDate` 上）；已经到了、不是刚开启的是 nil
+    private static func openingDeadline(_ content: ActivityContent<State>) -> Date? {
+        guard content.state.isOpening, let until = content.staleDate, until > Date() else { return nil }
+        return until
+    }
+
+    /// 刚开启的岛到 `openingTime` 补上按钮：换成带按钮的内容，不提醒、不展开。
+    /// App 是被快捷指令在后台拉起来的，动作返回后很快会被挂起，所以先要一段后台时间撑到那时
+    @MainActor
+    private static func fillButtonsLater(_ activity: Activity<CategoryActivityAttributes>) {
+        let time = BackgroundTime(name: "liveCategory.opening")
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(openingTime))
+            await fillButtons(activity)
+            time.end()
+        }
+    }
+
+    /// 还是刚开启的样子就补上按钮。这期间换成了别的一笔也一样补（换的时候留着没放按钮）
+    @MainActor
+    private static func fillButtons(_ activity: Activity<CategoryActivityAttributes>) async {
+        guard activity.activityState == .active || activity.activityState == .stale, activity.content.state.isOpening else { return }
+        var state = activity.content.state
+        state.opening = nil
+        await activity.update(ActivityContent(state: state, staleDate: nil))
+    }
+
     // MARK: 打开、离开 App
 
-    /// 岛上这一笔已经在 App 里选了分类或者删了：换成排着的下一笔，没有了就结束
+    /// 岛上这一笔已经在 App 里选了分类或者删了：换成排着的下一笔，没有了就结束。
+    /// 刚开启的岛到时间了还没补上按钮（App 没撑到就被挂起了）：现在补上
     @MainActor
     static func reconcile() async {
+        for activity in running() where activity.content.state.isOpening && openingDeadline(activity.content) == nil {
+            await fillButtons(activity)
+        }
         let current = running().filter { $0.content.state.chosen == nil }
         guard !current.isEmpty, let backend = await openBackend() else { return }
         for activity in current {
@@ -354,6 +388,24 @@ enum LiveCategoryActivity {
 
     private static func milliseconds(_ duration: Duration) -> Int {
         Int(duration / .milliseconds(1))
+    }
+}
+
+/// 一段后台时间：App 在后台被拉起来、动作已经返回，还要等几秒再更新岛。用完或系统收回时结束
+@MainActor
+private final class BackgroundTime {
+    private var id = UIBackgroundTaskIdentifier.invalid
+
+    init(name: String) {
+        id = UIApplication.shared.beginBackgroundTask(withName: name) { [weak self] in
+            MainActor.assumeIsolated { self?.end() }
+        }
+    }
+
+    func end() {
+        guard id != .invalid else { return }
+        UIApplication.shared.endBackgroundTask(id)
+        id = .invalid
     }
 }
 
