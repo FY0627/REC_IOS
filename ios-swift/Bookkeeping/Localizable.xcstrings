@@ -18379,6 +18379,28 @@
         }
       }
     },
+    "选好后直接收岛" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Close Island After Picking"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选好后直接收岛"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "選好後直接收島"
+          }
+        }
+      }
+    },
     "选择上一步「获取 URL 内容」的结果（URL 的内容）。" : {
       "localizations" : {
         "en" : {

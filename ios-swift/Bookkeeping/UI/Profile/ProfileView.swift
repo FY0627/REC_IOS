@@ -40,6 +40,7 @@ private struct ProfileList: View {
     @AppStorage(ExchangeRateStore.primaryKey) private var primaryCurrency = CurrencyCode.cny.rawValue
     @AppStorage(IngestNotifier.modeKey) private var notifyMode = IngestNotifier.Mode.off.rawValue
     @AppStorage(IngestNotifier.islandKey) private var islandOn = true
+    @AppStorage(LiveCategoryActivity.skipLeaveKey) private var islandSkipLeave = false
     @AppStorage(ImportExchangeRatesIntent.notifyKey) private var notifyRates = true
     /// 「开发与调试」平时藏着：连点 7 次版本号显示，再连点 7 次藏起来
     @AppStorage("showDevTools") private var showDevTools = false
@@ -220,6 +221,12 @@ private struct ProfileList: View {
                             // 岛上正在选的也收起，留在待分类
                             guard !on else { return }
                             Task { await LiveCategoryActivity.endAll() }
+                        }
+                        // 选好以后：对勾画完往上走掉再收岛，还是直接收岛，对比哪个快
+                        if hasIsland {
+                            Toggle(isOn: $islandSkipLeave) {
+                                Label("选好后直接收岛", systemImage: "arrow.up.to.line")
+                            }
                         }
                     }
                 }

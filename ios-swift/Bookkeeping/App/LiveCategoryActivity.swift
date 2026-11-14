@@ -42,15 +42,18 @@ enum LiveCategoryActivity {
     private static let pickerKey = "liveCategory.picker"
     private static let pickerRecordKey = "liveCategory.pickerRecord"
     private static let queueKey = "liveCategory.queue"
-    /// 选好以后后面几步什么时候开始（从第一步放出来算，`ChosenStep`）。用户的录屏量的：淡出约 0.35 秒，岛变矮约 0.45 秒，对勾画约 0.2 秒
+    /// 选好以后后面几步什么时候开始（从第一步放出来算，`ChosenStep`）。用户的录屏量的：淡出约 0.35 秒，岛变矮约 0.45 秒，对勾画约 0.2 秒。
+    /// 用户嫌一步一步太慢、接不上（特别是变矮到出来）：每步在上一步快放完时就开始，选好的样子在岛快变完时出来，对勾在它快到位时画
     private static let chosenSteps: [(CategoryActivityAttributes.ChosenStep, Duration)] = [
-        (.sizing, .milliseconds(400)), (.showing, .milliseconds(950)), (.checked, .milliseconds(1400)),
+        (.sizing, .milliseconds(300)), (.showing, .milliseconds(700)), (.checked, .milliseconds(1000)),
     ]
-    /// 什么时候往上走掉：对勾画完再停一会儿
-    private static let chosenDisplay: Duration = .milliseconds(2300)
-    /// 没有下一笔：整页往上走掉以后再结束。实时活动的动画用系统自己的时长（ActivityKit 文档：忽略 `animation` 修饰符），
-    /// 0.35 秒就结束，往上走还没走完岛就收了；留 0.6 秒
-    private static let leaveTime: Duration = .milliseconds(600)
+    /// 什么时候往上走掉（或直接收岛）：对勾画完再停一会儿
+    private static let chosenDisplay: Duration = .milliseconds(1700)
+    /// 「开发与调试 › 选好后直接收岛」：开着时对勾画完不往上走掉，直接结束（岛收回去）或换下一笔；用户要对比哪个快
+    static let skipLeaveKey = "liveCategory.skipLeave"
+    /// 往上走掉以后再结束或换下一笔。实时活动的动画用系统自己的时长（ActivityKit 文档：忽略 `animation` 修饰符），
+    /// 0.35 秒就结束，往上走还没走完岛就收了（录屏里往上走约 0.4 秒）；留 0.5 秒
+    private static let leaveTime: Duration = .milliseconds(500)
     /// 没有灵动岛时提醒横幅的声音：一段没有声音的文件（提醒必须带声音；短信、推送本身已经响过，截图是自己敲的）
     private static let silentSound = "Silence.wav"
     /// 新开启的岛先放提醒多久，再换成按钮：系统自己展开几秒没有公开的数字，用户在真机上量的是 3 秒，试过 3 秒刚好
@@ -200,7 +203,7 @@ enum LiveCategoryActivity {
         }
         try? await Task.sleep(until: shownAt + chosenDisplay, clock: .continuous)
         guard activity.content.state.recordID == recordID else { return }
-        await advance(activity, from: recordID, backend: backend, leave: true)
+        await advance(activity, from: recordID, backend: backend, leave: !UserDefaults.standard.bool(forKey: skipLeaveKey))
     }
 
     /// 写不进账本：岛上换回这一笔的按钮
