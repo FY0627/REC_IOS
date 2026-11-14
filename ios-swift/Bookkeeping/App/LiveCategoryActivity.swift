@@ -40,9 +40,9 @@ enum LiveCategoryActivity {
     private static let queueKey = "liveCategory.queue"
     /// 选好的分类在岛上显示多久，再换成下一笔或结束
     private static let chosenDisplay: Duration = .milliseconds(1200)
-    /// 新开启的岛先放提醒多久，再换成按钮。系统自己展开几秒没有公开的数字，「开发与调试」里按真机上看到的调（1–15 秒）
+    /// 新开启的岛先放提醒多久，再换成按钮。系统自己展开几秒没有公开的数字，「开发与调试」里按真机上看到的调（1–15 秒，用户在真机上量的是 3 秒）
     static let openingKey = "liveCategory.openingSeconds"
-    static let defaultOpening = 5
+    static let defaultOpening = 3
     private static var openingTime: TimeInterval {
         let seconds = UserDefaults.standard.integer(forKey: openingKey)
         return TimeInterval((1...15).contains(seconds) ? seconds : defaultOpening)
