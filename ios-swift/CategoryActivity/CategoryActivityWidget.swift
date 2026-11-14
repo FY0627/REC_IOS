@@ -19,7 +19,8 @@ struct CategoryActivityBundle: WidgetBundle {
 ///   不放商户、金额（别人可能看到），摄像头旁边也不放标签图标；单点打开 App 这一笔的选分类面板。几秒后 App 更新一次去掉提醒，长按展开才是按钮；
 /// - 按钮：分类是主题色的圆和图标，「全部」「更多」是白色的圆，字在圆下面；
 /// - 选好：和提醒一样的样子（岛也矮回提醒的高度）：左边主题色圆里是选中的分类图标，中间灰色「已分类」、白色分类名，右边主题色圆环。
-///   商户、金额和按钮一起往上走，这三样从下面上来；接着圆环里的对勾从左往右画出来（`ChosenCheck`）；
+///   商户、金额和按钮一起往上走，这三样从下面上来，这时岛的高度不变（和换页一样只滚内容）；
+///   接着圆环里的对勾从左往右画出来（`ChosenCheck`），岛同时矮回提醒的高度；
 ///   没有下一笔时这三样再往上走掉，岛跟着收回去；
 /// - 收起：只有左边的分类图标（还没选是统一的标签图标），右边空着、不放金额；minimal 只放图标；
 /// - 锁屏：黑色卡片，同样的三页和按钮；没有灵动岛的手机只放提醒（`ContentState.reminderOnly`），这张卡片也是屏幕上方弹出的横幅；
@@ -68,9 +69,9 @@ struct CategoryActivityWidget: Widget {
                     }
                 }
                 DynamicIslandExpandedRegion(.bottom) {
-                    // 选好了没有按钮，岛矮回提醒的高度
-                    if notice == nil, state.chosen == nil {
-                        PickerBody(state: state)
+                    // 选好的样子上来时先留着按钮那么高的空，岛不变（`showsBottom`）；对勾画出来时去掉，岛矮回提醒的高度
+                    if notice == nil, state.showsBottom {
+                        IslandBottom(state: state)
                             .islandSwap(state.screenKey, back: state.isBack)
                             .transition(IslandMotion.page(back: state.isBack))
                     }
@@ -107,7 +108,8 @@ struct CategoryActivityWidget: Widget {
 ///
 /// 每一页都占两行按钮的高度：第 1 页只有一行时上下居中，空出来的地方留白。
 /// 以前第 1 页一行、「全部」两行，换页时岛跟着变高变矮，系统缩放岛时整块重排，金额也跟着动，动画乱；现在选分类的几页岛的大小不变。
-/// 选好时整个换成提醒的样子，岛矮回提醒的高度（锁屏卡片大小不变）
+/// 选好时换成提醒的样子：先在原来的高度里从下面上来，对勾画出来时岛再矮回提醒的高度（锁屏卡片大小不变）。
+/// 真机上选好时同一次更新里又去掉按钮那一块、岛又变矮，选好的样子没有从下往上滚进来，所以分成两次
 enum IslandLayout {
     static let cell = CGSize(width: 60, height: 44)
     static let circle: CGFloat = 28
@@ -183,6 +185,10 @@ extension CategoryActivityAttributes.ContentState {
 
     /// 右边：金额在选好时和按钮一起往上走掉，换成对勾；换下一笔时换
     var amountKey: String { chosen != nil ? chosenKey : recordID }
+
+    /// 展开的岛下面那一块：选分类时是按钮；刚选好、选好的样子往上滚进来时是同样高的空，岛不变高；
+    /// 对勾画出来、走掉时去掉，岛矮回提醒的高度
+    var showsBottom: Bool { chosen == nil || !(isChecked || isLeaving) }
 }
 
 /// 换页、选好、换下一笔：像翻桌面那样整页滚过去，只是上下滚。
@@ -450,6 +456,20 @@ struct AmountText: View {
             .foregroundStyle(.white)
             .lineLimit(1)
             .minimumScaleFactor(0.6)
+    }
+}
+
+/// 展开的岛下面那一块：还没选是按钮；刚选好是按钮那么高的空（选好的样子在上面，见 `showsBottom`）
+struct IslandBottom: View {
+    let state: CategoryActivityAttributes.ContentState
+
+    var body: some View {
+        if state.chosen == nil {
+            PickerBody(state: state)
+        } else {
+            Color.clear
+                .frame(maxWidth: .infinity, minHeight: IslandLayout.grid, maxHeight: IslandLayout.grid)
+        }
     }
 }
 

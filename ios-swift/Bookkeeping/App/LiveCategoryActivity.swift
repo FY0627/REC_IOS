@@ -46,8 +46,9 @@ enum LiveCategoryActivity {
     private static let chosenDisplay: Duration = .milliseconds(1400)
     /// 选中的分类滚进来（0.35 秒）以后再加上对勾，对勾一笔画出来
     private static let checkDelay: Duration = .milliseconds(450)
-    /// 没有下一笔：整页往上走掉（0.35 秒）以后再结束
-    private static let leaveTime: Duration = .milliseconds(350)
+    /// 没有下一笔：整页往上走掉以后再结束。实时活动的动画用系统自己的时长（ActivityKit 文档：忽略 `animation` 修饰符），
+    /// 0.35 秒就结束，往上走还没走完岛就收了；留 0.6 秒
+    private static let leaveTime: Duration = .milliseconds(600)
     /// 没有灵动岛时提醒横幅的声音：一段没有声音的文件（提醒必须带声音；短信、推送本身已经响过，截图是自己敲的）
     private static let silentSound = "Silence.wav"
     /// 新开启的岛先放提醒多久，再换成按钮。系统自己展开几秒没有公开的数字，「开发与调试」里按真机上看到的调（1–15 秒，用户在真机上量的是 3 秒）
