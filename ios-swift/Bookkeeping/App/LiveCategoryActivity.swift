@@ -281,7 +281,7 @@ enum LiveCategoryActivity {
     }
 
     /// 分类名称和固定的字按 App 里选的语言写好，扩展照着显示
-    private static func makePicker(_ suggestions: CategorySuggestions) -> LiveCategoryPicker {
+    static func makePicker(_ suggestions: CategorySuggestions) -> LiveCategoryPicker {
         let type = suggestions.groups.first?.parent.type ?? .expense
         // 「只记%@」：插进去的就是「%@」，留给 `LiveCategoryPicker` 换成大类名称
         let labels = LiveCategoryPicker.Labels(all: L("全部"), more: L("更多"), only: L("只记\("%@")"), type: type.displayName.loc)

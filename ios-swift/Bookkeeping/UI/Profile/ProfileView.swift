@@ -39,11 +39,15 @@ private struct ProfileList: View {
     @AppStorage(AppLanguage.key) private var language = AppLanguage.system.rawValue
     @AppStorage(ExchangeRateStore.primaryKey) private var primaryCurrency = CurrencyCode.cny.rawValue
     @AppStorage(IngestNotifier.modeKey) private var notifyMode = IngestNotifier.Mode.off.rawValue
+    @AppStorage(IngestNotifier.islandKey) private var islandOn = true
+    @AppStorage(IngestNotifier.snippetKey) private var snippetOn = false
     @AppStorage(ImportExchangeRatesIntent.notifyKey) private var notifyRates = true
     /// 「开发与调试」平时藏着：连点 7 次版本号显示，再连点 7 次藏起来
     @AppStorage("showDevTools") private var showDevTools = false
     @AppStorage(LiveCategoryActivity.lastResultKey) private var liveActivityResult = ""
     @AppStorage(LiveCategoryActivity.lastTapKey) private var liveActivityTap = ""
+    @AppStorage(CategorySnippet.lastResultKey) private var snippetResult = ""
+    private let hasIsland = DynamicIsland.isPresent(model: LiveCategoryActivity.modelIdentifier)
     @State private var versionTaps = 0
     @State private var lastVersionTap = Date.distantPast
     @State private var retention = 30
@@ -79,6 +83,28 @@ private struct ProfileList: View {
                     .onChange(of: notifyMode) { _, mode in
                         guard mode != IngestNotifier.Mode.off.rawValue else { return }
                         askPermission { notifyMode = IngestNotifier.Mode.off.rawValue }
+                    }
+                    // 选「全部」时没分类的在哪里选：灵动岛（ADR 0024）、摘要卡片（ADR 0027）只开一个，都关是在通知上选
+                    if notifyMode == IngestNotifier.Mode.all.rawValue {
+                        if hasIsland {
+                            Toggle(isOn: $islandOn) {
+                                Label("灵动岛选分类", systemImage: "iphone.gen3")
+                            }
+                            .onChange(of: islandOn) { _, on in
+                                if on {
+                                    snippetOn = false
+                                } else {
+                                    // 岛上正在选的也收起，留在待分类
+                                    Task { await LiveCategoryActivity.endAll() }
+                                }
+                            }
+                        }
+                        Toggle(isOn: $snippetOn) {
+                            Label("摘要卡片选分类", systemImage: "rectangle.topthird.inset.filled")
+                        }
+                        .onChange(of: snippetOn) { _, on in
+                            if on { islandOn = false }
+                        }
                     }
                 }
 
@@ -206,6 +232,8 @@ private struct ProfileList: View {
                         LabeledContent("灵动岛", value: liveActivityResult.isEmpty ? "—" : liveActivityResult)
                         // 上次点岛上的按钮 App 这边花了多久：剩下的等待是系统叫起 App、重画岛
                         LabeledContent("灵动岛按钮", value: liveActivityTap.isEmpty ? "—" : liveActivityTap)
+                        // 上次弹摘要卡片的结果（ADR 0027）：自动化里能不能弹要在真机上看
+                        LabeledContent("摘要卡片", value: snippetResult.isEmpty ? "—" : snippetResult)
                     }
                 }
             }
