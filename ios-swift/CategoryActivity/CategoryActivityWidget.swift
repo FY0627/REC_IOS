@@ -19,9 +19,8 @@ struct CategoryActivityBundle: WidgetBundle {
 ///   不放商户、金额（别人可能看到），摄像头旁边也不放标签图标；单点打开 App 这一笔的选分类面板。几秒后 App 更新一次去掉提醒，长按展开才是按钮；
 /// - 按钮：分类是主题色的圆和图标，「全部」「更多」是白色的圆，字在圆下面；
 /// - 选好：和提醒一样的样子（岛也矮回提醒的高度）：左边主题色圆里是选中的分类图标，中间灰色「已分类」、白色分类名，右边主题色圆环。
-///   商户、金额和按钮一起往上走，这三样从下面上来，这时岛的高度不变（和换页一样只滚内容）；
-///   接着圆环里的对勾从左往右画出来（`ChosenCheck`），岛同时矮回提醒的高度；
-///   没有下一笔时这三样再往上走掉，岛跟着收回去；
+///   一步一次更新（`ChosenStep`）：商户、金额和按钮淡出 → 岛矮回提醒的高度（这时什么都不显示）→ 这三样从下往上出来
+///   → 圆环里的对勾从左往右画出来（`ChosenCheck`）→ 往上走掉，岛收回去或换下一笔；
 /// - 收起：只有左边的分类图标（还没选是统一的标签图标），右边空着、不放金额；minimal 只放图标；
 /// - 锁屏：黑色卡片，同样的三页和按钮；没有灵动岛的手机只放提醒（`ContentState.reminderOnly`），这张卡片也是屏幕上方弹出的横幅；
 /// - 换页、选好、换下一笔：整页上下滚过去，返回时反过来（`IslandMotion`）。
@@ -61,15 +60,13 @@ struct CategoryActivityWidget: Widget {
                 DynamicIslandExpandedRegion(.center) {
                     if let notice {
                         IslandBadgeText(caption: notice.caption, title: notice.title)
-                    } else if let chosen = state.chosen {
+                    } else if let chosen = state.chosen, state.step >= .sizing {
                         IslandBadgeText(caption: state.chosenCaption ?? "", title: chosen.name)
-                            .opacity(state.isLeaving ? 0 : 1)
-                            .islandSwap(state.chosenKey, back: false)
-                            .transition(IslandMotion.page(back: false))
+                            .chosenReveal(state.step)
                     }
                 }
                 DynamicIslandExpandedRegion(.bottom) {
-                    // 选好的样子上来时先留着按钮那么高的空，岛不变（`showsBottom`）；对勾画出来时去掉，岛矮回提醒的高度
+                    // 选好的第一步按钮淡出，留着同样高的空，岛不变（`showsBottom`）；第二步去掉，岛矮回提醒的高度
                     if notice == nil, state.showsBottom {
                         IslandBottom(state: state)
                             .islandSwap(state.screenKey, back: state.isBack)
@@ -108,8 +105,7 @@ struct CategoryActivityWidget: Widget {
 ///
 /// 每一页都占两行按钮的高度：第 1 页只有一行时上下居中，空出来的地方留白。
 /// 以前第 1 页一行、「全部」两行，换页时岛跟着变高变矮，系统缩放岛时整块重排，金额也跟着动，动画乱；现在选分类的几页岛的大小不变。
-/// 选好时换成提醒的样子：先在原来的高度里从下面上来，对勾画出来时岛再矮回提醒的高度（锁屏卡片大小不变）。
-/// 真机上选好时同一次更新里又去掉按钮那一块、岛又变矮，选好的样子没有从下往上滚进来，所以分成两次
+/// 选好时换成提醒的样子：按钮淡出以后岛先矮回提醒的高度，这时什么都不显示，再放出选好的样子（`ChosenStep`；锁屏卡片大小不变）
 enum IslandLayout {
     static let cell = CGSize(width: 60, height: 44)
     static let circle: CGFloat = 28
@@ -141,6 +137,8 @@ enum IslandLayout {
     static let noticeDrop: CGFloat = 10
     /// 中间两行字离左边的图标再远一点：真机上只隔了约 8 点，太挤
     static let badgeTextGap: CGFloat = 10
+    /// 选好的样子出来和走掉时上下移动多少
+    static let revealRise: CGFloat = 16
     /// 锁屏卡片的边距：苹果规范里锁屏实时活动的标准边距是 14 点
     static let lockMargin: CGFloat = 14
     /// 提醒和选好的圆环的线宽
@@ -171,24 +169,23 @@ extension CategoryActivityAttributes.ContentState {
 }
 
 extension CategoryActivityAttributes.ContentState {
-    /// 下面的按钮：换页、选好、走掉、换下一笔时变。对勾画出来不算（只是加上对勾，不整页滚）
+    /// 下面的按钮：换页、选好、走掉、换下一笔时变。选好以后的其他几步不算
     var screenKey: String { "\(recordID)|\(screen.page.token)|\(chosen?.id ?? "")|\(isLeaving ? "leave" : "")" }
 
-    /// 选好的样子（左边分类图标、中间「已分类」、右边对勾）：选好时从下面上来，走掉时往上走
-    var chosenKey: String { "\(recordID)|\(isLeaving ? "leave" : "chosen")" }
+    /// 选好以后左右两边：第一步是和顶上一行一样大的空（商户、金额淡出）；之后一直是同一个（只改位置、透明度，系统才有动画）
+    private var chosenKey: String { "\(recordID)|\(step == .clearing ? "clear" : "chosen")" }
 
-    /// 左边：返回和标题跟着页变；商户在选好时和按钮一起往上走掉，换成选中的分类图标；换下一笔时换
+    /// 左边：返回和标题跟着页变；选好时商户淡出，换成选中的分类图标；换下一笔时换
     var headerKey: String {
         if chosen != nil { return chosenKey }
         return screen.back != nil ? "\(recordID)|\(screen.page.token)" : recordID
     }
 
-    /// 右边：金额在选好时和按钮一起往上走掉，换成对勾；换下一笔时换
+    /// 右边：选好时金额淡出，换成圆环和对勾；换下一笔时换
     var amountKey: String { chosen != nil ? chosenKey : recordID }
 
-    /// 展开的岛下面那一块：选分类时是按钮；刚选好、选好的样子往上滚进来时是同样高的空，岛不变高；
-    /// 对勾画出来、走掉时去掉，岛矮回提醒的高度
-    var showsBottom: Bool { chosen == nil || !(isChecked || isLeaving) }
+    /// 展开的岛下面那一块：选分类时是按钮；选好的第一步是同样高的空，岛不变；之后去掉，岛矮回提醒的高度
+    var showsBottom: Bool { chosen == nil || step == .clearing }
 }
 
 /// 换页、选好、换下一笔：像翻桌面那样整页滚过去，只是上下滚。
@@ -213,6 +210,14 @@ extension View {
         .animation(IslandMotion.scroll, value: key)
     }
 
+    /// 选好的样子：岛变矮那一步已经放好但看不见、在下面一点；下一步出来；往上走掉那一步往上、看不见。
+    /// 从放好到走掉一直是同一个视图，只改位置和透明度：系统只对这个放动画（新加进来的只会淡入）
+    func chosenReveal(_ step: CategoryActivityAttributes.ChosenStep) -> some View {
+        opacity(step == .showing || step == .checked ? 1 : 0)
+            .offset(y: step == .sizing ? IslandLayout.revealRise : step == .leaving ? -IslandLayout.revealRise : 0)
+            .animation(IslandMotion.scroll, value: step)
+    }
+
     /// 提醒和选好的样子左边的图标、右边的圆环：靠边（和岛的圆角同心，见 `noticeBadge`），往下放，下沿和中间两行字的下沿对齐
     func badgeSlot(_ edge: HorizontalEdge) -> some View {
         frame(maxWidth: .infinity, alignment: edge == .leading ? .leading : .trailing)
@@ -228,15 +233,20 @@ extension View {
     }
 }
 
-/// 展开的岛左边：还没选是顶上一行（`HeaderLeading`）；选好了是主题色圆里的分类图标，和提醒的收据图标一个位置；走掉时空着（占着位置）
+/// 展开的岛左边：还没选是顶上一行（`HeaderLeading`）；选好的第一步是一样大的空；之后是主题色圆里的分类图标，和提醒的收据图标一个位置
 struct IslandLeading: View {
     let state: CategoryActivityAttributes.ContentState
 
     var body: some View {
         if let chosen = state.chosen {
-            ChosenIcon(symbol: chosen.symbol, tint: state.tintColor)
-                .opacity(state.isLeaving ? 0 : 1)
-                .badgeSlot(.leading)
+            if state.step == .clearing {
+                Color.clear
+                    .islandHeader(.leading)
+            } else {
+                ChosenIcon(symbol: chosen.symbol, tint: state.tintColor)
+                    .chosenReveal(state.step)
+                    .badgeSlot(.leading)
+            }
         } else {
             HeaderLeading(state: state, inline: false)
                 .islandHeader(.leading)
@@ -250,9 +260,14 @@ struct IslandTrailing: View {
 
     var body: some View {
         if state.chosen != nil {
-            ChosenCheck(checked: state.isChecked, tint: state.tintColor, cover: .black)
-                .opacity(state.isLeaving ? 0 : 1)
-                .badgeSlot(.trailing)
+            if state.step == .clearing {
+                Color.clear
+                    .islandHeader(.trailing)
+            } else {
+                ChosenCheck(checked: state.isChecked, tint: state.tintColor, cover: .black)
+                    .chosenReveal(state.step)
+                    .badgeSlot(.trailing)
+            }
         } else {
             AmountText(amount: state.amount)
                 .islandHeader(.trailing)
@@ -391,7 +406,7 @@ struct ChosenIcon: View {
 
 /// 选好的样子右边：主题色圆环（和提醒的一样），里面的对勾从左往右画出来。
 /// 灵动岛里不播 SF Symbols 的 Draw On（真机试过，对勾直接出现），这里用一块和岛一样黑的方块（`cover`）盖住对勾，
-/// 加上对勾时（`ContentState.checked`）把方块往右挪开，对勾从左往右露出来。对勾是从左往右写的，露出来的样子就像一笔画出来。
+/// 画对勾那一步（`ChosenStep.checked`）把方块往右挪开，对勾从左往右露出来。对勾是从左往右写的，露出来的样子就像一笔画出来。
 /// 没画之前对勾是透明的：选好的样子从下面上来时系统是淡入，对勾和方块各自半透明，方块挡不住，对勾会透出来（真机上看到过）。
 /// 锁屏卡片的底是半透明的，盖不住，`cover` 是 nil，对勾直接出现
 struct ChosenCheck: View {
@@ -490,6 +505,7 @@ struct PickerBody: View {
                     ChosenCheck(checked: state.isChecked, tint: state.tintColor, cover: nil)
                 }
                 .padding(.horizontal, 6)
+                .chosenReveal(state.step)
             } else {
                 CellGrid(recordID: state.recordID, cells: state.screen.cells, tint: state.tintColor)
             }

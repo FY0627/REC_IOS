@@ -30,10 +30,8 @@ struct CategoryActivityAttributes: ActivityAttributes {
         var notice: Notice?
         /// 选好时中间的灰色小字：「已分类」，下面白色大字是分类名。以前开的活动没有，空着
         var chosenCaption: String?
-        /// 选好以后画对勾：选中的分类先滚进来，过一会儿 App 再更新一次，对勾从左往右画出来
-        var checked: Bool?
-        /// 选好了、没有下一笔：整页往上走掉，接着结束
-        var leaving: Bool?
+        /// 选好以后走到了哪一步（`ChosenStep`）：一步一次更新，每步等上一步的动画放完。nil 和第一步一样
+        var chosenStep: ChosenStep?
 
         /// 这台手机没有灵动岛：只放提醒（`notice`），锁屏卡片和它在屏幕上方弹出的横幅是同一张提醒，没有按钮，单点打开 App 这一笔
         var reminderOnly: Bool?
@@ -41,8 +39,26 @@ struct CategoryActivityAttributes: ActivityAttributes {
         var isBack: Bool { back ?? false }
         var isOpening: Bool { notice != nil }
         var isReminderOnly: Bool { reminderOnly ?? false }
-        var isChecked: Bool { checked ?? false }
-        var isLeaving: Bool { leaving ?? false }
+        var step: ChosenStep { chosenStep ?? .clearing }
+        var isChecked: Bool { chosen != nil && step >= .checked }
+        var isLeaving: Bool { chosen != nil && step == .leaving }
+    }
+
+    /// 选好以后的几步，一步只做一件事。真机录屏看到：同一次更新里又换内容又改岛的大小，系统整个变形，内容被切、字叠成两层；
+    /// 新加进来的东西只会淡入，不会从下面滚上来；一直在的东西改位置、透明度才有动画（对勾的黑块、往上走掉都放出来了）
+    enum ChosenStep: Int, Codable, Hashable, Comparable {
+        /// 顶上一行和按钮淡出，岛的大小不变
+        case clearing = 1
+        /// 岛矮回提醒的高度；选好的样子已经放好，看不见，在下面一点
+        case sizing
+        /// 选好的样子从下往上出来
+        case showing
+        /// 对勾画出来
+        case checked
+        /// 往上走掉，接着结束或换下一笔
+        case leaving
+
+        static func < (lhs: Self, rhs: Self) -> Bool { lhs.rawValue < rhs.rawValue }
     }
 
     /// 刚开启时的提醒（像 AirPods 连上时那样）：左边收据图标，中间两行字，右边圆环里是待分类的笔数

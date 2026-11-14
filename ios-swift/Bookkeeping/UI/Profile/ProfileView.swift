@@ -40,7 +40,6 @@ private struct ProfileList: View {
     @AppStorage(ExchangeRateStore.primaryKey) private var primaryCurrency = CurrencyCode.cny.rawValue
     @AppStorage(IngestNotifier.modeKey) private var notifyMode = IngestNotifier.Mode.off.rawValue
     @AppStorage(IngestNotifier.islandKey) private var islandOn = true
-    @AppStorage(LiveCategoryActivity.openingKey) private var islandOpening = LiveCategoryActivity.defaultOpening
     @AppStorage(ImportExchangeRatesIntent.notifyKey) private var notifyRates = true
     /// 「开发与调试」平时藏着：连点 7 次版本号显示，再连点 7 次藏起来
     @AppStorage("showDevTools") private var showDevTools = false
@@ -209,8 +208,7 @@ private struct ProfileList: View {
                         LabeledContent("灵动岛", value: liveActivityResult.isEmpty ? "—" : liveActivityResult)
                         // 上次点岛上的按钮 App 这边花了多久：剩下的等待是系统叫起 App、重画岛
                         LabeledContent("灵动岛按钮", value: liveActivityTap.isEmpty ? "—" : liveActivityTap)
-                        // 灵动岛的设置（ADR 0024）只放这里：关了在通知上选；新开启的岛先放提醒，过多久换成按钮。
-                        // 没有灵动岛的手机是待分类的提醒横幅，开关一样。系统自己展开几秒没有公开的数字，按真机上看到的调
+                        // 灵动岛的开关（ADR 0024）只放这里：关了在通知上选。没有灵动岛的手机是待分类的提醒横幅，开关一样
                         Toggle(isOn: $islandOn) {
                             if hasIsland {
                                 Label("灵动岛选分类", systemImage: "iphone.gen3")
@@ -222,15 +220,6 @@ private struct ProfileList: View {
                             // 岛上正在选的也收起，留在待分类
                             guard !on else { return }
                             Task { await LiveCategoryActivity.endAll() }
-                        }
-                        if hasIsland {
-                            Stepper(value: $islandOpening, in: 1...15) {
-                                LabeledContent {
-                                    Text("\(islandOpening) 秒")
-                                } label: {
-                                    Label("灵动岛提醒时长", systemImage: "timer")
-                                }
-                            }
                         }
                     }
                 }

@@ -703,40 +703,6 @@
         }
       }
     },
-    "%lld 秒" : {
-      "localizations" : {
-        "en" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld second"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld seconds"
-                }
-              }
-            }
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld 秒"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld 秒"
-          }
-        }
-      }
-    },
     "%lld 笔" : {
       "localizations" : {
         "en" : {
@@ -14175,28 +14141,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "動態島換頁"
-          }
-        }
-      }
-    },
-    "灵动岛提醒时长" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Dynamic Island Reminder Time"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "灵动岛提醒时长"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "動態島提醒時長"
           }
         }
       }
