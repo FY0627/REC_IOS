@@ -132,16 +132,6 @@ struct RootView: View {
         }
         .environment(detail)
         .dismissesKeyboardOnTapOutside()
-        .overlay(alignment: .topTrailing) {
-            if PerfFlags.shared.showMetrics {
-                MetricsOverlay().padding(.trailing, 8)
-            }
-        }
-        .overlay {
-            if PerfFlags.shared.showAlignmentGuides {
-                AlignmentGuides()
-            }
-        }
         .overlay {
             if case .failed(let message) = store.state {
                 StorageErrorView(message: message) { Task { await store.retryStart() } }

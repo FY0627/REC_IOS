@@ -186,12 +186,6 @@ private struct OverviewCard: View {
         Text("合计（\(main.currency.localizedName)）")
             .font(.headline)
             .foregroundStyle(.secondary)
-            .background {
-                // 对齐参考线打开时量这行字的底边（在卡包滚动区里的位置），和首页量的分组标题底边比
-                if PerfFlags.shared.showAlignmentGuides {
-                    ScrollContentFrameProbe { if AlignmentDebug.shared.assetTitleBottom != $0.maxY { AlignmentDebug.shared.assetTitleBottom = $0.maxY } }
-                }
-            }
             .padding(.horizontal, 16)
             .frame(
                 maxWidth: .infinity,
@@ -217,11 +211,6 @@ private struct OverviewCard: View {
         // 和首页、统计的合计卡一样高：里面的字和间距一样，边距取首页那一格实际留的（`FirstBoxLayout`）
         .padding(.vertical, ConvertedTotalsView.verticalPadding)
         .padding(FirstBoxLayout.shared.homeRowInsets ?? Self.rowInsets)
-        .background {
-            if PerfFlags.shared.showAlignmentGuides {
-                ScrollContentFrameProbe { if AlignmentDebug.shared.assetCardTop != $0.minY { AlignmentDebug.shared.assetCardTop = $0.minY } }
-            }
-        }
         .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
         .contentShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         .onTapGesture { showDetail = true }

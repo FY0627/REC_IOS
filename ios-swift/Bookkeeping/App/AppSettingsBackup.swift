@@ -2,7 +2,7 @@ import Foundation
 import UIKit
 
 /// 「我的」里的设置，跟着「导出数据」走（zip 里的 `设置.json`，ADR 0019）：换手机、换 App 后导入就恢复成原来的样子。
-/// 只放用户自己选的；性能开关、开发与调试、汇率缓存（账本里有每天的汇率）不放。没有的项导入时不动
+/// 只放用户自己选的；开发与调试、汇率缓存（账本里有每天的汇率）不放。没有的项导入时不动
 struct AppSettingsBackup: Codable, Equatable {
     var appearance: String?
     var appIcon: String?

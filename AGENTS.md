@@ -44,7 +44,7 @@ App target 和 IPA 由 GitHub Actions 构建，见 `.github/workflows/ios-swift-
    - App 不能直接 import `BKDatabase`（CI 检查）。
    - `BKCore` 不能依赖 SwiftUI / UIKit。
 2. **主线程不做重活**：数据库访问和解析在专用串行队列上执行，不要假设 `async` 会自动离开 MainActor。
-3. **性能改动**在真机上测量，一次只改一个变量，用「性能开关与调试指标」做对照，方法见 [docs/guides/ios-swift-device-checklist.md](docs/guides/ios-swift-device-checklist.md)。
+3. **性能改动**在真机上测量，一次只改一个变量，改动前后各录屏对照，方法见 [docs/guides/ios-swift-device-checklist.md](docs/guides/ios-swift-device-checklist.md)。
 4. **引入新的第三方依赖、改变架构或技术选型**时，在 `docs/decisions/` 新增一份 ADR。
 5. **新增、移动或删除模块 / 文档 / 决策后**，同步更新 [docs/INDEX.md](docs/INDEX.md)。
 6. **包名是临时的**：`BK*` 和 `com.example` 会在项目改名时统一替换，不要再引入新的命名前缀。

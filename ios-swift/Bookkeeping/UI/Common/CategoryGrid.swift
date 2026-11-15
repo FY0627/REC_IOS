@@ -11,7 +11,8 @@ import BKModel
 /// 格子不用懒加载的网格：放在列表的一行里时，懒加载会在行高变化时重新摆放，图标上下跳一下。
 ///
 /// 「我的 › 分类」也用它（`arrangement` 不为 nil）：隐藏的也排出来（淡一些）。点一下打开这个分类，有小类的先展开，
-/// 展开那一行第一格是大类自己。长按拖动排顺序，其他图标让位；小类拖到上面的大类上，放下就挪进那个大类。
+/// 展开那一行第一格是大类自己。两行最后一格是「添加」（`add`）。长按拖动排顺序，其他图标让位；小类拖到上面的大类上，放下就挪进那个大类。
+/// 长按不动就松开：像桌面图标那样弹出隐藏、删除。
 struct CategoryGrid: View {
     let type: CategoryType
     var selected: String?
@@ -19,6 +20,8 @@ struct CategoryGrid: View {
     var expandsSelected = false
     /// 「我的 › 分类」：排顺序、换大类；nil 是选分类
     var arrangement: CategoryArrangement?
+    /// 「我的 › 分类」：格子最后的「添加」，参数是要加到哪个大类下面（nil 是加大类）；nil 时没有这一格
+    var add: ((String?) -> Void)?
     /// 选分类时是选上；「我的 › 分类」里是打开这个分类
     let pick: (String) -> Void
 
@@ -45,6 +48,9 @@ struct CategoryGrid: View {
         /// 大类现在的顺序、能放小类的大类：小类拖到大类上时用
         let tops: [String]
         let holders: Set<String>
+        /// 这一块格子一共几格、大类那块一共几格（算上第一格的大类自己和最后的「添加」）：按格子数算行数
+        let cellCount: Int
+        let topCount: Int
     }
 
     var body: some View {
@@ -53,11 +59,13 @@ struct CategoryGrid: View {
         let selectedTop = tree.topLevel(selected)?.id
         let tops = nodes.map(\.id)
         let holders = Set(nodes.filter { !$0.category.locked }.map(\.id))
-        let topLevel = Level(parentID: nil, ids: tops, tops: tops, holders: holders)
+        let addsTop = add != nil && type != .transfer
+        let topCount = tops.count + (addsTop ? 1 : 0)
+        let topLevel = Level(parentID: nil, ids: tops, tops: tops, holders: holders, cellCount: topCount, topCount: topCount)
         let topCells = nodes.map {
             Cell(id: $0.id, name: $0.category.localizedName, symbol: $0.category.symbol, hasChildren: !$0.children.isEmpty, hidden: $0.category.hidden)
         }
-        grid(topCells) { cell in
+        grid(topCells, adding: addsTop ? { add?(nil) } : nil) { cell in
             if arrangement == nil {
                 button(cell, isSelected: selectedTop == cell.id) { tap(cell, selectedTop: selectedTop) }
             } else {
@@ -87,12 +95,16 @@ struct CategoryGrid: View {
         }
         if let node = nodes.first(where: { $0.id == expanded }) {
             let children = arranged(node.children, key: node.id).filter { $0.id != arrangement?.leaving }
-            let childLevel = Level(parentID: node.id, ids: children.map(\.id), tops: tops, holders: holders)
+            let addsChild = add != nil && holders.contains(node.id)
+            let childLevel = Level(
+                parentID: node.id, ids: children.map(\.id), tops: tops, holders: holders,
+                cellCount: children.count + 1 + (addsChild ? 1 : 0), topCount: topCount
+            )
             VStack(alignment: .leading, spacing: 10) {
                 Text(L("\(node.category.localizedName)的小类")).font(.footnote).foregroundStyle(.secondary)
                 let first = Cell(id: node.id, name: arrangement == nil ? L("不细分") : node.category.localizedName, symbol: node.category.symbol, hidden: node.category.hidden)
                 let cells = [first] + children.map { Cell(id: $0.id, name: $0.localizedName, symbol: $0.symbol, hidden: $0.hidden) }
-                grid(cells) { cell in
+                grid(cells, adding: addsChild ? { add?(node.id) } : nil) { cell in
                     if arrangement == nil {
                         button(cell, isSelected: selected == cell.id) {
                             withAnimation(.snappy(duration: 0.25)) { pick(cell.id) }
@@ -136,9 +148,16 @@ struct CategoryGrid: View {
         }
     }
 
-    private func grid<Content: View>(_ cells: [Cell], @ViewBuilder content: @escaping (Cell) -> Content) -> some View {
+    private func grid<Content: View>(
+        _ cells: [Cell], adding: (() -> Void)? = nil, @ViewBuilder content: @escaping (Cell) -> Content
+    ) -> some View {
         CategoryGridLayout {
             ForEach(cells) { cell in content(cell) }
+            if let adding {
+                Button(action: adding) { AddCategoryCell() }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(Text("添加"))
+            }
         }
     }
 
@@ -187,6 +206,13 @@ struct CategoryGrid: View {
                 .onTapGesture(perform: action)
                 .onLongPressGesture(minimumDuration: 0.3) { pickUp(cell.id, level: level) }
                 .simultaneousGesture(followGesture(cell.id))
+                .confirmationDialog(
+                    cell.name,
+                    isPresented: Binding(get: { arrangement?.menu == cell.id }, set: { if !$0 { arrangement?.menu = nil } }),
+                    titleVisibility: .visible
+                ) {
+                    menuButtons(cell.id)
+                }
         } else {
             face.onTapGesture(perform: action)
         }
@@ -211,9 +237,10 @@ struct CategoryGrid: View {
                 id: id, name: category.localizedName, symbol: category.symbol, hidden: category.hidden,
                 key: level.parentID ?? CategoryArrangement.topKey(type), parentID: level.parentID,
                 order: level.ids, original: level.ids, tops: level.tops, holders: level.holders,
+                cellCount: level.cellCount, topCount: level.topCount,
                 width: CategoryGridLayout.cellWidth(frame.width)
             ),
-            at: CategoryGridLayout.center(of: index + offset, count: level.ids.count + offset, in: frame)
+            at: CategoryGridLayout.center(of: index + offset, count: level.cellCount, in: frame)
         )
     }
 
@@ -223,13 +250,13 @@ struct CategoryGrid: View {
         arrangement.follow(drag.location, start: drag.startLocation)
         let point = drag.location
         if lift.parentID == nil {
-            if let slot = CategoryGridLayout.slot(at: point, count: lift.order.count, in: arrangement.topFrame) {
+            if let slot = CategoryGridLayout.slot(at: point, count: lift.cellCount, in: arrangement.topFrame) {
                 lift.move(to: min(slot, lift.order.count - 1))
             }
-        } else if let slot = CategoryGridLayout.slot(at: point, count: lift.order.count + 1, in: arrangement.childFrame) {
+        } else if let slot = CategoryGridLayout.slot(at: point, count: lift.cellCount, in: arrangement.childFrame) {
             lift.target = nil
             lift.move(to: min(max(slot - 1, 0), lift.order.count - 1))
-        } else if let slot = CategoryGridLayout.slot(at: point, count: lift.tops.count, in: arrangement.topFrame),
+        } else if let slot = CategoryGridLayout.slot(at: point, count: lift.topCount, in: arrangement.topFrame),
                   slot < lift.tops.count, lift.tops[slot] != lift.parentID, lift.holders.contains(lift.tops[slot]) {
             lift.target = lift.tops[slot]
         } else {
@@ -245,13 +272,28 @@ struct CategoryGrid: View {
         withAnimation(.snappy(duration: 0.25)) { arrangement.lift = lift }
     }
 
-    /// 松手：浮起来的图标先回到格子（或缩进拖到的大类），再存进账本
+    /// 松手：浮起来的图标先回到格子（或缩进拖到的大类），再存进账本。
+    /// 长按以后没动就松开：回到格子，弹出隐藏、删除（`menuButtons`）
     private func drop() {
         guard let arrangement, let lift = arrangement.lift, arrangement.settling == nil else { return }
+        if !arrangement.moved, lift.order == lift.original, lift.target == nil {
+            let offset = lift.parentID == nil ? 0 : 1
+            let frame = lift.parentID == nil ? arrangement.topFrame : arrangement.childFrame
+            let index = (lift.order.firstIndex(of: lift.id) ?? 0) + offset
+            withAnimation(.snappy(duration: 0.2)) {
+                arrangement.settle(at: CategoryGridLayout.center(of: index, count: lift.cellCount, in: frame), into: false)
+            }
+            Task {
+                try? await Task.sleep(for: .milliseconds(200))
+                arrangement.finish()
+                if hasMenu(lift.id) { arrangement.menu = lift.id }
+            }
+            return
+        }
         arrangement.feedback(.drop)
         if let target = lift.target, let index = lift.tops.firstIndex(of: target) {
             withAnimation(.snappy(duration: 0.2)) {
-                arrangement.settle(at: CategoryGridLayout.center(of: index, count: lift.tops.count, in: arrangement.topFrame), into: true)
+                arrangement.settle(at: CategoryGridLayout.center(of: index, count: lift.topCount, in: arrangement.topFrame), into: true)
             }
             Task {
                 try? await Task.sleep(for: .milliseconds(200))
@@ -269,7 +311,7 @@ struct CategoryGrid: View {
             let frame = lift.parentID == nil ? arrangement.topFrame : arrangement.childFrame
             let index = (lift.order.firstIndex(of: lift.id) ?? 0) + offset
             withAnimation(.snappy(duration: 0.2)) {
-                arrangement.settle(at: CategoryGridLayout.center(of: index, count: lift.order.count + offset, in: frame), into: false)
+                arrangement.settle(at: CategoryGridLayout.center(of: index, count: lift.cellCount, in: frame), into: false)
             }
             Task {
                 try? await Task.sleep(for: .milliseconds(200))
@@ -279,6 +321,30 @@ struct CategoryGrid: View {
                 guard changed else { return }
                 await arrangement.run { try await store.reorderCategories(lift.order) }
                 arrangement.pending[lift.key] = nil
+            }
+        }
+    }
+
+    /// 长按松开的菜单：转帐的分类不能隐藏，系统分类（自动记账要用）不能删
+    private func hasMenu(_ id: String) -> Bool {
+        guard let category = store.categoryTree.category(id) else { return false }
+        return category.type != .transfer || !category.locked
+    }
+
+    @ViewBuilder
+    private func menuButtons(_ id: String) -> some View {
+        if let category = store.categoryTree.category(id), let arrangement {
+            if category.type != .transfer {
+                Button(category.hidden ? "取消隐藏" : "隐藏", systemImage: category.hidden ? "eye" : "eye.slash") {
+                    Task { await arrangement.run { try await store.setCategoryHidden(id: id, hidden: !category.hidden) } }
+                }
+            }
+            if !category.locked {
+                // 记录不删，回到待分类；大类连小类一起删
+                let hasChildren = store.categoryTree.all.contains { $0.parentID == id }
+                Button(hasChildren ? "连小类一起删除" : "删除", systemImage: "trash", role: .destructive) {
+                    Task { await arrangement.run { try await store.deleteCategory(id: id, moveRecordsTo: nil) } }
+                }
             }
         }
     }
@@ -394,6 +460,9 @@ final class CategoryArrangement {
         /// 大类的顺序、能放小类的大类（系统分类不能）
         let tops: [String]
         let holders: Set<String>
+        /// 这一块、大类那块一共几格（`Level`）
+        let cellCount: Int
+        let topCount: Int
         /// 格子宽度：浮起来的图标和格子里的一样宽
         let width: CGFloat
         /// 小类悬在哪个大类上：放下就挪进去
@@ -425,8 +494,13 @@ final class CategoryArrangement {
     /// 挪去别的大类的小类：存好之前不在原来那一行
     var leaving: String?
     var failure: String?
+    /// 长按没动就松开：这个分类弹出隐藏、删除
+    var menu: String?
 
     @ObservationIgnored private var grabbed = false
+    /// 浮起来以后手指挪开过（超过 10 点）：松手是放下，不弹菜单
+    @ObservationIgnored private(set) var moved = false
+    @ObservationIgnored private var liftedAt: CGPoint = .zero
     /// 大类、小类两块格子在屏幕上的位置。滚动时一直在变，不触发重画
     @ObservationIgnored var topFrame: CGRect = .zero
     @ObservationIgnored var childFrame: CGRect = .zero
@@ -469,6 +543,7 @@ final class CategoryArrangement {
         grab = .zero
         grabbed = false
         settling = nil
+        moved = false
         self.lift = lift
         active = true
         feedback(.lift)
@@ -478,7 +553,9 @@ final class CategoryArrangement {
         if !grabbed {
             grabbed = true
             grab = CGSize(width: start.x - location.x, height: start.y - location.y)
+            liftedAt = point
         }
+        if !moved, hypot(point.x - liftedAt.x, point.y - liftedAt.y) > 10 { moved = true }
         location = point
     }
 
@@ -591,32 +668,45 @@ private struct CategoryCell: View {
     }
 }
 
-/// 选图标
-struct SymbolPicker: View {
+/// 「我的 › 分类」格子最后一格：添加大类或小类
+private struct AddCategoryCell: View {
+    var body: some View {
+        VStack(spacing: 6) {
+            Image(systemName: "plus")
+                .font(.title3)
+                .foregroundStyle(.tint)
+                .frame(width: 48, height: 48)
+                .background(Color.primary.opacity(0.06), in: Circle())
+            Text("添加")
+                .font(.caption)
+                .foregroundStyle(Color.primary)
+        }
+        .frame(maxWidth: .infinity)
+        .contentShape(Rectangle())
+    }
+}
+
+/// 选图标：放在分类编辑页里，点一下就换
+struct SymbolGrid: View {
     @Binding var symbol: String
-    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        ScrollView {
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 6), spacing: 12) {
-                ForEach(CategorySymbols.all, id: \.self) { name in
-                    Button {
-                        symbol = name
-                        dismiss()
-                    } label: {
-                        Image(systemName: name)
-                            .font(.title3)
-                            .foregroundStyle(symbol == name ? AnyShapeStyle(.tint) : AnyShapeStyle(Color.primary))
-                            .frame(width: 48, height: 48)
-                            .background(symbol == name ? AnyShapeStyle(TintShapeStyle().opacity(0.15)) : AnyShapeStyle(Color.primary.opacity(0.06)), in: Circle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(name)
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 6), spacing: 12) {
+            ForEach(CategorySymbols.all, id: \.self) { name in
+                Button {
+                    symbol = name
+                } label: {
+                    Image(systemName: name)
+                        .font(.title3)
+                        .foregroundStyle(symbol == name ? AnyShapeStyle(.tint) : AnyShapeStyle(Color.primary))
+                        .frame(width: 48, height: 48)
+                        .background(symbol == name ? AnyShapeStyle(TintShapeStyle().opacity(0.15)) : AnyShapeStyle(Color.primary.opacity(0.06)), in: Circle())
                 }
+                .buttonStyle(.plain)
+                .accessibilityLabel(name)
+                .accessibilityAddTraits(symbol == name ? [.isSelected] : [])
             }
-            .padding()
         }
-        .navigationTitle("选择图标")
-        .navigationBarTitleDisplayMode(.inline)
+        .padding(.vertical, 6)
     }
 }

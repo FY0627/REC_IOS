@@ -40,20 +40,24 @@ struct CategoryActivityAttributes: ActivityAttributes {
         var isOpening: Bool { notice != nil }
         var isReminderOnly: Bool { reminderOnly ?? false }
         var step: ChosenStep { chosenStep ?? .clearing }
+        var isRingDrawn: Bool { chosen != nil && step >= .ringing }
         var isChecked: Bool { chosen != nil && step >= .checked }
         var isLeaving: Bool { chosen != nil && step == .leaving }
     }
 
     /// 选好以后的几步，一步只做一件事。真机录屏看到：同一次更新里又换内容又改岛的大小，系统整个变形，内容被切、字叠成两层；
-    /// 新加进来的东西只会淡入，不会从下面滚上来；一直在的东西改位置、透明度才有动画（对勾的黑块、往上走掉都放出来了）
+    /// 新加进来的东西只会淡入，不会从下面滚上来；一直在的东西改位置、透明度才有动画（对勾的黑块、往上走掉都放出来了）。
+    /// 岛的大小从头到尾不变（和选分类时一样高），顶上的商户、金额一直留着
     enum ChosenStep: Int, Codable, Hashable, Comparable {
-        /// 顶上一行和按钮淡出，岛的大小不变
+        /// 按钮淡出
         case clearing = 1
-        /// 岛矮回提醒的高度；选好的样子已经放好，看不见，在下面一点
-        case sizing
-        /// 选好的样子从下往上出来
+        /// 选好的样子已经放好，看不见，在下面一点
+        case placed
+        /// 选好的样子从下往上出来，右边的圆圈还没画
         case showing
-        /// 对勾画出来
+        /// 圆圈从 12 点顺时针画一圈（像面容 ID 认出来那样）
+        case ringing
+        /// 圆圈里画出对勾
         case checked
         /// 往上走掉，接着结束或换下一笔
         case leaving

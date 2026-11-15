@@ -42,15 +42,14 @@ enum LiveCategoryActivity {
     private static let pickerKey = "liveCategory.picker"
     private static let pickerRecordKey = "liveCategory.pickerRecord"
     private static let queueKey = "liveCategory.queue"
-    /// 选好以后后面几步什么时候开始（从第一步放出来算，`ChosenStep`）。用户的录屏量的：淡出约 0.35 秒，岛变矮约 0.45 秒，对勾画约 0.2 秒。
-    /// 用户嫌一步一步太慢、接不上（特别是变矮到出来）：每步在上一步快放完时就开始，选好的样子在岛快变完时出来，对勾在它快到位时画
+    /// 选好以后后面几步什么时候开始（从第一步放出来算，`ChosenStep`）。用户的录屏量的：淡出约 0.35 秒。
+    /// 岛的大小不变，不用等岛变矮：按钮快淡完就放好，紧接着出来；快到位时画圆圈，圆圈快画完时画对勾
     private static let chosenSteps: [(CategoryActivityAttributes.ChosenStep, Duration)] = [
-        (.sizing, .milliseconds(300)), (.showing, .milliseconds(700)), (.checked, .milliseconds(1000)),
+        (.placed, .milliseconds(300)), (.showing, .milliseconds(450)), (.ringing, .milliseconds(800)),
+        (.checked, .milliseconds(1200)),
     ]
-    /// 什么时候往上走掉（或直接收岛）：对勾画完再停一会儿
-    private static let chosenDisplay: Duration = .milliseconds(1700)
-    /// 「开发与调试 › 选好后直接收岛」：开着时对勾画完不往上走掉，直接结束（岛收回去）或换下一笔；用户要对比哪个快
-    static let skipLeaveKey = "liveCategory.skipLeave"
+    /// 什么时候往上走掉：对勾画完再停一会儿
+    private static let chosenDisplay: Duration = .milliseconds(2000)
     /// 往上走掉以后再结束或换下一笔。实时活动的动画用系统自己的时长（ActivityKit 文档：忽略 `animation` 修饰符），
     /// 0.35 秒就结束，往上走还没走完岛就收了（录屏里往上走约 0.4 秒）；留 0.5 秒
     private static let leaveTime: Duration = .milliseconds(500)
@@ -156,7 +155,7 @@ enum LiveCategoryActivity {
     }
 
     /// 点到一个分类：岛上一步一步换成选好的样子（`ChosenStep`，一步一次更新，每步等上一步的动画放完）：
-    /// 商户、金额和按钮淡出 → 岛矮回提醒的高度 → 选好的样子从下往上出来 → 对勾画出来 → 往上走掉，再结束或换成排着的下一笔。
+    /// 按钮淡出 → 选好的一行从下往上出来 → 圆圈画一圈 → 对勾画出来 → 整块往上走掉，再结束或换成排着的下一笔；岛的大小一直不变。
     /// 第一步放出来就写进账本（学习和通知上选分类一样），不等写完再显示，点了不用多等。
     /// 写不进去（开机后还没解锁过）时岛换回按钮，可以再点或单点打开 App；这一笔已经删了就直接换下一笔
     @MainActor
@@ -203,7 +202,7 @@ enum LiveCategoryActivity {
         }
         try? await Task.sleep(until: shownAt + chosenDisplay, clock: .continuous)
         guard activity.content.state.recordID == recordID else { return }
-        await advance(activity, from: recordID, backend: backend, leave: !UserDefaults.standard.bool(forKey: skipLeaveKey))
+        await advance(activity, from: recordID, backend: backend, leave: true)
     }
 
     /// 写不进账本：岛上换回这一笔的按钮

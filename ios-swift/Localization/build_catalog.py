@@ -19,9 +19,9 @@ ROOT = os.path.dirname(HERE)
 OUTPUT = os.path.join(ROOT, "Bookkeeping", "Localizable.xcstrings")
 BANKS = os.path.join(ROOT, "Packages", "BKCore", "Sources", "BKModel", "BankCatalog.swift")
 
-# 不翻译的：开发与调试里的页面（平时藏着）、性能诊断
-SKIP_FILES = {"CategoryCheckupView.swift", "SimulationView.swift", "MetricsOverlay.swift", "PerfFlags.swift"}
-SKIP_DIRS = {"Diagnostics"}
+# 不翻译的：开发与调试里的页面（平时藏着）
+SKIP_FILES = {"CategoryCheckupView.swift", "SimulationView.swift"}
+SKIP_DIRS = set()
 
 
 def load():

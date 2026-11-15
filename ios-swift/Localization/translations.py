@@ -219,7 +219,6 @@ t("了结失败：%@", "了結失敗：%@", "Couldn’t release: %@")
 t("取消了结失败：%@", "取消了結失敗：%@", "Couldn’t undo: %@")
 t("启用", "啟用", "Enable")
 t("停用", "停用", "Disable")
-t("删除这个分类", "刪除這個分類", "Delete Category")
 
 # MARK: 编辑流水、选币种
 
@@ -340,7 +339,6 @@ t("添加", "新增", "Add")
 t("%@的小类", "%@的子分類", "Subcategories of %@")
 t("不细分", "不細分", "General")
 t("展开小类", "展開子分類", "Shows subcategories")
-t("选择图标", "選擇圖示", "Choose Icon")
 t("只删除这一边，另一边的账户还留着这笔。删除后不能恢复", "只刪除這一邊，另一邊的帳戶仍保留這筆。刪除後無法復原", "Only this side is deleted; the other account keeps its side. This can’t be undone.")
 t("删除失败", "刪除失敗", "Couldn’t Delete")
 
@@ -554,7 +552,6 @@ t("开发与调试", "開發與除錯", "Developer")
 t("分类建议体检", "分類建議檢查", "Category Suggestion Check")
 t("模拟消费", "模擬消費", "Simulate a Purchase")
 t("演示数据", "示範資料", "Demo Data")
-t("性能开关与调试指标", "效能開關與除錯指標", "Performance Switches & Metrics")
 t("关于", "關於", "About")
 t("版本", "版本", "Version")
 t("没有通知权限", "沒有通知權限", "Notifications Are Off")
@@ -593,18 +590,12 @@ t("落日", "落日", "Sunset")
 # MARK: 分类管理
 
 t("添加大类", "新增主分類", "Add Category")
-t("已隐藏", "已隱藏", "Hidden")
 t("分类已删除", "分類已刪除", "Category Deleted")
-t("隐藏（记账时不出现）", "隱藏（記帳時不顯示）", "Hide (Not Shown When Recording)")
 t("添加小类", "新增子分類", "Add Subcategory")
-t("挪到其他大类下面", "移到其他主分類下", "Move to Another Category")
-t("挪到", "移到", "Move To")
-t("单独作为大类", "獨立成為主分類", "Make It a Top-Level Category")
-t("合并到其他分类", "合併到其他分類", "Merge into Another Category")
-t("合并到", "合併到", "Merge Into")
-t("连小类一起删除，原来的记录改记到", "連同子分類一起刪除，原本的紀錄改記到", "Delete with subcategories and move their transactions to")
-t("删除后，原来的记录改记到", "刪除後，原本的紀錄改記到", "After deleting, move its transactions to")
-t("回到待分类", "回到待分類", "Uncategorized")
+t("隐藏", "隱藏", "Hide")
+t("取消隐藏", "取消隱藏", "Unhide")
+t("连小类一起删除", "連同子分類一起刪除", "Delete with Subcategories")
+t("操作失败", "操作失敗", "Something Went Wrong")
 
 # MARK: 默认分类（账本里存的名称）
 
@@ -765,7 +756,6 @@ t("启动后 %lld ms", "啟動後 %lld ms", "%lld ms after launch")
 t("刚刚记了一笔", "剛剛記了一筆", "Just Recorded")
 t("已分类", "已分類", "Categorized")
 t("实时活动提醒", "即時動態提醒", "Live Activity Reminder")
-t("选好后直接收岛", "選好後直接收島", "Close Island After Picking")
 
 # MARK: 新手引导（OnboardingView）
 

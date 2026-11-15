@@ -2,26 +2,29 @@ import SwiftUI
 import BKModel
 import BKBackend
 
-/// 「我的 › 分类」：支出、收入、转帐三组。分类全由自己定：增加、删除、改名、换图标、排序、隐藏，
-/// 小类可以挪到别的大类下面，两个分类可以合并。删除时选原来的记录改记到哪；不选就回到待分类，记录不删。
-/// 转帐和系统分类（手续费、扣息）自动记账要用，只能改名、换图标。
+/// 「我的 › 分类」：支出、收入、转帐三组。分类全由自己定：增加、删除、改名、换图标、排序、隐藏，小类可以挪到别的大类下面。
+/// 删除时原来的记录回到待分类，记录不删。转帐和系统分类（手续费、扣息）自动记账要用，只能改名、换图标。
 ///
-/// 分类排成和记账页一样的格子（同一个 `CategoryGrid`）：点一下打开分类，有小类的先展开；
-/// 长按拖动排顺序，小类拖到别的大类上就挪进去，都存进账本，记账页、通知、灵动岛跟着变
+/// 分类排成和记账页一样的格子（同一个 `CategoryGrid`）：点一下打开分类（只改名称和图标），有小类的先展开；
+/// 大类和小类两行最后一格是「添加」；长按拖动排顺序，小类拖到别的大类上就挪进去；长按不动就松开，弹出隐藏、删除。
+/// 都存进账本，记账页、通知、灵动岛跟着变
 struct CategoryManagerView: View {
     @Environment(LedgerStore.self) private var store
     @State private var type: CategoryType = .expense
-    @State private var adding = false
+    @State private var adding: AddTarget?
     @State private var opened: String?
     @State private var arrangement = CategoryArrangement()
+
+    /// 「添加」加到哪：大类（`parentID` 为 nil）或某个大类的小类
+    struct AddTarget: Identifiable {
+        let parentID: String?
+        var id: String { parentID ?? "" }
+    }
 
     var body: some View {
         List {
             Section {
-                CategoryGrid(type: type, arrangement: arrangement) { opened = $0 }
-                if type != .transfer {
-                    Button("添加大类", systemImage: "plus") { adding = true }
-                }
+                CategoryGrid(type: type, arrangement: arrangement, add: { adding = AddTarget(parentID: $0) }) { opened = $0 }
             } header: {
                 // 放在分组标题的位置：上下只留一点空隙（单独占一个分组时上下各空一大段）
                 Picker("类型", selection: $type) {
@@ -32,9 +35,6 @@ struct CategoryManagerView: View {
                 .listRowInsets(EdgeInsets())
                 .padding(.bottom, 8)
             }
-            if let failure = arrangement.failure {
-                Section { Text(failure).foregroundStyle(.red) }
-            }
         }
         .navigationTitle("分类")
         // 拖动时列表不滚，浮起来的图标盖在整个列表上
@@ -43,30 +43,43 @@ struct CategoryManagerView: View {
         .navigationDestination(item: $opened) { id in
             CategoryDetailView(categoryID: id)
         }
-        .sheet(isPresented: $adding) {
-            NewCategorySheet(type: type, parentID: nil)
+        .sheet(item: $adding) { target in
+            NewCategorySheet(type: type, parentID: target.parentID)
+        }
+        .alert("操作失败", isPresented: Binding(get: { arrangement.failure != nil }, set: { if !$0 { arrangement.failure = nil } })) {
+            Button("好", role: .cancel) {}
+        } message: {
+            Text(arrangement.failure ?? "")
         }
     }
 }
 
-private struct CategoryManagerRow: View {
-    let category: LedgerCategory
+/// 名称和图标：添加和打开分类共用。图标直接排在下面，点一下就换
+private struct CategoryForm: View {
+    @Binding var name: String
+    @Binding var symbol: String
+    @FocusState private var naming: Bool
+    var focusName = false
 
     var body: some View {
-        HStack(spacing: 12) {
-            CategoryIcon(symbol: category.symbol)
-            Text(category.localizedName).foregroundStyle(category.hidden ? Color.secondary : Color.primary)
-            Spacer()
-            if category.hidden {
-                Text("已隐藏").font(.footnote).foregroundStyle(.secondary)
-            } else if category.locked {
-                Image(systemName: "lock").font(.footnote).foregroundStyle(.secondary)
+        Form {
+            Section {
+                HStack(spacing: 12) {
+                    CategoryIcon(symbol: symbol)
+                    TextField("名称", text: $name)
+                        .focused($naming)
+                        .submitLabel(.done)
+                }
+            }
+            Section {
+                SymbolGrid(symbol: $symbol)
             }
         }
+        .onAppear { if focusName { naming = true } }
     }
 }
 
-/// 一个分类：改名、换图标、隐藏；大类管理它的小类；挪到别的大类、合并、删除
+/// 一个分类：只改名称和图标（小类在分类页上排，隐藏、删除在分类页上长按）
 private struct CategoryDetailView: View {
     let categoryID: String
 
@@ -75,192 +88,47 @@ private struct CategoryDetailView: View {
     @State private var name = ""
     @State private var symbol = "tag"
     @State private var loaded = false
-    @State private var addingChild = false
     @State private var errorText: String?
 
     var body: some View {
         if let category = store.categoryTree.category(categoryID) {
-            form(category)
+            CategoryForm(name: $name, symbol: $symbol)
+                .navigationTitle(category.localizedName)
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("保存", systemImage: "checkmark") { Task { await save(category) } }
+                            .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty
+                                      || (name == category.localizedName && symbol == category.symbol))
+                    }
+                }
+                .onAppear {
+                    guard !loaded else { return }
+                    name = category.localizedName
+                    symbol = category.symbol
+                    loaded = true
+                }
+                .alert("保存失败", isPresented: Binding(get: { errorText != nil }, set: { if !$0 { errorText = nil } })) {
+                    Button("好", role: .cancel) {}
+                } message: {
+                    Text(errorText ?? "")
+                }
         } else {
             ContentUnavailableView("分类已删除", systemImage: "tag.slash")
         }
     }
 
-    private func form(_ category: LedgerCategory) -> some View {
-        let children = store.categoryTree.all.filter { $0.parentID == category.id }.sorted { $0.sortOrder < $1.sortOrder }
-        return Form {
-            Section {
-                TextField("名称", text: $name)
-                NavigationLink {
-                    SymbolPicker(symbol: $symbol)
-                } label: {
-                    LabeledContent("图标") { Image(systemName: symbol).foregroundStyle(Color.primary) }
-                }
-                if category.type != .transfer {
-                    Toggle("隐藏（记账时不出现）", isOn: Binding(
-                        get: { category.hidden },
-                        set: { hidden in Task { await run { try await store.setCategoryHidden(id: category.id, hidden: hidden) } } }
-                    ))
-                }
-            }
-            if category.isTopLevel, category.type != .transfer, !category.locked {
-                Section("小类") {
-                    ForEach(children) { child in
-                        NavigationLink {
-                            CategoryDetailView(categoryID: child.id)
-                        } label: {
-                            CategoryManagerRow(category: child)
-                        }
-                    }
-                    .onMove { from, to in
-                        var ids = children.map(\.id)
-                        ids.move(fromOffsets: from, toOffset: to)
-                        Task { await run { try await store.reorderCategories(ids) } }
-                    }
-                    Button("添加小类", systemImage: "plus") { addingChild = true }
-                }
-            }
-            if !category.locked {
-                Section {
-                    if children.isEmpty {
-                        NavigationLink("挪到其他大类下面") {
-                            CategoryTargetList(title: "挪到", type: category.type, excluding: category.id, topLevelOnly: true,
-                                               allowNone: !category.isTopLevel, noneTitle: "单独作为大类") { target in
-                                Task { await run { try await store.moveCategory(id: category.id, toParent: target) } }
-                            }
-                        }
-                    }
-                    NavigationLink("合并到其他分类") {
-                        CategoryTargetList(title: "合并到", type: category.type, excluding: category.id, topLevelOnly: false,
-                                           allowNone: false, noneTitle: "") { target in
-                            guard let target else { return }
-                            Task {
-                                await run { try await store.mergeCategory(id: category.id, into: target) }
-                                dismiss()
-                            }
-                        }
-                    }
-                    deleteMenu(category)
-                }
-            }
-            if let errorText {
-                Section { Text(errorText).foregroundStyle(.red) }
-            }
-        }
-        .navigationTitle(category.localizedName)
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .confirmationAction) {
-                Button("保存", systemImage: "checkmark") {
-                    Task { await run { try await store.updateCategory(id: category.id, name: name, symbol: symbol) } }
-                }
-                .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty || (name == category.localizedName && symbol == category.symbol))
-            }
-        }
-        .onAppear {
-            guard !loaded else { return }
-            name = category.localizedName
-            symbol = category.symbol
-            loaded = true
-        }
-        .sheet(isPresented: $addingChild) {
-            NewCategorySheet(type: category.type, parentID: category.id)
-        }
-    }
-
-    /// 删除：在按钮旁边弹出小菜单，选原来的记录改记到哪（或回到待分类），选了就删。记录不删
-    private func deleteMenu(_ category: LedgerCategory) -> some View {
-        Menu {
-            Section(category.isTopLevel ? "连小类一起删除，原来的记录改记到" : "删除后，原来的记录改记到") {
-                Button("回到待分类", systemImage: "tray", role: .destructive) { Task { await delete(category, moveTo: nil) } }
-                ForEach(deleteTargets(category)) { target in
-                    Button(target.name) { Task { await delete(category, moveTo: target.id) } }
-                }
-            }
-        } label: {
-            ActionLabel(title: "删除这个分类").foregroundStyle(Color.red)
-        }
-    }
-
-    /// 可以改记到的分类：同一类型，除了它自己和它的小类；小类名称前写上大类
-    private func deleteTargets(_ category: LedgerCategory) -> [DeleteTarget] {
-        store.categoryTree.nodes(category.type).filter { $0.id != category.id }.flatMap { node in
-            [DeleteTarget(id: node.id, name: node.category.localizedName)]
-                + node.children.filter { $0.id != category.id }.map { DeleteTarget(id: $0.id, name: "\(node.category.localizedName) · \($0.localizedName)") }
-        }
-    }
-
-    private struct DeleteTarget: Identifiable {
-        let id: String
-        let name: String
-    }
-
-    private func delete(_ category: LedgerCategory, moveTo target: String?) async {
+    private func save(_ category: LedgerCategory) async {
         do {
-            try await store.deleteCategory(id: category.id, moveRecordsTo: target)
+            try await store.updateCategory(id: category.id, name: name, symbol: symbol)
             dismiss()
         } catch {
-            errorText = L("删除失败：\(error.localizedDescription)")
-        }
-    }
-
-    private func run(_ action: () async throws -> Void) async {
-        do {
-            try await action()
-            errorText = nil
-        } catch {
-            errorText = L("操作失败：\(error.localizedDescription)")
+            errorText = error.localizedDescription
         }
     }
 }
 
-/// 选一个目标分类（挪到哪个大类、合并到哪、删除后记录改记到哪）
-private struct CategoryTargetList: View {
-    let title: String
-    let type: CategoryType
-    let excluding: String
-    let topLevelOnly: Bool
-    let allowNone: Bool
-    let noneTitle: String
-    let choose: (String?) -> Void
-
-    @Environment(LedgerStore.self) private var store
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        List {
-            if allowNone {
-                Button(noneTitle.loc) {
-                    choose(nil)
-                    dismiss()
-                }
-            }
-            ForEach(store.categoryTree.nodes(type).filter { $0.id != excluding && !(topLevelOnly && $0.category.locked) }) { node in
-                row(node.category, indent: false)
-                if !topLevelOnly {
-                    ForEach(node.children.filter { $0.id != excluding }) { child in row(child, indent: true) }
-                }
-            }
-        }
-        .navigationTitle(title.loc)
-        .navigationBarTitleDisplayMode(.inline)
-    }
-
-    private func row(_ category: LedgerCategory, indent: Bool) -> some View {
-        Button {
-            choose(category.id)
-            dismiss()
-        } label: {
-            HStack(spacing: 12) {
-                CategoryIcon(symbol: category.symbol)
-                Text(category.localizedName).foregroundStyle(Color.primary)
-            }
-            .padding(.leading, indent ? 28 : 0)
-        }
-    }
-}
-
-/// 新增分类：名称和图标
+/// 新增分类：输入名称、点一个图标
 struct NewCategorySheet: View {
     let type: CategoryType
     let parentID: String?
@@ -273,26 +141,21 @@ struct NewCategorySheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                TextField("名称", text: $name)
-                NavigationLink {
-                    SymbolPicker(symbol: $symbol)
-                } label: {
-                    LabeledContent("图标") { Image(systemName: symbol).foregroundStyle(Color.primary) }
+            CategoryForm(name: $name, symbol: $symbol, focusName: true)
+                .navigationTitle(parentID == nil ? "添加大类" : "添加小类")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) { Button("取消", systemImage: "xmark") { dismiss() } }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("保存", systemImage: "checkmark") { Task { await save() } }
+                            .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
+                    }
                 }
-                if let errorText {
-                    Text(errorText).foregroundStyle(.red)
+                .alert("保存失败", isPresented: Binding(get: { errorText != nil }, set: { if !$0 { errorText = nil } })) {
+                    Button("好", role: .cancel) {}
+                } message: {
+                    Text(errorText ?? "")
                 }
-            }
-            .navigationTitle(parentID == nil ? "添加大类" : "添加小类")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("取消", systemImage: "xmark") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("保存", systemImage: "checkmark") { Task { await save() } }
-                        .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
-                }
-            }
         }
     }
 
@@ -301,8 +164,7 @@ struct NewCategorySheet: View {
             try await store.addCategory(CategoryDraft(type: type, parentID: parentID, name: name, symbol: symbol))
             dismiss()
         } catch {
-            errorText = L("保存失败：\(error.localizedDescription)")
+            errorText = error.localizedDescription
         }
     }
 }
-

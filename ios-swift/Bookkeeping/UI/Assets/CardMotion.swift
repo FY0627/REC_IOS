@@ -55,7 +55,7 @@ enum CardMotion {
             spring.mass = 1
             spring.stiffness = CGFloat(pow(2 * Double.pi / response, 2))
             spring.damping = CGFloat(4 * Double.pi * damping / response)
-            let rest = PerfFlags.shared.settleSprings ? restTime(response: response, damping: damping, distance: distance) : 0
+            let rest = restTime(response: response, damping: damping, distance: distance)
             spring.duration = max(spring.settlingDuration, rest)
             animation = spring
         case .easeIn(let duration):
@@ -65,7 +65,7 @@ enum CardMotion {
         case .easeInOut(let duration):
             animation = curve(keyPath, duration, .easeInEaseOut)
         }
-        if distance > 0, PerfFlags.shared.holdHighRefresh {
+        if distance > 0 {
             animation.preferredFrameRateRange = moveFrameRate
         }
         return animation

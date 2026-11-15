@@ -23,7 +23,7 @@ struct ProfileView: View {
 
 /// 「我的」推进去的二级页面
 enum ProfileRoute: Hashable {
-    case language, primaryCurrency, exchangeRates, categories, autoSetup, screenshotSetup, categoryCheckup, templates, dataExport, dataImport, simulation, performance
+    case language, primaryCurrency, exchangeRates, categories, autoSetup, screenshotSetup, categoryCheckup, templates, dataExport, dataImport, simulation
 }
 
 /// 「我的」的列表和导航栈。顶部一行和首页、资产页一样高、一样的位置；列表滚到它下面时垫一层磨砂背景（和首页一样）。
@@ -40,7 +40,6 @@ private struct ProfileList: View {
     @AppStorage(ExchangeRateStore.primaryKey) private var primaryCurrency = CurrencyCode.cny.rawValue
     @AppStorage(IngestNotifier.modeKey) private var notifyMode = IngestNotifier.Mode.off.rawValue
     @AppStorage(IngestNotifier.islandKey) private var islandOn = true
-    @AppStorage(LiveCategoryActivity.skipLeaveKey) private var islandSkipLeave = false
     @AppStorage(ImportExchangeRatesIntent.notifyKey) private var notifyRates = true
     /// 「开发与调试」平时藏着：连点 7 次版本号显示，再连点 7 次藏起来
     @AppStorage("showDevTools") private var showDevTools = false
@@ -196,9 +195,6 @@ private struct ProfileList: View {
                             }
                         }
                         .disabled(store.switchingLedger)
-                        NavigationLink(value: ProfileRoute.performance) {
-                            Label("性能开关与调试指标", systemImage: "speedometer")
-                        }
                         // 新手引导只在第一次打开时出现，这里再看一次
                         Button {
                             showingOnboarding = true
@@ -221,12 +217,6 @@ private struct ProfileList: View {
                             // 岛上正在选的也收起，留在待分类
                             guard !on else { return }
                             Task { await LiveCategoryActivity.endAll() }
-                        }
-                        // 选好以后：对勾画完往上走掉再收岛，还是直接收岛，对比哪个快
-                        if hasIsland {
-                            Toggle(isOn: $islandSkipLeave) {
-                                Label("选好后直接收岛", systemImage: "arrow.up.to.line")
-                            }
                         }
                     }
                 }
@@ -293,7 +283,6 @@ private struct ProfileList: View {
         case .dataExport: DataExportView()
         case .dataImport: DataImportView()
         case .simulation: SimulationView()
-        case .performance: PerformanceSettingsView()
         }
     }
 
@@ -357,45 +346,5 @@ enum BuildInfo {
         let build = info["CFBundleVersion"] as? String ?? "?"
         let commit = (info["BKBuildCommit"] as? String).map { String($0.prefix(7)) } ?? L("本地构建")
         return "\(version) (\(build)) · \(commit)"
-    }
-}
-
-struct PerformanceSettingsView: View {
-    @Bindable private var flags = PerfFlags.shared
-
-    var body: some View {
-        Form {
-            Section {
-                Toggle("卡片阴影", isOn: $flags.cardShadows)
-                Toggle("卡面合成为位图（drawingGroup）", isOn: $flags.rasterizeCards)
-                Toggle("卡面图片用遮罩裁圆角", isOn: $flags.clipCardPhotos)
-                Toggle("图片卡的金额合成为位图", isOn: $flags.flattenCardAmount)
-                Toggle("返回时下面的卡不回弹", isOn: $flags.gentleCardReturn)
-                Toggle("返回停稳后再清空详情", isOn: $flags.lateDetailCleanup)
-                Toggle("弹簧走到终点才结束", isOn: $flags.settleSprings)
-                Toggle("转场保持高刷新率", isOn: $flags.holdHighRefresh)
-            } header: {
-                Text("单变量开关")
-            }
-            Section {
-                Toggle("显示帧率与内存", isOn: $flags.showMetrics)
-                Toggle("对齐参考线", isOn: $flags.showAlignmentGuides)
-            }
-            // 签名工具会改 Bundle ID；扩展的要以 App 的开头才认得是一家（ADR 0020）
-            Section("通知扩展") {
-                LabeledContent("App", value: Bundle.main.bundleIdentifier ?? "")
-                LabeledContent("扩展", value: extensionBundleID ?? L("没有"))
-            }
-            Section {
-                Button("恢复默认") { flags.resetToDefaults() }
-            }
-        }
-        .navigationTitle("性能开关")
-        .navigationBarTitleDisplayMode(.inline)
-    }
-
-    /// 装好的 App 里通知扩展的 Bundle ID；签名工具把扩展删掉了时是 nil
-    private var extensionBundleID: String? {
-        Bundle.main.builtInPlugInsURL.flatMap { Bundle(url: $0.appendingPathComponent("NotificationContent.appex"))?.bundleIdentifier }
     }
 }

@@ -245,7 +245,6 @@ final class WalletController: UIViewController, UIScrollViewDelegate, UIGestureR
         let height = height.rounded(.up)
         guard height > 0, height != renderedHeaderHeight else { return }
         renderedHeaderHeight = height
-        if PerfFlags.shared.showAlignmentGuides { AlignmentDebug.shared.assetRenderedHeight = height }
         if height != headerHeight { view.setNeedsLayout() }
     }
 
@@ -412,10 +411,6 @@ final class WalletController: UIViewController, UIScrollViewDelegate, UIGestureR
 
         let fitted = headerHost.sizeThatFits(in: CGSize(width: contentWidth, height: .greatestFiniteMagnitude)).height.rounded(.up)
         headerHeight = renderedHeaderHeight ?? fitted
-        if PerfFlags.shared.showAlignmentGuides {
-            AlignmentDebug.shared.assetFittedHeight = fitted
-            AlignmentDebug.shared.assetRenderedHeight = renderedHeaderHeight ?? 0
-        }
         place(headerHost.view, CGRect(x: inset, y: 0, width: contentWidth, height: headerHeight))
         placeTitle()
         let layout = stackLayout
@@ -436,14 +431,6 @@ final class WalletController: UIViewController, UIScrollViewDelegate, UIGestureR
         placeCards()
         updateCardElements(layout)
         settleAtTop(animated: false)
-        recordScrolled()
-    }
-
-    /// 对齐参考线打开时记下卡包拉开了多少（`AlignmentGuides` 显示）
-    private func recordScrolled() {
-        guard PerfFlags.shared.showAlignmentGuides else { return }
-        let scrolled = stackScroll.contentOffset.y + stackScroll.contentInset.top
-        if AlignmentDebug.shared.assetScrolled != scrolled { AlignmentDebug.shared.assetScrolled = scrolled }
     }
 
     /// 用 bounds 和 center 摆放：视图可能带着变换（标题区淡出时上移），这时不能直接设 frame
@@ -613,7 +600,6 @@ final class WalletController: UIViewController, UIScrollViewDelegate, UIGestureR
         setHeaderShown(false, reduceMotion: reduceMotion)
         announceScreenChange()
         actions.selectionChanged(account.id)
-        FrameMonitor.current?.watch(cards[index].layer, title: "展开")
         Task { @MainActor [weak self] in
             try? await Task.sleep(for: .milliseconds(500))
             AppServices.signposter.endInterval("DetailOpen", signpost)
@@ -696,15 +682,10 @@ final class WalletController: UIViewController, UIScrollViewDelegate, UIGestureR
             case .below:
                 // 稍晚一点，让详情内容先开始退下。下面的卡走得最远（一整屏多）：带回弹的弹簧会冲过头 4pt 左右再退回来，
                 // 正好在快收完的时候，和选中的卡错开，看起来顿一下，所以用不回弹的弹簧
-                let rise = PerfFlags.shared.gentleCardReturn ? CardMotion.entrance(reduceMotion: reduceMotion) : transition
-                CardMotion.addMove(layer, deltaY: delta, timing: rise, delay: reduceMotion ? 0 : CardMotion.riseDelay)
+                CardMotion.addMove(layer, deltaY: delta, timing: transition, delay: reduceMotion ? 0 : CardMotion.riseDelay)
             case .resting:
                 break
             }
-        }
-        // 调试指标盯走得最远的卡：下面的卡，没有时是选中的卡
-        if let farthest = moving.first(where: { roles[$0] == .below }) ?? moving.first(where: { roles[$0] == .selected }) {
-            FrameMonitor.current?.watch(cards[farthest].layer, title: "返回")
         }
         // 内容退到屏幕底下；卡包马上能滑动、能点，返回途中再点卡片会从当前位置转向重新打开
         detailList.close()
@@ -715,17 +696,15 @@ final class WalletController: UIViewController, UIScrollViewDelegate, UIGestureR
         setHeaderShown(true, reduceMotion: reduceMotion)
         announceScreenChange()
         actions.selectionChanged(nil)
-        let cleanUpLate = PerfFlags.shared.lateDetailCleanup
         Task { @MainActor [weak self] in
             // 详情内容已退到屏幕外，隐藏并清空。这一步要拆掉列表里的格子，
             // 0.5 秒时卡片还在收尾，所以等全部停稳再做；停稳前再点同一张卡，内容从当前位置升回来
             try? await Task.sleep(for: .milliseconds(500))
             AppServices.signposter.endInterval("DetailClose", signpost)
             guard let self, token == self.motionToken else { return }
-            if !cleanUpLate { self.detailList.finishClose() }
             try? await Task.sleep(for: Self.transitionSettle - .milliseconds(500))
             guard token == self.motionToken else { return }
-            if cleanUpLate { self.detailList.finishClose() }
+            self.detailList.finishClose()
             self.finishTransition(token)
         }
     }

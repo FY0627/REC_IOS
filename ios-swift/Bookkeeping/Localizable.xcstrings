@@ -4249,28 +4249,6 @@
         }
       }
     },
-    "删除后，原来的记录改记到" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "After deleting, move its transactions to"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "删除后，原来的记录改记到"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "刪除後，原本的紀錄改記到"
-          }
-        }
-      }
-    },
     "删除失败" : {
       "localizations" : {
         "en" : {
@@ -4311,28 +4289,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "刪除失敗：%@"
-          }
-        }
-      }
-    },
-    "删除这个分类" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Delete Category"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "删除这个分类"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "刪除這個分類"
           }
         }
       }
@@ -4993,28 +4949,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "華夏銀行"
-          }
-        }
-      }
-    },
-    "单独作为大类" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Make It a Top-Level Category"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "单独作为大类"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "獨立成為主分類"
           }
         }
       }
@@ -5691,6 +5625,28 @@
         }
       }
     },
+    "取消隐藏" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unhide"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "取消隐藏"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "取消隱藏"
+          }
+        }
+      }
+    },
     "另有 %lld 笔外币交易还没有汇率" : {
       "localizations" : {
         "en" : {
@@ -6209,50 +6165,6 @@
         }
       }
     },
-    "合并到" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Merge Into"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "合并到"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "合併到"
-          }
-        }
-      }
-    },
-    "合并到其他分类" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Merge into Another Category"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "合并到其他分类"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "合併到其他分類"
-          }
-        }
-      }
-    },
     "合并失败：%@" : {
       "localizations" : {
         "en" : {
@@ -6723,28 +6635,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "四位數字，保留開頭的 0"
-          }
-        }
-      }
-    },
-    "回到待分类" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Uncategorized"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "回到待分类"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "回到待分類"
           }
         }
       }
@@ -8741,28 +8631,6 @@
         }
       }
     },
-    "已隐藏" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Hidden"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "已隐藏"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "已隱藏"
-          }
-        }
-      }
-    },
     "巴克莱银行" : {
       "localizations" : {
         "en" : {
@@ -9619,28 +9487,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "忽略"
-          }
-        }
-      }
-    },
-    "性能开关与调试指标" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Performance Switches & Metrics"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "性能开关与调试指标"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "效能開關與除錯指標"
           }
         }
       }
@@ -10569,50 +10415,6 @@
         }
       }
     },
-    "挪到" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Move To"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "挪到"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "移到"
-          }
-        }
-      }
-    },
-    "挪到其他大类下面" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Move to Another Category"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "挪到其他大类下面"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "移到其他主分類下"
-          }
-        }
-      }
-    },
     "换一个文件" : {
       "localizations" : {
         "en" : {
@@ -10851,6 +10653,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "撤銷上次匯入"
+          }
+        }
+      }
+    },
+    "操作失败" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Something Went Wrong"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "操作失败"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "操作失敗"
           }
         }
       }
@@ -18159,24 +17983,24 @@
         }
       }
     },
-    "连小类一起删除，原来的记录改记到" : {
+    "连小类一起删除" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Delete with subcategories and move their transactions to"
+            "value" : "Delete with Subcategories"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "连小类一起删除，原来的记录改记到"
+            "value" : "连小类一起删除"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "連同子分類一起刪除，原本的紀錄改記到"
+            "value" : "連同子分類一起刪除"
           }
         }
       }
@@ -18379,28 +18203,6 @@
         }
       }
     },
-    "选好后直接收岛" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Close Island After Picking"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "选好后直接收岛"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "選好後直接收島"
-          }
-        }
-      }
-    },
     "选择上一步「获取 URL 内容」的结果（URL 的内容）。" : {
       "localizations" : {
         "en" : {
@@ -18419,28 +18221,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "選擇上一步「取得 URL 的內容」的結果（URL 的內容）。"
-          }
-        }
-      }
-    },
-    "选择图标" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Choose Icon"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "选择图标"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "選擇圖示"
           }
         }
       }
@@ -19149,24 +18929,24 @@
         }
       }
     },
-    "隐藏（记账时不出现）" : {
+    "隐藏" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Hide (Not Shown When Recording)"
+            "value" : "Hide"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "隐藏（记账时不出现）"
+            "value" : "隐藏"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "隱藏（記帳時不顯示）"
+            "value" : "隱藏"
           }
         }
       }

@@ -34,15 +34,11 @@ struct WalletCardView: View {
 
     var body: some View {
         let palette = CardPalette.named(account.paletteID)
-        let flags = PerfFlags.shared
         face(palette)
-            .modifier(CardRasterization(enabled: flags.rasterizeCards))
             .background {
-                if flags.cardShadows {
-                    Self.shape
-                        .fill(Color(hex: palette.colors.last ?? 0x000000))
-                        .shadow(color: .black.opacity(0.18), radius: 6, y: 4)
-                }
+                Self.shape
+                    .fill(Color(hex: palette.colors.last ?? 0x000000))
+                    .shadow(color: .black.opacity(0.18), radius: 6, y: 4)
             }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("\(account.spokenTitle)，\(balanceText)")
@@ -85,7 +81,8 @@ struct WalletCardView: View {
             }
             balance
         }
-        .modifier(AmountFlattening(enabled: PerfFlags.shared.flattenCardAmount))
+        // 位图只画得到自己的范围，四周多留一点给描边
+        .padding(3).drawingGroup().padding(-3)
         .modifier(AmountSizeReport(size: amountSize))
     }
 
@@ -151,26 +148,9 @@ private struct CardBackground: View {
             // 位图和卡片一样大，圆角已经画在里面
             Image(uiImage: image)
                 .resizable()
-                .modifier(CardPhotoClip(enabled: PerfFlags.shared.clipCardPhotos))
         } else {
             WalletCardView.shape.fill(palette.gradient)
         }
-    }
-}
-
-/// 单变量开关：图片再用遮罩裁一次圆角（原来的做法，留着对照）。
-private struct CardPhotoClip: ViewModifier {
-    let enabled: Bool
-    func body(content: Content) -> some View {
-        if enabled { content.clipShape(WalletCardView.shape) } else { content }
-    }
-}
-
-/// 单变量开关：金额和描边合成一张小位图。位图只画得到自己的范围，四周多留一点给描边。
-private struct AmountFlattening: ViewModifier {
-    let enabled: Bool
-    func body(content: Content) -> some View {
-        if enabled { content.padding(3).drawingGroup().padding(-3) } else { content }
     }
 }
 
@@ -204,14 +184,6 @@ private struct AmountPlacement: Layout {
             anchor: .topLeading,
             proposal: fit
         )
-    }
-}
-
-/// 单变量开关：卡面是否先合成为一张离屏位图。
-private struct CardRasterization: ViewModifier {
-    let enabled: Bool
-    func body(content: Content) -> some View {
-        if enabled { content.drawingGroup() } else { content }
     }
 }
 

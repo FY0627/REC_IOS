@@ -17,7 +17,6 @@ ios-swift/
 │   ├── App/                       入口、共享服务 AppServices、界面状态 LedgerStore
 │   ├── Intents/                   App Intent「记录银行动账通知」「记录付款截图」、AccountEntity、AppShortcuts
 │   ├── UI/                        Shell（系统 TabView）、Home、Assets（卡包与已停用卡包、详情转场、卡片信息、卡面编辑、管理银行卡）、Stats、Profile、Pending
-│   ├── Diagnostics/               单变量性能开关、帧率/内存指标、对齐参考线
 │   ├── AppIcon*.icon/             App 图标和「我的 › 图标」里选的两个备用图标（Icon Composer 格式：分层、Liquid Glass，见下面「App 图标」）
 │   └── Assets.xcassets
 ├── Packages/BKCore/               纯 Swift 业务核心（无 UI 依赖）
@@ -118,7 +117,7 @@ docker run --rm -v "<仓库>/ios-swift/Packages/BKCore:/pkg:ro" bk-swift bash -l
   标题按「备注 → 交易对方 → 分类名」，图标是分类图标（`UI/Common/{RecordRowView,RecordDisplay}.swift`）。
   首页按收到那天分组，每一笔只写时间（`Fmt.recordClock`）；通知写的交易日期不是那天时才写上日期。完整时间在流水详情里。
 - 分类在「我的 › 分类」里自己管（`UI/Profile/CategoryManagerView.swift`），选分类的格子在 `UI/Common/CategoryGrid.swift`；
-  分类页用同一个格子（`CategoryGrid` 的 `arrangement`），长按拖动排顺序、把小类拖到别的大类上，存进账本（`reorderCategories`、`moveCategory`）
+  分类页用同一个格子（`CategoryGrid` 的 `arrangement`），两行最后一格是「添加」；长按拖动排顺序、把小类拖到别的大类上，存进账本（`reorderCategories`、`moveCategory`）；长按不动松开弹出隐藏、删除；点开分类只改名称和图标
   （放在列表的分组里：点有小类的大类先选上它，小类在下一行展开，分组的框往下变大，大类那一行不动；只会有一个选中）。
   自动记账把手续费、扣息、工资、利息和退款归类；同一个商户连续 3 次选同一个分类后，下一笔自动归类，标题旁写「自动」
   （在本机学习，[ADR 0017](../docs/decisions/0017-ios-swift-learned-categories.md)）。
@@ -157,7 +156,7 @@ docker run --rm -v "<仓库>/ios-swift/Packages/BKCore:/pkg:ro" bk-swift bash -l
   一个账户、一个币种不换算，账户用了几个币种就分开几组（`LedgerBackend.stats(accountID:)`）。转帐不算收支。
   标题「统计」和两个胶囊在同一行，和资产页一样高（`UI/Common/TitleBar.swift`，放不下时左边的胶囊截断）。
 - 「我的」的标题行也和资产页一样高，滚动时的磨砂背景和首页一样。推进二级页面时标签栏滑出、回来时滑入（`ProfileView` 外层管标签栏，列表和导航栈在 `ProfileList`）。系统导航栏在「我的」首屏也留着、里面是空的，首屏不让出它的位置（`ignoresSafeArea`），从屏幕顶端排：藏起来的话，从二级页面返回时系统要把导航栏收走，顶上的东西会往中间收再往上消失。列表和首页、统计是同一种（`.insetGrouped`），第一个白框和灰字自然一样；资产页不是系统列表，位置跟着首页排（`FirstBoxLayout`）。
-- 「我的」分组，常用的在前、设一次的在后：自动记账（设置自动记账、设置截图记账、识别模板、记账结果通知）、记账（分类、主要币种、汇率和更新时间、导入汇率通知）、数据（导出、导入、原始通知保留天数）、显示（外观、图标、主题色、语言：跟随系统、简体中文、繁體中文、English，ADR 0022）、关于（版本、汇率数据源链接）、开发与调试（分类建议体检、模拟消费、演示数据（ADR 0025，换成只有账户的演示账本给官网录屏）、性能开关；平时藏着，连点 7 次版本号在最下面显示，再连点 7 次藏起来）。
+- 「我的」分组，常用的在前、设一次的在后：自动记账（设置自动记账、设置截图记账、识别模板、记账结果通知）、记账（分类、主要币种、汇率和更新时间、导入汇率通知）、数据（导出、导入、原始通知保留天数）、显示（外观、图标、主题色、语言：跟随系统、简体中文、繁體中文、English，ADR 0022）、关于（版本、汇率数据源链接）、开发与调试（分类建议体检、模拟消费、演示数据（ADR 0025，换成只有账户的演示账本给官网录屏）、新手引导、灵动岛开关；平时藏着，连点 7 次版本号在最下面显示，再连点 7 次藏起来）。
 - **导出数据、导入数据**（[ADR 0019](../docs/decisions/0019-ios-swift-export-and-import.md)；`UI/Profile/{DataExportView,DataImportView}.swift`，`BKBackend/{DataExport,BackupImport,ZipStore}.swift`）：
   导出打开就生成一个 zip，点一下用分享菜单存到「文件」或发出去。里面每种数据一个 CSV——流水、账户（含完整卡号、账号）、余额（每个币种的初始余额、推算余额、冻结、可用）、分类、学到的分类、识别模板、汇率、待处理、原始通知（含原文）、通知里的余额——和一份完整的数据库副本（导入用）。卡面图片不导出。CSV 金额按币种小数位、不加千位分隔，流水流入为正、流出为负；开头带 BOM 让 Excel 认出中文；几个文件之间用编号对上。
   导入选这个 zip，先看里面有几笔流水、几个账户，再选增量（现在的数据不动，只加没有的；同一张卡、同一条通知不重复）或覆盖（在按钮弹出的小菜单里再点一下）。导入前自动存一份现在的数据，可以撤销上次导入。
