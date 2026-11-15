@@ -525,7 +525,6 @@ final class WalletController: UIViewController, UIScrollViewDelegate, UIGestureR
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
         placeTitle()
         placeCards(only: [.resting, .below])
-        recordScrolled()
     }
 
     /// 再点一次标签栏的「资产」：卡包滚回顶部（和其他标签页的系统行为一样）。卡包是 UIKit 的滚动区，系统不会替它滚
