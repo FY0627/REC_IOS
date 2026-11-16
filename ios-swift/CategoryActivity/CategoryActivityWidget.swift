@@ -402,7 +402,10 @@ struct ChosenRow: View {
         HStack(spacing: IslandLayout.chosenGap) {
             ChosenIcon(symbol: chosen.symbol, tint: state.tintColor)
             BadgeText(caption: state.chosenCaption ?? "", title: chosen.name, large: true)
-            ChosenCheck(ring: state.ringRange, check: state.checkRange, drawn: state.isDrawn, tint: state.tintColor)
+            ChosenCheck(
+                ring: state.ringRange, check: state.checkRange, drawn: state.isDrawn, leaving: state.isLeaving,
+                tint: state.tintColor
+            )
         }
         .padding(.horizontal, IslandLayout.chosenInset)
         .frame(maxWidth: .infinity, minHeight: IslandLayout.grid, maxHeight: IslandLayout.grid)
@@ -415,35 +418,57 @@ struct ChosenRow: View {
 /// 直接放系统的圆环（`ProgressView(timerInterval:)` 圆形的）真机上看到：底下有一圈浅色的底；画满的圆是两段，淡出时 12 点、6 点的接头比别处亮；
 /// 往上走掉时它不跟着走。所以圆圈和对勾都是自己画好的、一直在，系统按时间画的进度条只当遮罩把它们露出来（`TimedReveal`）：
 /// 遮罩只看透明度，圆圈是自己画的一笔，没有接头；对勾的遮罩是横条，从左往右。
-/// 画完（`drawn`）遮罩上再盖一块全白：看起来没有变化，之后淡出、往上走掉都和左边的图标一样。
+/// 系统每次更新都把按时间画的进度条重画一遍、淡出淡入，遮罩跟着暗一下（真机录屏：画完后那次更新圆圈和对勾闪了一下，
+/// 接头又露出来；往上走掉时也比左边的图标暗得快）。所以画完（`drawn`）把一样的圆圈和对勾直接盖在上面（不淡入、不放动画），
+/// 下面按时间画的那份暗一下也看不见；往上走掉（`leaving`）时下面那份直接拿掉，走掉的只有上面这份，和左边的图标一样。
 /// 系统的圆环线宽是直径的十分之一、外沿贴着框（真机截图量的）；自己画的圆圈在它中间、里外各窄 0.5 点，
-/// 遮罩边上的半透明碰不到它，画完前后一样粗
+/// 遮罩边上的半透明碰不到它，上下两份一样粗
 struct ChosenCheck: View {
     /// 圆圈从空画到满的时间（`ContentState.ringRange`）
     let ring: ClosedRange<Date>
     /// 对勾画出来的时间（`ContentState.checkRange`）
     let check: ClosedRange<Date>
     let drawn: Bool
+    let leaving: Bool
     let tint: Color
 
     var body: some View {
         ZStack {
-            Circle()
-                .inset(by: IslandLayout.chosenRingInset)
-                .stroke(tint, lineWidth: IslandLayout.chosenRing)
-                .modifier(TimedReveal(range: ring, drawn: drawn, style: .ring))
-            CheckShape()
-                .stroke(tint, style: StrokeStyle(lineWidth: IslandLayout.checkLine, lineCap: .round, lineJoin: .round))
-                .frame(width: IslandLayout.check, height: IslandLayout.check)
-                .modifier(TimedReveal(range: check, drawn: drawn, style: .wipe))
+            if !leaving {
+                ZStack {
+                    ringShape.modifier(TimedReveal(range: ring, style: .ring))
+                    checkShape.modifier(TimedReveal(range: check, style: .wipe))
+                }
+                .transition(.identity)
+            }
+            if drawn {
+                ZStack {
+                    ringShape
+                    checkShape
+                }
+                .transition(.identity)
+            }
         }
+        .animation(nil, value: drawn)
+        .animation(nil, value: leaving)
         .frame(width: IslandLayout.chosenBadge, height: IslandLayout.chosenBadge)
+    }
+
+    private var ringShape: some View {
+        Circle()
+            .inset(by: IslandLayout.chosenRingInset)
+            .stroke(tint, lineWidth: IslandLayout.chosenRing)
+    }
+
+    private var checkShape: some View {
+        CheckShape()
+            .stroke(tint, style: StrokeStyle(lineWidth: IslandLayout.checkLine, lineCap: .round, lineJoin: .round))
+            .frame(width: IslandLayout.check, height: IslandLayout.check)
     }
 }
 
 /// 按系统的时间露出来：`range` 这段时间里系统把进度条一帧一帧往前画，这里只拿它的透明度当遮罩，不用 App 更新。
-/// 进度条的底（还没走到的地方）透过约四分之一，叠四层遮罩只剩约 0.4%，看不见。
-/// `drawn` 以后遮罩上盖一块全白：整个露着，不再靠按时间画的进度条（它不跟着往上走掉的动画走）
+/// 进度条的底（还没走到的地方）透过约四分之一，叠四层遮罩只剩约 0.4%，看不见
 struct TimedReveal: ViewModifier {
     enum Style {
         /// 圆形：从 12 点顺时针
@@ -453,24 +478,14 @@ struct TimedReveal: ViewModifier {
     }
 
     let range: ClosedRange<Date>
-    let drawn: Bool
     let style: Style
 
     func body(content: Content) -> some View {
         content
-            .mask { pass }
-            .mask { pass }
-            .mask { pass }
-            .mask { pass }
-    }
-
-    private var pass: some View {
-        ZStack {
-            TimedProgress(range: range, style: style)
-            if drawn {
-                Color.white
-            }
-        }
+            .mask { TimedProgress(range: range, style: style) }
+            .mask { TimedProgress(range: range, style: style) }
+            .mask { TimedProgress(range: range, style: style) }
+            .mask { TimedProgress(range: range, style: style) }
     }
 }
 

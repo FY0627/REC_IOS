@@ -9931,6 +9931,28 @@
         }
       }
     },
+    "打勾" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Checkmark"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打勾"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打勾"
+          }
+        }
+      }
+    },
     "打开" : {
       "localizations" : {
         "en" : {
@@ -14503,6 +14525,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "電子錢包"
+          }
+        }
+      }
+    },
+    "画圈" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ring"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "画圈"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "畫圈"
           }
         }
       }

@@ -35,6 +35,9 @@ struct CategoryActivityAttributes: ActivityAttributes {
         /// 选好的圆圈什么时候开始画：点到分类的第一次更新就写好，系统到点自己画圆圈、接着画对勾（`ringRange`、`checkRange`），
         /// 不再为它们更新
         var ringStart: Date?
+        /// 圆圈、对勾各画多久（秒）：「开发与调试」里调的。没写的用 `ringDuration`、`checkDuration`
+        var ringSeconds: Double?
+        var checkSeconds: Double?
 
         /// 这台手机没有灵动岛：只放提醒（`notice`），锁屏卡片和它在屏幕上方弹出的横幅是同一张提醒，没有按钮，单点打开 App 这一笔
         var reminderOnly: Bool?
@@ -46,21 +49,21 @@ struct CategoryActivityAttributes: ActivityAttributes {
         var isDrawn: Bool { chosen != nil && step >= .drawn }
         var isLeaving: Bool { chosen != nil && step == .leaving }
 
-        /// 圆圈画一整圈要多久
+        /// 圆圈画一整圈要多久（默认）
         static let ringDuration: TimeInterval = 0.45
-        /// 圆圈画完接着从左往右画对勾，画多久
+        /// 圆圈画完接着从左往右画对勾，画多久（默认）
         static let checkDuration: TimeInterval = 0.3
 
         /// 圆圈从空画到满的这段时间。没写开始时间的（以前开的活动）是早就画完的一段，直接是满的
         var ringRange: ClosedRange<Date> {
             let start = ringStart ?? .distantPast
-            return start...start.addingTimeInterval(Self.ringDuration)
+            return start...start.addingTimeInterval(ringSeconds ?? Self.ringDuration)
         }
 
         /// 对勾画出来的这段时间：紧接着圆圈
         var checkRange: ClosedRange<Date> {
             let start = ringRange.upperBound
-            return start...start.addingTimeInterval(Self.checkDuration)
+            return start...start.addingTimeInterval(checkSeconds ?? Self.checkDuration)
         }
     }
 
@@ -75,7 +78,7 @@ struct CategoryActivityAttributes: ActivityAttributes {
         case placed
         /// 选好的样子从下往上出来；快到位时圆圈从 12 点顺时针画一圈，接着画出对勾（像面容 ID 认出来那样）
         case showing
-        /// 圆圈和对勾都画完了：换成不跟着时间画的样子（看起来一样），往上走掉时整块一起走
+        /// 圆圈和对勾都画完了：一样的圆圈和对勾直接盖上去（不淡入），往上走掉时都是它，和左边的图标一起走
         case drawn
         /// 往上走掉，接着结束或换下一笔
         case leaving

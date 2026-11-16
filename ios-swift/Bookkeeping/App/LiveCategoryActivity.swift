@@ -42,16 +42,21 @@ enum LiveCategoryActivity {
     private static let pickerKey = "liveCategory.picker"
     private static let pickerRecordKey = "liveCategory.pickerRecord"
     private static let queueKey = "liveCategory.queue"
-    /// 选好以后后面几步什么时候开始（从第一步放出来算，`ChosenStep`）。用户的录屏量的：淡出约 0.35 秒。
-    /// 岛的大小不变，不用等岛变矮：按钮快淡完就放好，紧接着出来；快到位时一笔画一整圈（`ringDelay`），
-    /// 接着画对勾，0.8 + 0.45 + 0.3 = 1.55 秒画完；1.7 秒换成不跟着时间画的样子，之后往上走掉
+    /// 「开发与调试」里调的：选好以后画圆圈、画对勾各用多少秒。没调过用 `ContentState.ringDuration`、`checkDuration`
+    static let ringSecondsKey = "liveCategory.ringSeconds"
+    static let checkSecondsKey = "liveCategory.checkSeconds"
+    static let drawSecondsRange: ClosedRange<Double> = 0.15...2
+    /// 选好以后前两步什么时候开始（从第一步放出来算，`ChosenStep`）。用户的录屏量的：淡出约 0.35 秒。
+    /// 岛的大小不变，不用等岛变矮：按钮快淡完就放好，紧接着出来
     private static let chosenSteps: [(CategoryActivityAttributes.ChosenStep, Duration)] = [
-        (.placed, .milliseconds(300)), (.showing, .milliseconds(450)), (.drawn, .milliseconds(1700)),
+        (.placed, .milliseconds(300)), (.showing, .milliseconds(450)),
     ]
-    /// 点到分类后多久开始画圆圈：系统到点自己画（`ContentState.ringStart`），画 `ringDuration`，接着画对勾 `checkDuration`
+    /// 点到分类后多久开始画圆圈（快到位时）：系统到点自己画圆圈、接着画对勾（`ContentState.ringStart`）
     private static let ringDelay: TimeInterval = 0.8
-    /// 什么时候往上走掉：对勾画完再停一会儿
-    private static let chosenDisplay: Duration = .milliseconds(2200)
+    /// 圆圈和对勾画完后多久盖上不跟着时间画的那份（`drawn`）
+    private static let drawnDelay: Duration = .milliseconds(150)
+    /// 圆圈和对勾画完后再停多久往上走掉
+    private static let chosenDisplay: Duration = .milliseconds(650)
     /// 往上走掉以后再结束或换下一笔。实时活动的动画用系统自己的时长（ActivityKit 文档：忽略 `animation` 修饰符），
     /// 0.35 秒就结束，往上走还没走完岛就收了（录屏里往上走约 0.4 秒）；留 0.5 秒
     private static let leaveTime: Duration = .milliseconds(500)
@@ -165,14 +170,18 @@ enum LiveCategoryActivity {
         let started = ContinuousClock.now
         let activity = find(recordID)
         var shownAt = started
+        let ringSeconds = drawSeconds(ringSecondsKey, default: State.ringDuration)
+        let checkSeconds = drawSeconds(checkSecondsKey, default: State.checkDuration)
         if let activity {
             var state = activity.content.state
             state.chosen = await loadPicker(recordID)?.option(categoryID) ?? LiveCategoryPicker.Option(id: categoryID, name: "", symbol: "checkmark")
             state.chosenCaption = L("已分类")
             state.back = false
             state.chosenStep = .clearing
-            // 圆圈开始画的时间这次就写进去：后面的更新晚到也不影响圆圈
+            // 圆圈开始画的时间这次就写进去：后面的更新晚到也不影响圆圈和对勾
             state.ringStart = Date().addingTimeInterval(ringDelay)
+            state.ringSeconds = ringSeconds
+            state.checkSeconds = checkSeconds
             await present(activity, state)
             shownAt = .now
         }
@@ -197,14 +206,16 @@ enum LiveCategoryActivity {
         NotificationCenter.default.post(name: .ledgerDidChange, object: nil)
         guard let activity else { return }
         // 后面几步到点再走。这期间来了新的一笔、岛已经换成它了，就不动
-        for (step, time) in chosenSteps {
+        let drawnAt = Duration.seconds(ringDelay + ringSeconds + checkSeconds)
+        let steps = chosenSteps + [(CategoryActivityAttributes.ChosenStep.drawn, drawnAt + drawnDelay)]
+        for (step, time) in steps {
             try? await Task.sleep(until: shownAt + time, clock: .continuous)
             guard activity.content.state.recordID == recordID, activity.content.state.chosen != nil else { return }
             var next = activity.content.state
             next.chosenStep = step
             await present(activity, next)
         }
-        try? await Task.sleep(until: shownAt + chosenDisplay, clock: .continuous)
+        try? await Task.sleep(until: shownAt + drawnAt + chosenDisplay, clock: .continuous)
         guard activity.content.state.recordID == recordID else { return }
         await advance(activity, from: recordID, backend: backend, leave: true)
     }
@@ -217,6 +228,8 @@ enum LiveCategoryActivity {
         state.chosen = nil
         state.chosenStep = nil
         state.ringStart = nil
+        state.ringSeconds = nil
+        state.checkSeconds = nil
         state.back = true
         await present(activity, state)
     }
@@ -381,6 +394,12 @@ enum LiveCategoryActivity {
     @MainActor
     private static func find(_ recordID: String) -> Activity<CategoryActivityAttributes>? {
         running().first { $0.content.state.recordID == recordID }
+    }
+
+    /// 画圆圈、画对勾用多少秒：「开发与调试」里调过的，没调过用默认的
+    private static func drawSeconds(_ key: String, default value: TimeInterval) -> TimeInterval {
+        let stored = UserDefaults.standard.double(forKey: key)
+        return drawSecondsRange.contains(stored) ? stored : value
     }
 
     /// 第 1 页，主题色按现在 App 里选的

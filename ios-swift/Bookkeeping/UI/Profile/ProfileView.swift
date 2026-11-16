@@ -45,6 +45,8 @@ private struct ProfileList: View {
     @AppStorage("showDevTools") private var showDevTools = false
     @AppStorage(LiveCategoryActivity.lastResultKey) private var liveActivityResult = ""
     @AppStorage(LiveCategoryActivity.lastTapKey) private var liveActivityTap = ""
+    @AppStorage(LiveCategoryActivity.ringSecondsKey) private var ringSeconds = CategoryActivityAttributes.ContentState.ringDuration
+    @AppStorage(LiveCategoryActivity.checkSecondsKey) private var checkSeconds = CategoryActivityAttributes.ContentState.checkDuration
     private let hasIsland = DynamicIsland.isPresent(model: LiveCategoryActivity.modelIdentifier)
     @State private var versionTaps = 0
     @State private var lastVersionTap = Date.distantPast
@@ -218,6 +220,11 @@ private struct ProfileList: View {
                             guard !on else { return }
                             Task { await LiveCategoryActivity.endAll() }
                         }
+                        // 岛上选好以后画圆圈、画对勾各用多久：在真机上调好再写死
+                        if hasIsland {
+                            drawTimeStepper("画圈", systemImage: "circle.dashed", value: $ringSeconds)
+                            drawTimeStepper("打勾", systemImage: "checkmark", value: $checkSeconds)
+                        }
                     }
                 }
             }
@@ -267,6 +274,17 @@ private struct ProfileList: View {
             .onChange(of: retention) { _, days in Task { await store.setRetentionDays(days) } }
         }
         .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.top } action: { stackSafeTop = $0 }
+    }
+
+    private func drawTimeStepper(_ title: LocalizedStringKey, systemImage: String, value: Binding<Double>) -> some View {
+        Stepper(value: value, in: LiveCategoryActivity.drawSecondsRange, step: 0.05) {
+            LabeledContent {
+                Text(verbatim: String(format: "%.2f s", value.wrappedValue))
+                    .monospacedDigit()
+            } label: {
+                Label(title, systemImage: systemImage)
+            }
+        }
     }
 
     @ViewBuilder
