@@ -654,6 +654,63 @@ final class ScreenshotTests: XCTestCase {
         XCTAssertEqual(into.transactionTime?.sortKey, "2026-10-24T09:44:15")
     }
 
+    /// 支付宝扫码付款的成功页（照真机截图的版式，商家、金额换过）：金额上面只有「支付成功」和右上角的「回首页」，
+    /// 商家写在金额下面、右边跟着同样的金额；「交易方式」是余额宝；底下的广告里有「每天都可赚红包」
+    func alipaySuccess(top: String) -> String {
+        """
+        \(top)
+        ¥3.50
+        示例科技  ¥ 3.50
+        交易方式  余额宝 (转出资金付款)
+        支付有礼
+        今日抢最高88元  去参与
+        每天都可赚红包
+        广告
+        摇一摇，有优惠
+        摇动或点击查看详情
+        淘宝  立即查看
+        上淘宝，超便宜，免拼单！
+        完成
+        """
+    }
+
+    func testAlipaySuccessPageReadsTheMerchantBesideTheAmount() async throws {
+        let tops = [
+            "1:14\n• 支付成功  回首页",
+            "1:14  80\n支付成功  回首页",
+            "1:14\n支付成功\n回首页",
+            "1:14\n回首页\n© 支付成功",
+        ]
+        for top in tops {
+            let reading = ScreenshotParser.parse(alipaySuccess(top: top), referenceDate: now, calendar: calendar)
+            let draft = try XCTUnwrap(reading.message.events.first?.draft, top)
+            XCTAssertEqual(draft.counterparty, "示例科技", top)
+            XCTAssertEqual(draft.amount.digits, "3.50", top)
+            XCTAssertEqual(draft.direction, .outflow, top)
+            XCTAssertEqual(draft.kind, .purchase, "广告里的「红包」不算红包：\(top)")
+            XCTAssertEqual(reading.message.walletHint, "alipay", top)
+            XCTAssertTrue(reading.methodStated, "交易方式写了余额宝：\(top)")
+            XCTAssertEqual(reading.methodName, "余额宝", top)
+        }
+
+        let backend = try makeBackend()
+        try await addWechat(backend)
+        let alipay = try await addAlipay(backend)
+        let result = try await backend.ingestScreenshot(text: alipaySuccess(top: tops[0]), capturedAt: at(13, 14))
+        XCTAssertEqual(result.recordedCount, 1, result.summary)
+        let r = try await backend.records()[0].record
+        XCTAssertEqual(r.accountID, alipay.id)
+        XCTAssertEqual(r.counterparty, "示例科技")
+        XCTAssertEqual(r.amountMinor, 3_50)
+    }
+
+    /// 和金额写在同一行的「订单金额」「优惠」不是商家
+    func testAmountLabelBesideTheAmountIsNotTheMerchant() throws {
+        let page = "支付成功\n¥3.50\n订单金额  ¥3.50\n交易方式  余额宝\n完成"
+        let draft = try XCTUnwrap(ScreenshotParser.parse(page, referenceDate: now, calendar: calendar).message.events.first?.draft)
+        XCTAssertNil(draft.counterparty)
+    }
+
     // MARK: 同一笔只记一次
 
     func testSameScreenshotTwiceIsOneRecord() async throws {

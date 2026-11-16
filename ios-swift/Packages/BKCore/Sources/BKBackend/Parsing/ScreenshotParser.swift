@@ -52,7 +52,7 @@ enum ScreenshotParser {
     private static let labels: [(key: Label, names: [String])] = [
         (.ignored, ["商户全称", "收款方全称", "收单机构", "商户单号", "商家订单号", "商品说明", "商品", "账单分类", "标签和备注", "备注", "转账说明", "支付奖励", "服务详情", "计入收支",
                     "收款店铺", "收款方式", "聊天位置", "服务费", "经营账户余额"]),
-        (.method, ["支付方式", "付款方式", "支付卡", "付款卡", "扣款方式"]),
+        (.method, ["支付方式", "付款方式", "交易方式", "支付卡", "付款卡", "扣款方式"]),
         (.target, ["到账银行卡", "到账银行", "提现银行卡", "提现银行", "提现到", "充值银行卡", "充值来源"]),
         (.status, ["当前状态", "交易状态", "支付状态", "转账状态", "状态"]),
         (.reference, ["交易单号", "转账单号", "订单号", "退款单号", "红包单号", "提现单号", "收款单号", "交易编号", "交易号"]),
@@ -99,7 +99,13 @@ enum ScreenshotParser {
     private static let receivedTitle = Rx(#"^(?:待(.{1,24}?)(?:确认)?收款|(.{1,24}?)已收款)(?:[，,\s].*)?$"#)
 
     /// 页面上的这些行不是商户名称：状态栏、导航、页面标题、按钮
-    private static let noiseRow = Rx(#"^(?:\d{1,2}[:：]\d{2}|[0-9]{1,3}%?|[45]G|LTE|WiFi|<|返回|账单详情|交易详情|详情|全部账单|全部收款明细|账单|支付成功|付款成功|交易成功|转账成功|收款成功|已收款|你已收款|微信支付|支付宝|完成|返回商家|\.{2,}|…+|·+|X|x|更多|查看账单|查看详情|联系商家|申请退款|常见问题|对此订单有疑问)$"#)
+    private static let noiseRow = Rx(#"^(?:\d{1,2}[:：]\d{2}|[0-9]{1,3}%?|[45]G|LTE|WiFi|<|返回|账单详情|交易详情|详情|全部账单|全部收款明细|账单|支付成功|付款成功|交易成功|转账成功|收款成功|已收款|你已收款|微信支付|支付宝|完成|返回商家|回首页|\.{2,}|…+|·+|X|x|更多|查看账单|查看详情|联系商家|申请退款|常见问题|对此订单有疑问)$"#)
+    /// 一段字前面的符号：成功页标题左边的对勾被认成「•」「©」这类
+    private static let leadingSymbols = Rx(#"^[^\p{L}\p{N}]+"#)
+    /// 右边跟着一个金额的一行：「示例科技 ¥ 0.03」
+    private static let trailingAmount = Rx(#"^(.*?\S)\s+[-+]?\s*[¥Y]?\s*(\d{1,3}(?:,\d{3})+|\d+)\.(\d{2})\s*元?$"#, caseInsensitive: false)
+    /// 和金额写在同一行的名称不是商家的：「订单金额  ¥12.00」「优惠  ¥1.00」
+    private static let amountName = Rx(#"金额|合计|总计|实付|应付|优惠|抵扣|立减|折扣|红包"#)
     private static let adWords = Rx(#"优惠|券|奖励|领取|广告|立即|查看|积分|抽奖|推荐|活动|开通|服务|关注|公众号|小程序|随机立减|立减"#)
     private static let titlePrefix = Rx(#"^(?:转账-转给|转账-来自|转账给|转账-|微信红包-发给|微信红包-来自|微信红包-|扫二维码付款-给|二维码收款-来自|付款给|收款方[:：]?)\s*"#)
     private static let titleSuffix = Rx(#"(?:发出的?|的)红包$|(?:\.{2,}|…+)$"#)
@@ -236,7 +242,10 @@ enum ScreenshotParser {
         let titleText = title ?? ""
         let isWithdraw = withdraw.test(titleText) || withdraw.test(pageText)
         let isTopUp = topUp.test(titleText) || topUp.test(pageText)
-        let isRedPacket = pageText.contains("红包")
+        // 红包写在金额上面（「王五的红包」）或标签里（「红包单号」）；金额下面广告里的「每天都可赚红包」不算
+        let isRedPacket = rows.enumerated().contains { index, row in
+            index != methodRow && ((amountRow.map { index <= $0 } ?? true) || labelRows.contains(index)) && row.contains("红包")
+        }
         let isTransfer = pageText.contains("转账") || pageText.contains("转帐")
         let status = values[.status]?.value ?? ""
         let isRefund = refund.test(titleText) || status.contains("退款成功") || (sign == "+" && refund.test(refundButton.replace(pageText, with: " ")))
@@ -297,18 +306,22 @@ enum ScreenshotParser {
         }
         let walletHint = cardTail == nil && bankHint == nil ? app : nil
 
-        // 7. 商户或对方：标签 > 金额上面那一行（页面标题）> 金额下面不像广告的一行。
+        // 7. 商户或对方：标签 > 金额下面写着「商家  ¥同样的金额」的一行 > 金额上面那一行（页面标题）> 金额下面不像广告的一行。
         // 转账页的标题是「谁已收款」：对方收的取名字；自己收的页面上没写对方，金额下面的「零钱余额」也不是。
         // 红包页取发红包的人，不取金额上面的祝福语
         var counterparty = values[.counterparty]?.value
         if counterparty == nil || counterparty?.isEmpty == true {
             if let receiver { counterparty = receiver == "你" || receiver == "对方" ? nil : receiver }
             else if let sender { counterparty = sender == "你" || sender == "我" ? nil : sender }
-            else { counterparty = title }
+            else { counterparty = Self.nameBesideAmount(rows: rows, below: amountRow, digits: digits, labelRows: labelRows) ?? title }
         }
         if counterparty == nil, receiver == nil, sender == nil, let amountRow, amountRow + 1 < rows.count, !labelRows.contains(amountRow + 1) {
             let below = rows[amountRow + 1]
-            if below.count <= 20, !noiseRow.test(below), !adWords.test(below), !failedWords.test(below), amountOnly.first(NSString(string: below)) == nil { counterparty = below }
+            // 右边跟着金额的（「订单金额 ¥12.00」）不是名称
+            if below.count <= 20, !isNoise(below), !adWords.test(below), !failedWords.test(below), amountOnly.first(NSString(string: below)) == nil,
+               trailingAmount.first(NSString(string: below)) == nil {
+                counterparty = below
+            }
         }
         counterparty = counterparty.map(cleanName).flatMap { $0.isEmpty ? nil : $0 }
         if isWithdraw || isTopUp || (isRefund && counterparty?.contains("退款") == true) { counterparty = nil }
@@ -404,11 +417,30 @@ enum ScreenshotParser {
         guard let amountRow, amountRow > 0 else { return nil }
         for index in stride(from: amountRow - 1, through: 0, by: -1) where !labelRows.contains(index) {
             let row = rows[index]
-            if noiseRow.test(row) || amountOnly.first(NSString(string: row)) != nil { continue }
+            if isNoise(row) || amountOnly.first(NSString(string: row)) != nil { continue }
             if row.count > 40 { return nil }
             return row
         }
         return nil
+    }
+
+    /// 状态栏、标题、按钮：一行里用空白隔开的每段都是。段前面的符号不看，
+    /// 「• 支付成功 回首页」（对勾、标题、右上角按钮排在同一行）、「1:14 80」（时间、电量）整行都是
+    private static func isNoise(_ row: String) -> Bool {
+        row.split(whereSeparator: \.isWhitespace)
+            .map { leadingSymbols.replace(String($0), with: "") }
+            .filter { !$0.isEmpty }
+            .allSatisfy { noiseRow.test($0) }
+    }
+
+    /// 金额下面一行写着「商家 ¥0.03」（支付宝扫码付款的成功页，金额上面只有「支付成功」）：和大字一样的金额左边那段是商家
+    private static func nameBesideAmount(rows: [String], below amountRow: Int?, digits: String, labelRows: Set<Int>) -> String? {
+        guard let amountRow, amountRow + 1 < rows.count, !labelRows.contains(amountRow + 1) else { return nil }
+        let ns = NSString(string: rows[amountRow + 1])
+        guard let m = trailingAmount.first(ns), (m.group(2, in: ns) ?? "") + "." + (m.group(3, in: ns) ?? "") == digits,
+              let name = m.group(1, in: ns)?.trimmingCharacters(in: .whitespaces) else { return nil }
+        guard name.count <= 30, !isNoise(name), !amountName.test(name), !adWords.test(name) else { return nil }
+        return name
     }
 
     /// 金额上面写着谁收了钱的一行（`receivedTitle`）：收钱的人，自己是「你」
