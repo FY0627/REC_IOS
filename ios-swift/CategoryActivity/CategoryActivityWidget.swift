@@ -140,9 +140,11 @@ enum IslandLayout {
     static let lockMargin: CGFloat = 14
     /// 提醒和选好的圆环的线宽
     static let ringLine: CGFloat = 5.5
-    /// 选好的一行：左边的图标圆、右边的圆圈多大（圆圈的线宽系统按直径定，约 6）。离岛边 19 + 8 = 27，和按钮一样；在按钮那块的 92 里上下居中
+    /// 选好的一行：左边的图标圆、右边的圆圈多大。离岛边 19 + 8 = 27，和按钮一样；在按钮那块的 92 里上下居中
     static let chosenBadge: CGFloat = 60
     static let chosenInset: CGFloat = 8
+    /// 画完以后自己画的圆圈的线宽：和系统的圆环一样，直径的十分之一（`ChosenCheck`）
+    static let chosenRing: CGFloat = chosenBadge / 10
     /// 选好的一行：图标和字之间
     static let chosenGap: CGFloat = 14
     /// 选好时圆圈里的对勾：边长和线宽
@@ -408,9 +410,12 @@ struct ChosenRow: View {
 }
 
 /// 选好的一行右边：像面容 ID 认出来那样，主题色圆圈从 12 点顺时针画一圈，再在里面画出对勾（`checked`）。
-/// 圆圈是系统按时间画的进度圈（`ProgressView(timerInterval:)`）：实时活动里只有按时间走的计时文字和进度条系统会自己一帧一帧往前画，
+/// 圆圈靠系统按时间画的进度圈（`ProgressView(timerInterval:)`）：实时活动里只有按时间走的计时文字和进度条系统会自己一帧一帧往前画，
 /// 别的改动都要等下一次更新，形状也不会在两次更新之间变（SF Symbols 的 Draw On、`trim` 改终点、转半平面真机上都是直接出现）。
 /// 小组件和实时活动里圆形的进度条是系统的圆环（`accessoryCircularCapacity`）：从 12 点顺时针、圆头，填满给它的框，线宽是直径的十分之一。
+/// 真机上看到系统的圆环底下有一圈浅色的底；画满的圆是两段，淡出时 12 点、6 点两个接头比别处亮；往上走掉时它也不跟着走。所以：
+/// - 画的时候只拿它当遮罩（`TimedRing`），不要浅色的底；
+/// - 画对勾那一步起换成自己画的一样大的圆圈（不淡入淡出），之后淡出、往上走掉都和左边的图标一样。
 /// 对勾用一块和岛一样黑的方块（`cover`）盖住，
 /// 画对勾那一步把方块往右挪开，对勾从左往右露出来，就像一笔画出来（挪位置真机上有动画）。
 /// 没画之前对勾是透明的：选好的一行从下面上来时系统是淡入，对勾和方块各自半透明，方块挡不住，对勾会透出来（真机上看到过）。
@@ -424,13 +429,16 @@ struct ChosenCheck: View {
 
     var body: some View {
         let size = IslandLayout.chosenBadge
-        ProgressView(timerInterval: ring, countsDown: false) {
-            EmptyView()
-        } currentValueLabel: {
-            EmptyView()
+        Group {
+            if checked {
+                Circle()
+                    .strokeBorder(tint, lineWidth: IslandLayout.chosenRing)
+                    .transition(.identity)
+            } else {
+                TimedRing(range: ring, tint: tint)
+                    .transition(.identity)
+            }
         }
-        .progressViewStyle(.circular)
-        .tint(tint)
         .frame(width: size, height: size)
         .overlay {
             ZStack {
@@ -444,6 +452,30 @@ struct ChosenCheck: View {
             .frame(width: IslandLayout.check, height: IslandLayout.check)
             .clipped()
             .animation(.easeInOut(duration: 0.35), value: checked)
+        }
+    }
+}
+
+/// 系统按时间画的圆环，只留画出来的那一段，涂主题色。
+/// 白色的圆环画在黑底上，压成一层再加大对比度：浅色的底（亮度不到一半）变成全黑，画出来的那段变成全白，两段的接头也一样白；
+/// 再按亮度变成透明度当遮罩，盖住主题色。锁屏卡片的底是半透明的，黑底也变成透明，一样能用
+struct TimedRing: View {
+    let range: ClosedRange<Date>
+    let tint: Color
+
+    var body: some View {
+        tint.mask {
+            ProgressView(timerInterval: range, countsDown: false) {
+                EmptyView()
+            } currentValueLabel: {
+                EmptyView()
+            }
+            .progressViewStyle(.circular)
+            .tint(.white)
+            .background(Color.black)
+            .compositingGroup()
+            .contrast(6)
+            .luminanceToAlpha()
         }
     }
 }
