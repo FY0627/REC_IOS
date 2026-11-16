@@ -140,10 +140,9 @@ enum IslandLayout {
     static let lockMargin: CGFloat = 14
     /// 提醒和选好的圆环的线宽
     static let ringLine: CGFloat = 5.5
-    /// 选好的一行：左边的图标圆、右边的圆圈多大，圆圈的线宽。离岛边 19 + 8 = 27，和按钮一样；在按钮那块的 92 里上下居中
+    /// 选好的一行：左边的图标圆、右边的圆圈多大（圆圈的线宽系统按直径定，约 6）。离岛边 19 + 8 = 27，和按钮一样；在按钮那块的 92 里上下居中
     static let chosenBadge: CGFloat = 60
     static let chosenInset: CGFloat = 8
-    static let chosenRing: CGFloat = 5
     /// 选好的一行：图标和字之间
     static let chosenGap: CGFloat = 14
     /// 选好时圆圈里的对勾：边长和线宽
@@ -401,7 +400,7 @@ struct ChosenRow: View {
         HStack(spacing: IslandLayout.chosenGap) {
             ChosenIcon(symbol: chosen.symbol, tint: state.tintColor)
             BadgeText(caption: state.chosenCaption ?? "", title: chosen.name, large: true)
-            ChosenCheck(ringStarted: state.isRingStarted, checked: state.isChecked, tint: state.tintColor, cover: cover)
+            ChosenCheck(ring: state.ringRange, checked: state.isChecked, tint: state.tintColor, cover: cover)
         }
         .padding(.horizontal, IslandLayout.chosenInset)
         .frame(maxWidth: .infinity, minHeight: IslandLayout.grid, maxHeight: IslandLayout.grid)
@@ -409,65 +408,43 @@ struct ChosenRow: View {
 }
 
 /// 选好的一行右边：像面容 ID 认出来那样，主题色圆圈从 12 点顺时针画一圈，再在里面画出对勾（`checked`）。
-/// 灵动岛里改形状的动画不播：SF Symbols 的 Draw On、`trim` 改终点真机上都是直接出现。圆圈改用转动的半平面（`HalfPlane`），一次更新画完一整圈：
-/// 半平面一开始盖住左半边，顺时针转 θ 就盖住 [θ-180°, θ]（从 12 点顺时针量）。三块都在圆圈形状里面，同一次动画里转：
-/// 主题色转 360°；主题色转 180° 只留右半边；黑色（`cover`）转 180° 只留左半边。转到一半时右半圈已经满了，
-/// 左半圈从 6 点接着往 12 点露出来，整圈一笔连着画完（三块用同一条时间曲线，曲线是什么都对得上）。
-/// 圆圈开始画之前是透明的（理由和对勾一样）。
+/// 圆圈是系统按时间画的进度圈（`ProgressView(timerInterval:)`）：实时活动里只有按时间走的计时文字和进度条系统会自己一帧一帧往前画，
+/// 别的改动都要等下一次更新，形状也不会在两次更新之间变（SF Symbols 的 Draw On、`trim` 改终点、转半平面真机上都是直接出现）。
+/// 小组件和实时活动里圆形的进度条是系统的圆环（`accessoryCircularCapacity`）：从 12 点顺时针、圆头，填满给它的框，线宽是直径的十分之一。
 /// 对勾用一块和岛一样黑的方块（`cover`）盖住，
 /// 画对勾那一步把方块往右挪开，对勾从左往右露出来，就像一笔画出来（挪位置真机上有动画）。
 /// 没画之前对勾是透明的：选好的一行从下面上来时系统是淡入，对勾和方块各自半透明，方块挡不住，对勾会透出来（真机上看到过）。
 /// 锁屏卡片的底是半透明的，盖不住，`cover` 是 nil，对勾直接出现
 struct ChosenCheck: View {
-    let ringStarted: Bool
+    /// 圆圈从空画到满的时间（`ContentState.ringRange`）
+    let ring: ClosedRange<Date>
     let checked: Bool
     let tint: Color
     let cover: Color?
 
     var body: some View {
         let size = IslandLayout.chosenBadge
-        ring
-            .compositingGroup()
-            .opacity(ringStarted ? 1 : 0)
-            .frame(width: size, height: size)
-            .animation(.easeInOut(duration: 0.4), value: ringStarted)
-            .overlay {
-                ZStack {
-                    CheckShape()
-                        .stroke(tint, style: StrokeStyle(lineWidth: IslandLayout.checkLine, lineCap: .round, lineJoin: .round))
-                        .opacity(checked ? 1 : 0)
-                    if let cover {
-                        cover.offset(x: checked ? IslandLayout.check : 0)
-                    }
-                }
-                .frame(width: IslandLayout.check, height: IslandLayout.check)
-                .clipped()
-                .animation(.easeInOut(duration: 0.35), value: checked)
-            }
-    }
-
-    /// 线画在框里面（`strokeBorder`）：画到框外的部分会被整页滚动的裁切切掉
-    @ViewBuilder private var ring: some View {
-        if let cover {
-            let half = ringStarted ? 180.0 : 0
-            ZStack {
-                HalfPlane().fill(tint).rotationEffect(.degrees(half * 2))
-                HalfPlane().fill(tint).rotationEffect(.degrees(half)).mask(HalfPlane(right: true))
-                HalfPlane().fill(cover).rotationEffect(.degrees(half)).mask(HalfPlane())
-            }
-            .mask(Circle().strokeBorder(.white, lineWidth: IslandLayout.chosenRing))
-        } else {
-            Circle().strokeBorder(tint, lineWidth: IslandLayout.chosenRing)
+        ProgressView(timerInterval: ring, countsDown: false) {
+            EmptyView()
+        } currentValueLabel: {
+            EmptyView()
         }
-    }
-}
-
-/// 框的左半边（`right` 时右半边）。转起来时盖住以中心为界的半个圆
-struct HalfPlane: Shape {
-    var right = false
-
-    func path(in rect: CGRect) -> Path {
-        Path(CGRect(x: right ? rect.midX : rect.minX, y: rect.minY, width: rect.width / 2, height: rect.height))
+        .progressViewStyle(.circular)
+        .tint(tint)
+        .frame(width: size, height: size)
+        .overlay {
+            ZStack {
+                CheckShape()
+                    .stroke(tint, style: StrokeStyle(lineWidth: IslandLayout.checkLine, lineCap: .round, lineJoin: .round))
+                    .opacity(checked ? 1 : 0)
+                if let cover {
+                    cover.offset(x: checked ? IslandLayout.check : 0)
+                }
+            }
+            .frame(width: IslandLayout.check, height: IslandLayout.check)
+            .clipped()
+            .animation(.easeInOut(duration: 0.35), value: checked)
+        }
     }
 }
 

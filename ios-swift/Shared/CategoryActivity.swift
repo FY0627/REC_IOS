@@ -32,6 +32,8 @@ struct CategoryActivityAttributes: ActivityAttributes {
         var chosenCaption: String?
         /// 选好以后走到了哪一步（`ChosenStep`）：一步一次更新，每步等上一步的动画放完。nil 和第一步一样
         var chosenStep: ChosenStep?
+        /// 选好的圆圈什么时候开始画：点到分类的第一次更新就写好，系统到点自己画（`ringRange`），不再为圆圈更新一次
+        var ringStart: Date?
 
         /// 这台手机没有灵动岛：只放提醒（`notice`），锁屏卡片和它在屏幕上方弹出的横幅是同一张提醒，没有按钮，单点打开 App 这一笔
         var reminderOnly: Bool?
@@ -40,23 +42,30 @@ struct CategoryActivityAttributes: ActivityAttributes {
         var isOpening: Bool { notice != nil }
         var isReminderOnly: Bool { reminderOnly ?? false }
         var step: ChosenStep { chosenStep ?? .clearing }
-        var isRingStarted: Bool { chosen != nil && step >= .ringing }
         var isChecked: Bool { chosen != nil && step >= .checked }
         var isLeaving: Bool { chosen != nil && step == .leaving }
+
+        /// 圆圈画一整圈要多久
+        static let ringDuration: TimeInterval = 0.45
+
+        /// 圆圈从空画到满的这段时间。没写开始时间的（以前开的活动）是早就画完的一段，圆圈直接是满的
+        var ringRange: ClosedRange<Date> {
+            let start = ringStart ?? .distantPast
+            return start...start.addingTimeInterval(Self.ringDuration)
+        }
     }
 
     /// 选好以后的几步，一步只做一件事。真机录屏看到：同一次更新里又换内容又改岛的大小，系统整个变形，内容被切、字叠成两层；
     /// 新加进来的东西只会淡入，不会从下面滚上来；一直在的东西改位置、透明度才有动画（对勾的黑块、往上走掉都放出来了）。
-    /// 岛的大小从头到尾不变（和选分类时一样高），顶上的商户、金额一直留着
+    /// 岛的大小从头到尾不变（和选分类时一样高），顶上的商户、金额一直留着。
+    /// 右边的圆圈不占一步：系统按 `ringStart` 到点自己画
     enum ChosenStep: Int, Codable, Hashable, Comparable {
         /// 按钮淡出
         case clearing = 1
         /// 选好的样子已经放好，看不见，在下面一点
         case placed
-        /// 选好的样子从下往上出来，右边的圆圈还没画
+        /// 选好的样子从下往上出来；快到位时圆圈从 12 点顺时针画一圈（像面容 ID 认出来那样）
         case showing
-        /// 圆圈从 12 点顺时针一笔画一整圈（像面容 ID 认出来那样）
-        case ringing
         /// 圆圈里画出对勾
         case checked
         /// 往上走掉，接着结束或换下一笔

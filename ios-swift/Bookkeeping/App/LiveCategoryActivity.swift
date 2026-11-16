@@ -43,11 +43,13 @@ enum LiveCategoryActivity {
     private static let pickerRecordKey = "liveCategory.pickerRecord"
     private static let queueKey = "liveCategory.queue"
     /// 选好以后后面几步什么时候开始（从第一步放出来算，`ChosenStep`）。用户的录屏量的：淡出约 0.35 秒。
-    /// 岛的大小不变，不用等岛变矮：按钮快淡完就放好，紧接着出来；快到位时一笔画一整圈，圆圈画完时画对勾
+    /// 岛的大小不变，不用等岛变矮：按钮快淡完就放好，紧接着出来；快到位时一笔画一整圈（`ringDelay`），
+    /// 圆圈画完时画对勾（0.8 + 0.45 秒）
     private static let chosenSteps: [(CategoryActivityAttributes.ChosenStep, Duration)] = [
-        (.placed, .milliseconds(300)), (.showing, .milliseconds(450)), (.ringing, .milliseconds(800)),
-        (.checked, .milliseconds(1250)),
+        (.placed, .milliseconds(300)), (.showing, .milliseconds(450)), (.checked, .milliseconds(1250)),
     ]
+    /// 点到分类后多久开始画圆圈：系统到点自己画（`ContentState.ringStart`），画 `ringDuration`
+    private static let ringDelay: TimeInterval = 0.8
     /// 什么时候往上走掉：对勾画完再停一会儿
     private static let chosenDisplay: Duration = .milliseconds(2200)
     /// 往上走掉以后再结束或换下一笔。实时活动的动画用系统自己的时长（ActivityKit 文档：忽略 `animation` 修饰符），
@@ -169,6 +171,8 @@ enum LiveCategoryActivity {
             state.chosenCaption = L("已分类")
             state.back = false
             state.chosenStep = .clearing
+            // 圆圈开始画的时间这次就写进去：后面的更新晚到也不影响圆圈
+            state.ringStart = Date().addingTimeInterval(ringDelay)
             await present(activity, state)
             shownAt = .now
         }
@@ -212,6 +216,7 @@ enum LiveCategoryActivity {
         var state = activity.content.state
         state.chosen = nil
         state.chosenStep = nil
+        state.ringStart = nil
         state.back = true
         await present(activity, state)
     }
