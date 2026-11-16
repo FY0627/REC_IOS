@@ -230,4 +230,4 @@ docker run --rm -v "<仓库>/ios-swift/Packages/BKCore:/pkg:ro" bk-swift bash -l
 
 ## 自动记账
 
-见 [features/ios-swift-auto-bookkeeping.md](../docs/features/ios-swift-auto-bookkeeping.md)。
+见 [docs/features/ios-swift-auto-bookkeeping/](../docs/features/ios-swift-auto-bookkeeping/README.md)。
