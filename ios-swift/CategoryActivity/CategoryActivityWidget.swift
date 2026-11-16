@@ -403,7 +403,7 @@ struct ChosenRow: View {
             ChosenIcon(symbol: chosen.symbol, tint: state.tintColor)
             BadgeText(caption: state.chosenCaption ?? "", title: chosen.name, large: true)
             ChosenCheck(
-                ring: state.ringRange, check: state.checkRange, drawn: state.isDrawn, leaving: state.isLeaving,
+                ring: state.ringRange, check: state.checkRange, drawn: state.isDrawn, settled: state.isSettled,
                 tint: state.tintColor
             )
         }
@@ -418,9 +418,13 @@ struct ChosenRow: View {
 /// 直接放系统的圆环（`ProgressView(timerInterval:)` 圆形的）真机上看到：底下有一圈浅色的底；画满的圆是两段，淡出时 12 点、6 点的接头比别处亮；
 /// 往上走掉时它不跟着走。所以圆圈和对勾都是自己画好的、一直在，系统按时间画的进度条只当遮罩把它们露出来（`TimedReveal`）：
 /// 遮罩只看透明度，圆圈是自己画的一笔，没有接头；对勾的遮罩是横条，从左往右。
-/// 系统每次更新都把按时间画的进度条重画一遍、淡出淡入，遮罩跟着暗一下（真机录屏：画完后那次更新圆圈和对勾闪了一下，
-/// 接头又露出来；往上走掉时也比左边的图标暗得快）。所以画完（`drawn`）把一样的圆圈和对勾直接盖在上面（不淡入、不放动画），
-/// 下面按时间画的那份暗一下也看不见；往上走掉（`leaving`）时下面那份直接拿掉，走掉的只有上面这份，和左边的图标一样。
+/// 往上走掉时按时间画的东西不跟着走、在原地暗下去（真机录屏），所以走掉的必须是不跟着时间画的一份。
+/// 真机录屏还看到：这一块里加进、拿掉东西的那次更新，按时间画的进度条会暗一下再亮回来（遮罩跟着暗，圆圈和对勾闪一下）；
+/// `transition(.identity)`、`animation(nil)` 在实时活动里也不管用（拿掉的那份一直留在原地，直到岛收回去）。
+/// 只改一直在的东西的透明度、位置才是好好的动画。所以两份一直都在，不加不拿，只改透明度：
+/// 下面一份按时间画（`TimedReveal`）；上面一份是一样的圆圈和对勾，一开始透明。
+/// 画完（`drawn`）上面那份淡入，和下面那份一模一样，看不出变化；再过一步（`settled`）下面那份淡出，被上面那份盖着也看不出；
+/// 往上走掉时只剩上面那份，和左边的图标一样走。
 /// 系统的圆环线宽是直径的十分之一、外沿贴着框（真机截图量的）；自己画的圆圈在它中间、里外各窄 0.5 点，
 /// 遮罩边上的半透明碰不到它，上下两份一样粗
 struct ChosenCheck: View {
@@ -428,29 +432,25 @@ struct ChosenCheck: View {
     let ring: ClosedRange<Date>
     /// 对勾画出来的时间（`ContentState.checkRange`）
     let check: ClosedRange<Date>
+    /// 上面那份淡入
     let drawn: Bool
-    let leaving: Bool
+    /// 下面按时间画的那份淡出
+    let settled: Bool
     let tint: Color
 
     var body: some View {
         ZStack {
-            if !leaving {
-                ZStack {
-                    ringShape.modifier(TimedReveal(range: ring, style: .ring))
-                    checkShape.modifier(TimedReveal(range: check, style: .wipe))
-                }
-                .transition(.identity)
+            ZStack {
+                ringShape.modifier(TimedReveal(range: ring, style: .ring))
+                checkShape.modifier(TimedReveal(range: check, style: .wipe))
             }
-            if drawn {
-                ZStack {
-                    ringShape
-                    checkShape
-                }
-                .transition(.identity)
+            .opacity(settled ? 0 : 1)
+            ZStack {
+                ringShape
+                checkShape
             }
+            .opacity(drawn ? 1 : 0)
         }
-        .animation(nil, value: drawn)
-        .animation(nil, value: leaving)
         .frame(width: IslandLayout.chosenBadge, height: IslandLayout.chosenBadge)
     }
 

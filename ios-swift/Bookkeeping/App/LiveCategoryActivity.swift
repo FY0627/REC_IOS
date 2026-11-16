@@ -53,10 +53,11 @@ enum LiveCategoryActivity {
     ]
     /// 点到分类后多久开始画圆圈（快到位时）：系统到点自己画圆圈、接着画对勾（`ContentState.ringStart`）
     private static let ringDelay: TimeInterval = 0.8
-    /// 圆圈和对勾画完后多久盖上不跟着时间画的那份（`drawn`）
-    private static let drawnDelay: Duration = .milliseconds(150)
-    /// 圆圈和对勾画完后再停多久往上走掉
-    private static let chosenDisplay: Duration = .milliseconds(650)
+    /// 圆圈和对勾画完后多久淡入上面不跟着时间画的那份（`drawn`）；它淡入完（约 0.35 秒）再淡出下面按时间画的那份（`settled`），
+    /// 那份淡得差不多了再往上走掉
+    private static let drawnDelay: Duration = .milliseconds(50)
+    private static let settleDelay: Duration = .milliseconds(380)
+    private static let leaveDelay: Duration = .milliseconds(300)
     /// 往上走掉以后再结束或换下一笔。实时活动的动画用系统自己的时长（ActivityKit 文档：忽略 `animation` 修饰符），
     /// 0.35 秒就结束，往上走还没走完岛就收了（录屏里往上走约 0.4 秒）；留 0.5 秒
     private static let leaveTime: Duration = .milliseconds(500)
@@ -206,8 +207,10 @@ enum LiveCategoryActivity {
         NotificationCenter.default.post(name: .ledgerDidChange, object: nil)
         guard let activity else { return }
         // 后面几步到点再走。这期间来了新的一笔、岛已经换成它了，就不动
-        let drawnAt = Duration.seconds(ringDelay + ringSeconds + checkSeconds)
-        let steps = chosenSteps + [(CategoryActivityAttributes.ChosenStep.drawn, drawnAt + drawnDelay)]
+        let drawnAt = Duration.seconds(ringDelay + ringSeconds + checkSeconds) + drawnDelay
+        let steps = chosenSteps + [
+            (CategoryActivityAttributes.ChosenStep.drawn, drawnAt), (.settled, drawnAt + settleDelay),
+        ]
         for (step, time) in steps {
             try? await Task.sleep(until: shownAt + time, clock: .continuous)
             guard activity.content.state.recordID == recordID, activity.content.state.chosen != nil else { return }
@@ -215,7 +218,7 @@ enum LiveCategoryActivity {
             next.chosenStep = step
             await present(activity, next)
         }
-        try? await Task.sleep(until: shownAt + drawnAt + chosenDisplay, clock: .continuous)
+        try? await Task.sleep(until: shownAt + drawnAt + settleDelay + leaveDelay, clock: .continuous)
         guard activity.content.state.recordID == recordID else { return }
         await advance(activity, from: recordID, backend: backend, leave: true)
     }
