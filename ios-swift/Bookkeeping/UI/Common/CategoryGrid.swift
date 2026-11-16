@@ -62,8 +62,12 @@ struct CategoryGrid: View {
         let addsTop = add != nil && type != .transfer
         let topCount = tops.count + (addsTop ? 1 : 0)
         let topLevel = Level(parentID: nil, ids: tops, tops: tops, holders: holders, cellCount: topCount, topCount: topCount)
+        // 「我的 › 分类」：能放小类的大类没有小类也能展开，展开那一行有「添加」
         let topCells = nodes.map {
-            Cell(id: $0.id, name: $0.category.localizedName, symbol: $0.category.symbol, hasChildren: !$0.children.isEmpty, hidden: $0.category.hidden)
+            Cell(
+                id: $0.id, name: $0.category.localizedName, symbol: $0.category.symbol,
+                hasChildren: !$0.children.isEmpty || (add != nil && holders.contains($0.id)), hidden: $0.category.hidden
+            )
         }
         grid(topCells, adding: addsTop ? { add?(nil) } : nil) { cell in
             if arrangement == nil {
@@ -139,7 +143,7 @@ struct CategoryGrid: View {
         }
     }
 
-    /// 「我的 › 分类」点大类：有小类的展开，再点收起；没有小类的打开这个分类
+    /// 「我的 › 分类」点大类：有小类或能加小类的展开，再点收起；系统分类没有小类，直接打开
     private func openOrExpand(_ cell: Cell) {
         if cell.hasChildren {
             withAnimation(.snappy(duration: 0.3)) { expanded = expanded == cell.id ? nil : cell.id }

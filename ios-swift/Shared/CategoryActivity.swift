@@ -40,7 +40,8 @@ struct CategoryActivityAttributes: ActivityAttributes {
         var isOpening: Bool { notice != nil }
         var isReminderOnly: Bool { reminderOnly ?? false }
         var step: ChosenStep { chosenStep ?? .clearing }
-        var isRingDrawn: Bool { chosen != nil && step >= .ringing }
+        var isRingStarted: Bool { chosen != nil && step >= .ringing }
+        var isRingClosed: Bool { chosen != nil && step >= .ringed }
         var isChecked: Bool { chosen != nil && step >= .checked }
         var isLeaving: Bool { chosen != nil && step == .leaving }
     }
@@ -55,8 +56,10 @@ struct CategoryActivityAttributes: ActivityAttributes {
         case placed
         /// 选好的样子从下往上出来，右边的圆圈还没画
         case showing
-        /// 圆圈从 12 点顺时针画一圈（像面容 ID 认出来那样）
+        /// 圆圈从 12 点顺时针画右半圈到 6 点（像面容 ID 认出来那样）
         case ringing
+        /// 接着画左半圈回到 12 点
+        case ringed
         /// 圆圈里画出对勾
         case checked
         /// 往上走掉，接着结束或换下一笔

@@ -401,33 +401,49 @@ struct ChosenRow: View {
         HStack(spacing: IslandLayout.chosenGap) {
             ChosenIcon(symbol: chosen.symbol, tint: state.tintColor)
             BadgeText(caption: state.chosenCaption ?? "", title: chosen.name, large: true)
-            ChosenCheck(ring: state.isRingDrawn, checked: state.isChecked, tint: state.tintColor, cover: cover)
+            ChosenCheck(ringStarted: state.isRingStarted, ringClosed: state.isRingClosed, checked: state.isChecked, tint: state.tintColor, cover: cover)
         }
         .padding(.horizontal, IslandLayout.chosenInset)
         .frame(maxWidth: .infinity, minHeight: IslandLayout.grid, maxHeight: IslandLayout.grid)
     }
 }
 
-/// 选好的一行右边：像面容 ID 认出来那样，主题色圆圈从 12 点顺时针画一圈（`ring`，`trim` 改终点），再在里面画出对勾（`checked`）。
-/// 灵动岛里不播 SF Symbols 的 Draw On（真机试过，对勾直接出现），对勾用一块和岛一样黑的方块（`cover`）盖住，
+/// 选好的一行右边：像面容 ID 认出来那样，主题色圆圈从 12 点顺时针画一圈，再在里面画出对勾（`checked`）。
+/// 灵动岛里改形状的动画不播：SF Symbols 的 Draw On、`trim` 改终点真机上都是直接出现。挪位置的动画会播，所以都用黑块盖住再挪开：
+/// 圆圈左右两半各盖一块，右边那块往下挪开（`ringStarted`），右半圈从 12 点露到 6 点；左边那块再往上挪开（`ringClosed`），
+/// 左半圈从 6 点露回 12 点，看起来是顺时针画了一圈。圆圈开始画之前是透明的（理由和对勾一样）。
+/// 对勾也用一块和岛一样黑的方块（`cover`）盖住，
 /// 画对勾那一步把方块往右挪开，对勾从左往右露出来，就像一笔画出来（挪位置真机上有动画）。
 /// 没画之前对勾是透明的：选好的一行从下面上来时系统是淡入，对勾和方块各自半透明，方块挡不住，对勾会透出来（真机上看到过）。
 /// 锁屏卡片的底是半透明的，盖不住，`cover` 是 nil，对勾直接出现
 struct ChosenCheck: View {
-    let ring: Bool
+    let ringStarted: Bool
+    let ringClosed: Bool
     let checked: Bool
     let tint: Color
     let cover: Color?
 
     var body: some View {
-        // 线画在框里面（半径减半个线宽）：画到框外的部分会被整页滚动的裁切切掉
+        let size = IslandLayout.chosenBadge
+        // 线画在框里面（`strokeBorder`）：画到框外的部分会被整页滚动的裁切切掉
         Circle()
-            .inset(by: IslandLayout.chosenRing / 2)
-            .trim(from: 0, to: ring ? 1 : 0)
-            .stroke(tint, style: StrokeStyle(lineWidth: IslandLayout.chosenRing, lineCap: .round))
-            .rotationEffect(.degrees(-90))
-            .animation(.easeInOut(duration: 0.45), value: ring)
-            .frame(width: IslandLayout.chosenBadge, height: IslandLayout.chosenBadge)
+            .strokeBorder(tint, lineWidth: IslandLayout.chosenRing)
+            .opacity(ringStarted ? 1 : 0)
+            .frame(width: size, height: size)
+            .overlay {
+                if let cover {
+                    HStack(spacing: 0) {
+                        cover.offset(y: ringClosed ? -size : 0)
+                            .frame(width: size / 2, height: size)
+                            .clipped()
+                        cover.offset(y: ringStarted ? size : 0)
+                            .frame(width: size / 2, height: size)
+                            .clipped()
+                    }
+                    .animation(.easeIn(duration: 0.3), value: ringStarted)
+                    .animation(.easeOut(duration: 0.3), value: ringClosed)
+                }
+            }
             .overlay {
                 ZStack {
                     CheckShape()

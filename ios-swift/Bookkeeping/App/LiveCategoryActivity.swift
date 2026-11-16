@@ -43,13 +43,13 @@ enum LiveCategoryActivity {
     private static let pickerRecordKey = "liveCategory.pickerRecord"
     private static let queueKey = "liveCategory.queue"
     /// 选好以后后面几步什么时候开始（从第一步放出来算，`ChosenStep`）。用户的录屏量的：淡出约 0.35 秒。
-    /// 岛的大小不变，不用等岛变矮：按钮快淡完就放好，紧接着出来；快到位时画圆圈，圆圈快画完时画对勾
+    /// 岛的大小不变，不用等岛变矮：按钮快淡完就放好，紧接着出来；快到位时画右半圈，接着左半圈，圆圈画完时画对勾
     private static let chosenSteps: [(CategoryActivityAttributes.ChosenStep, Duration)] = [
         (.placed, .milliseconds(300)), (.showing, .milliseconds(450)), (.ringing, .milliseconds(800)),
-        (.checked, .milliseconds(1200)),
+        (.ringed, .milliseconds(1100)), (.checked, .milliseconds(1450)),
     ]
     /// 什么时候往上走掉：对勾画完再停一会儿
-    private static let chosenDisplay: Duration = .milliseconds(2000)
+    private static let chosenDisplay: Duration = .milliseconds(2200)
     /// 往上走掉以后再结束或换下一笔。实时活动的动画用系统自己的时长（ActivityKit 文档：忽略 `animation` 修饰符），
     /// 0.35 秒就结束，往上走还没走完岛就收了（录屏里往上走约 0.4 秒）；留 0.5 秒
     private static let leaveTime: Duration = .milliseconds(500)
