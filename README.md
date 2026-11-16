@@ -10,18 +10,21 @@ REC 是一款 iPhone 记账 App。你付完款，银行短信一到，它就在�
 
 <table>
   <tr>
-    <td align="center"><img src="docs/assets/demo/auto-bookkeeping.gif" width="260" alt="付款后银行短信到达，App 在后台自动记好这笔账"></td>
-    <td align="center"><img src="docs/assets/demo/wallet.gif" width="260" alt="资产页的银行卡像钱包一样叠放，点开可以看详情"></td>
+    <td align="center"><img src="docs/assets/demo/auto-bookkeeping.gif" width="220" alt="微信用银行卡付款后，银行通知到达，REC 在后台记好这笔账，再在灵动岛上选分类"></td>
+    <td align="center"><img src="docs/assets/demo/screenshot-bookkeeping.gif" width="220" alt="微信、支付宝付款成功页轻点背面截屏，REC 记好这笔账"></td>
+    <td align="center"><img src="docs/assets/demo/wallet.gif" width="220" alt="资产页的银行卡像钱包一样叠放，点开一张看流水再收回"></td>
   </tr>
   <tr>
     <td align="center">自动记账</td>
-    <td align="center">银行卡像钱包一样管理</td>
+    <td align="center">截图记账</td>
+    <td align="center">卡包</td>
   </tr>
 </table>
 
 ## 为什么用它
 
 - **不用手动记账**：设置一次快捷指令，之后银行短信、邮件和 App 通知都能自动入账。
+- **零钱付款也能记**：微信零钱、支付宝余额付款没有银行通知，在付款成功页轻点手机背面截个屏就记好。
 - **账本只在你手机里**：App 不联网，没有服务器，不用注册账号。
 - **认不准就先问你**：看不懂的通知放进「待处理」等你确认。同一笔钱收到短信和邮件，也只记一笔。
 - **多币种不头疼**：一张卡可以放多个币种，净资产按你的主要币种换算。
@@ -30,12 +33,14 @@ REC 是一款 iPhone 记账 App。你付完款，银行短信一到，它就在�
   <img src="docs/assets/demo/home.jpg" width="23%" alt="首页：本月支出和流水">
   <img src="docs/assets/demo/assets.jpg" width="23%" alt="资产：净资产和叠放的银行卡">
   <img src="docs/assets/demo/stats.jpg" width="23%" alt="统计：按分类查看收支">
-  <img src="docs/assets/demo/profile.jpg" width="23%" alt="我的：外观、币种和自动记账设置">
+  <img src="docs/assets/demo/profile.jpg" width="23%" alt="我的：自动记账、分类、币种和数据设置">
 </p>
 
 ## 现在能用吗
 
 还在测试，没有上架 App Store。可以用 TestFlight 参与测试：<https://testflight.apple.com/join/9KfFbPkC>
+
+官网：<https://kimimimi.qzz.io>
 
 要求：
 
