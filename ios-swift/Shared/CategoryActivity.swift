@@ -32,7 +32,8 @@ struct CategoryActivityAttributes: ActivityAttributes {
         var chosenCaption: String?
         /// 选好以后走到了哪一步（`ChosenStep`）：一步一次更新，每步等上一步的动画放完。nil 和第一步一样
         var chosenStep: ChosenStep?
-        /// 选好的圆圈什么时候开始画：点到分类的第一次更新就写好，系统到点自己画（`ringRange`），不再为圆圈更新一次
+        /// 选好的圆圈什么时候开始画：点到分类的第一次更新就写好，系统到点自己画圆圈、接着画对勾（`ringRange`、`checkRange`），
+        /// 不再为它们更新
         var ringStart: Date?
 
         /// 这台手机没有灵动岛：只放提醒（`notice`），锁屏卡片和它在屏幕上方弹出的横幅是同一张提醒，没有按钮，单点打开 App 这一笔
@@ -42,32 +43,40 @@ struct CategoryActivityAttributes: ActivityAttributes {
         var isOpening: Bool { notice != nil }
         var isReminderOnly: Bool { reminderOnly ?? false }
         var step: ChosenStep { chosenStep ?? .clearing }
-        var isChecked: Bool { chosen != nil && step >= .checked }
+        var isDrawn: Bool { chosen != nil && step >= .drawn }
         var isLeaving: Bool { chosen != nil && step == .leaving }
 
         /// 圆圈画一整圈要多久
         static let ringDuration: TimeInterval = 0.45
+        /// 圆圈画完接着从左往右画对勾，画多久
+        static let checkDuration: TimeInterval = 0.3
 
-        /// 圆圈从空画到满的这段时间。没写开始时间的（以前开的活动）是早就画完的一段，圆圈直接是满的
+        /// 圆圈从空画到满的这段时间。没写开始时间的（以前开的活动）是早就画完的一段，直接是满的
         var ringRange: ClosedRange<Date> {
             let start = ringStart ?? .distantPast
             return start...start.addingTimeInterval(Self.ringDuration)
+        }
+
+        /// 对勾画出来的这段时间：紧接着圆圈
+        var checkRange: ClosedRange<Date> {
+            let start = ringRange.upperBound
+            return start...start.addingTimeInterval(Self.checkDuration)
         }
     }
 
     /// 选好以后的几步，一步只做一件事。真机录屏看到：同一次更新里又换内容又改岛的大小，系统整个变形，内容被切、字叠成两层；
     /// 新加进来的东西只会淡入，不会从下面滚上来；一直在的东西改位置、透明度才有动画（对勾的黑块、往上走掉都放出来了）。
     /// 岛的大小从头到尾不变（和选分类时一样高），顶上的商户、金额一直留着。
-    /// 右边的圆圈不占一步：系统按 `ringStart` 到点自己画
+    /// 右边的圆圈和对勾不占步：系统按 `ringStart` 到点自己画
     enum ChosenStep: Int, Codable, Hashable, Comparable {
         /// 按钮淡出
         case clearing = 1
         /// 选好的样子已经放好，看不见，在下面一点
         case placed
-        /// 选好的样子从下往上出来；快到位时圆圈从 12 点顺时针画一圈（像面容 ID 认出来那样）
+        /// 选好的样子从下往上出来；快到位时圆圈从 12 点顺时针画一圈，接着画出对勾（像面容 ID 认出来那样）
         case showing
-        /// 圆圈里画出对勾
-        case checked
+        /// 圆圈和对勾都画完了：换成不跟着时间画的样子（看起来一样），往上走掉时整块一起走
+        case drawn
         /// 往上走掉，接着结束或换下一笔
         case leaving
 

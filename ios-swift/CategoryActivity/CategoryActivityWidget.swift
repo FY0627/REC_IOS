@@ -19,8 +19,8 @@ struct CategoryActivityBundle: WidgetBundle {
 ///   不放商户、金额（别人可能看到），摄像头旁边也不放标签图标；单点打开 App 这一笔的选分类面板。几秒后 App 更新一次去掉提醒，长按展开才是按钮；
 /// - 按钮：分类是主题色的圆和图标，「全部」「更多」是白色的圆，字在圆下面；
 /// - 选好：岛的大小不变，顶上的商户、金额留着；按钮那一块换成一行：左边主题色圆里是选中的分类图标，中间灰色「已分类」、白色分类名，
-///   右边主题色圆圈。一步一次更新（`ChosenStep`）：按钮淡出 → 这一行从下往上出来 → 圆圈从 12 点顺时针画一圈
-///   → 圆圈里画出对勾（像面容 ID 认出来，`ChosenCheck`）→ 整块往上走掉，岛收回去或换下一笔；
+///   右边主题色圆圈。一步一次更新（`ChosenStep`）：按钮淡出 → 这一行从下往上出来 → 系统按时间接着画：圆圈从 12 点顺时针一圈、
+///   圆圈里从左往右画出对勾（像面容 ID 认出来，`ChosenCheck`）→ 整块往上走掉，岛收回去或换下一笔；
 /// - 收起：只有左边的分类图标（还没选是统一的标签图标），右边空着、不放金额；minimal 只放图标；
 /// - 锁屏：黑色卡片，同样的三页和按钮；没有灵动岛的手机只放提醒（`ContentState.reminderOnly`），这张卡片也是屏幕上方弹出的横幅；
 /// - 换页、选好、换下一笔：整页上下滚过去，返回时反过来（`IslandMotion`）。
@@ -138,13 +138,14 @@ enum IslandLayout {
     static let revealRise: CGFloat = 16
     /// 锁屏卡片的边距：苹果规范里锁屏实时活动的标准边距是 14 点
     static let lockMargin: CGFloat = 14
-    /// 提醒和选好的圆环的线宽
+    /// 提醒的圆环的线宽
     static let ringLine: CGFloat = 5.5
     /// 选好的一行：左边的图标圆、右边的圆圈多大。离岛边 19 + 8 = 27，和按钮一样；在按钮那块的 92 里上下居中
     static let chosenBadge: CGFloat = 60
     static let chosenInset: CGFloat = 8
-    /// 画完以后自己画的圆圈的线宽：和系统的圆环一样，直径的十分之一（`ChosenCheck`）
-    static let chosenRing: CGFloat = chosenBadge / 10
+    /// 选好的圆圈：线宽 5，在系统圆环（线宽是直径的十分之一、外沿贴着框）的正中间，里外各比它窄 0.5 点（`ChosenCheck`）
+    static let chosenRing: CGFloat = 5
+    static let chosenRingInset: CGFloat = chosenBadge / 20
     /// 选好的一行：图标和字之间
     static let chosenGap: CGFloat = 14
     /// 选好时圆圈里的对勾：边长和线宽
@@ -396,87 +397,107 @@ struct ChosenIcon: View {
 struct ChosenRow: View {
     let state: CategoryActivityAttributes.ContentState
     let chosen: LiveCategoryPicker.Option
-    let cover: Color?
 
     var body: some View {
         HStack(spacing: IslandLayout.chosenGap) {
             ChosenIcon(symbol: chosen.symbol, tint: state.tintColor)
             BadgeText(caption: state.chosenCaption ?? "", title: chosen.name, large: true)
-            ChosenCheck(ring: state.ringRange, checked: state.isChecked, tint: state.tintColor, cover: cover)
+            ChosenCheck(ring: state.ringRange, check: state.checkRange, drawn: state.isDrawn, tint: state.tintColor)
         }
         .padding(.horizontal, IslandLayout.chosenInset)
         .frame(maxWidth: .infinity, minHeight: IslandLayout.grid, maxHeight: IslandLayout.grid)
     }
 }
 
-/// 选好的一行右边：像面容 ID 认出来那样，主题色圆圈从 12 点顺时针画一圈，再在里面画出对勾（`checked`）。
-/// 圆圈靠系统按时间画的进度圈（`ProgressView(timerInterval:)`）：实时活动里只有按时间走的计时文字和进度条系统会自己一帧一帧往前画，
-/// 别的改动都要等下一次更新，形状也不会在两次更新之间变（SF Symbols 的 Draw On、`trim` 改终点、转半平面真机上都是直接出现）。
-/// 小组件和实时活动里圆形的进度条是系统的圆环（`accessoryCircularCapacity`）：从 12 点顺时针、圆头，填满给它的框，线宽是直径的十分之一。
-/// 真机上看到系统的圆环底下有一圈浅色的底；画满的圆是两段，淡出时 12 点、6 点两个接头比别处亮；往上走掉时它也不跟着走。所以：
-/// - 画的时候只拿它当遮罩（`TimedRing`），不要浅色的底；
-/// - 画对勾那一步起换成自己画的一样大的圆圈（不淡入淡出），之后淡出、往上走掉都和左边的图标一样。
-/// 对勾用一块和岛一样黑的方块（`cover`）盖住，
-/// 画对勾那一步把方块往右挪开，对勾从左往右露出来，就像一笔画出来（挪位置真机上有动画）。
-/// 没画之前对勾是透明的：选好的一行从下面上来时系统是淡入，对勾和方块各自半透明，方块挡不住，对勾会透出来（真机上看到过）。
-/// 锁屏卡片的底是半透明的，盖不住，`cover` 是 nil，对勾直接出现
+/// 选好的一行右边：像面容 ID 认出来那样，主题色圆圈从 12 点顺时针画一圈，接着在里面从左往右画出对勾。
+/// 实时活动里只有按时间走的计时文字和进度条系统会自己一帧一帧往前画；别的改动都要等下一次更新，形状也不会在两次更新之间变
+/// （SF Symbols 的 Draw On、`trim` 改终点、转半平面真机上都是直接出现）。
+/// 直接放系统的圆环（`ProgressView(timerInterval:)` 圆形的）真机上看到：底下有一圈浅色的底；画满的圆是两段，淡出时 12 点、6 点的接头比别处亮；
+/// 往上走掉时它不跟着走。所以圆圈和对勾都是自己画好的、一直在，系统按时间画的进度条只当遮罩把它们露出来（`TimedReveal`）：
+/// 遮罩只看透明度，圆圈是自己画的一笔，没有接头；对勾的遮罩是横条，从左往右。
+/// 画完（`drawn`）遮罩上再盖一块全白：看起来没有变化，之后淡出、往上走掉都和左边的图标一样。
+/// 系统的圆环线宽是直径的十分之一、外沿贴着框（真机截图量的）；自己画的圆圈在它中间、里外各窄 0.5 点，
+/// 遮罩边上的半透明碰不到它，画完前后一样粗
 struct ChosenCheck: View {
     /// 圆圈从空画到满的时间（`ContentState.ringRange`）
     let ring: ClosedRange<Date>
-    let checked: Bool
+    /// 对勾画出来的时间（`ContentState.checkRange`）
+    let check: ClosedRange<Date>
+    let drawn: Bool
     let tint: Color
-    let cover: Color?
 
     var body: some View {
-        let size = IslandLayout.chosenBadge
-        Group {
-            if checked {
-                Circle()
-                    .strokeBorder(tint, lineWidth: IslandLayout.chosenRing)
-                    .transition(.identity)
-            } else {
-                TimedRing(range: ring, tint: tint)
-                    .transition(.identity)
-            }
+        ZStack {
+            Circle()
+                .inset(by: IslandLayout.chosenRingInset)
+                .stroke(tint, lineWidth: IslandLayout.chosenRing)
+                .modifier(TimedReveal(range: ring, drawn: drawn, style: .ring))
+            CheckShape()
+                .stroke(tint, style: StrokeStyle(lineWidth: IslandLayout.checkLine, lineCap: .round, lineJoin: .round))
+                .frame(width: IslandLayout.check, height: IslandLayout.check)
+                .modifier(TimedReveal(range: check, drawn: drawn, style: .wipe))
         }
-        .frame(width: size, height: size)
-        .overlay {
-            ZStack {
-                CheckShape()
-                    .stroke(tint, style: StrokeStyle(lineWidth: IslandLayout.checkLine, lineCap: .round, lineJoin: .round))
-                    .opacity(checked ? 1 : 0)
-                if let cover {
-                    cover.offset(x: checked ? IslandLayout.check : 0)
-                }
+        .frame(width: IslandLayout.chosenBadge, height: IslandLayout.chosenBadge)
+    }
+}
+
+/// 按系统的时间露出来：`range` 这段时间里系统把进度条一帧一帧往前画，这里只拿它的透明度当遮罩，不用 App 更新。
+/// 进度条的底（还没走到的地方）透过约四分之一，叠四层遮罩只剩约 0.4%，看不见。
+/// `drawn` 以后遮罩上盖一块全白：整个露着，不再靠按时间画的进度条（它不跟着往上走掉的动画走）
+struct TimedReveal: ViewModifier {
+    enum Style {
+        /// 圆形：从 12 点顺时针
+        case ring
+        /// 横条：从左往右
+        case wipe
+    }
+
+    let range: ClosedRange<Date>
+    let drawn: Bool
+    let style: Style
+
+    func body(content: Content) -> some View {
+        content
+            .mask { pass }
+            .mask { pass }
+            .mask { pass }
+            .mask { pass }
+    }
+
+    private var pass: some View {
+        ZStack {
+            TimedProgress(range: range, style: style)
+            if drawn {
+                Color.white
             }
-            .frame(width: IslandLayout.check, height: IslandLayout.check)
-            .clipped()
-            .animation(.easeInOut(duration: 0.35), value: checked)
         }
     }
 }
 
-/// 系统按时间画的圆环，只留画出来的那一段，涂主题色。
-/// 白色的圆环画在黑底上，压成一层再加大对比度：浅色的底（亮度不到一半）变成全黑，画出来的那段变成全白，两段的接头也一样白；
-/// 再按亮度变成透明度当遮罩，盖住主题色。锁屏卡片的底是半透明的，黑底也变成透明，一样能用
-struct TimedRing: View {
+/// 系统按时间画的进度条（白色）。圆形的填满给它的框；横条竖着拉高，盖住整个框，前沿就是一条竖线。
+/// 固定从左到右：系统语言从右往左写时也是顺时针、从左往右
+struct TimedProgress: View {
     let range: ClosedRange<Date>
-    let tint: Color
+    let style: TimedReveal.Style
 
     var body: some View {
-        tint.mask {
-            ProgressView(timerInterval: range, countsDown: false) {
-                EmptyView()
-            } currentValueLabel: {
-                EmptyView()
-            }
-            .progressViewStyle(.circular)
-            .tint(.white)
-            .background(Color.black)
-            .compositingGroup()
-            .contrast(6)
-            .luminanceToAlpha()
+        let bar = ProgressView(timerInterval: range, countsDown: false) {
+            EmptyView()
+        } currentValueLabel: {
+            EmptyView()
         }
+        .labelsHidden()
+        .tint(.white)
+        Group {
+            switch style {
+            case .ring:
+                bar.progressViewStyle(.circular)
+            case .wipe:
+                bar.progressViewStyle(.linear)
+                    .scaleEffect(x: 1, y: 40)
+            }
+        }
+        .environment(\.layoutDirection, .leftToRight)
     }
 }
 
@@ -526,7 +547,7 @@ struct IslandBottom: View {
                 Color.clear
                     .frame(maxWidth: .infinity, minHeight: IslandLayout.grid, maxHeight: IslandLayout.grid)
             } else {
-                ChosenRow(state: state, chosen: chosen, cover: .black)
+                ChosenRow(state: state, chosen: chosen)
                     .chosenReveal(state.step)
                     .dynamicTypeSize(...IslandLayout.largestType)
             }
@@ -547,7 +568,7 @@ struct PickerBody: View {
                 Color.clear
             } else if let chosen = state.chosen {
                 // 锁屏卡片：和岛上选好的一行一样（岛上用 `IslandBottom`）
-                ChosenRow(state: state, chosen: chosen, cover: nil)
+                ChosenRow(state: state, chosen: chosen)
                     .chosenReveal(state.step)
             } else {
                 CellGrid(recordID: state.recordID, cells: state.screen.cells, tint: state.tintColor)

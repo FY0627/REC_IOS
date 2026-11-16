@@ -44,11 +44,11 @@ enum LiveCategoryActivity {
     private static let queueKey = "liveCategory.queue"
     /// 选好以后后面几步什么时候开始（从第一步放出来算，`ChosenStep`）。用户的录屏量的：淡出约 0.35 秒。
     /// 岛的大小不变，不用等岛变矮：按钮快淡完就放好，紧接着出来；快到位时一笔画一整圈（`ringDelay`），
-    /// 圆圈画完时画对勾（0.8 + 0.45 秒）
+    /// 接着画对勾，0.8 + 0.45 + 0.3 = 1.55 秒画完；1.7 秒换成不跟着时间画的样子，之后往上走掉
     private static let chosenSteps: [(CategoryActivityAttributes.ChosenStep, Duration)] = [
-        (.placed, .milliseconds(300)), (.showing, .milliseconds(450)), (.checked, .milliseconds(1250)),
+        (.placed, .milliseconds(300)), (.showing, .milliseconds(450)), (.drawn, .milliseconds(1700)),
     ]
-    /// 点到分类后多久开始画圆圈：系统到点自己画（`ContentState.ringStart`），画 `ringDuration`
+    /// 点到分类后多久开始画圆圈：系统到点自己画（`ContentState.ringStart`），画 `ringDuration`，接着画对勾 `checkDuration`
     private static let ringDelay: TimeInterval = 0.8
     /// 什么时候往上走掉：对勾画完再停一会儿
     private static let chosenDisplay: Duration = .milliseconds(2200)
