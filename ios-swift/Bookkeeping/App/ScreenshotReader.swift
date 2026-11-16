@@ -1,6 +1,7 @@
 import Foundation
 import ImageIO
 import Vision
+import BKBackend
 import BKModel
 
 /// 付款页截图的文字识别（ADR 0021）：系统 Vision，在手机上做，不联网。图片识别完就丢，不保存。
@@ -10,6 +11,8 @@ enum ScreenshotReader {
         var lines: [ScreenTextLine]
         /// 照片里记的拍摄时间。快捷指令「截屏」交过来的图多半没有，是 nil
         var capturedAt: Date?
+        /// 成功页标题旁边对勾的颜色认出的 App（`ScreenshotIcon`）：微信绿、支付宝蓝；认不出是 nil
+        var iconApp: String?
     }
 
     enum ReadError: LocalizedError {
@@ -46,7 +49,28 @@ enum ScreenshotReader {
             let box = observation.boundingBox
             return ScreenTextLine(text: text, x: box.minX, y: 1 - box.maxY, width: box.width, height: box.height)
         }
-        return Reading(lines: lines, capturedAt: captureDate(source))
+        let iconApp = ScreenshotIcon.successTitle(in: lines).flatMap { iconApp(image, around: $0) }
+        return Reading(lines: lines, capturedAt: captureDate(source), iconApp: iconApp)
+    }
+
+    /// 只取「支付成功」左边、上面的一小块（几个字高见方），画成 sRGB 再数绿点、蓝点
+    private static func iconApp(_ image: CGImage, around title: ScreenTextLine) -> String? {
+        guard let rect = ScreenshotIcon.sampleRect(around: title, imageWidth: image.width, imageHeight: image.height),
+              rect.width * rect.height <= 4_000_000,
+              let cropped = image.cropping(to: CGRect(x: rect.x, y: rect.y, width: rect.width, height: rect.height)),
+              let space = CGColorSpace(name: CGColorSpace.sRGB) else { return nil }
+        let width = cropped.width, height = cropped.height
+        var pixels = [UInt8](repeating: 0, count: width * height * 4)
+        let drawn = pixels.withUnsafeMutableBytes { buffer -> Bool in
+            guard let context = CGContext(
+                data: buffer.baseAddress, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4,
+                space: space, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            ) else { return false }
+            context.draw(cropped, in: CGRect(x: 0, y: 0, width: width, height: height))
+            return true
+        }
+        guard drawn else { return nil }
+        return ScreenshotIcon.app(rgba: pixels, width: width, height: height, lineHeight: title.height * Double(image.height))
     }
 
     /// 照片的拍摄时间：EXIF、TIFF，或者 XMP 的创建时间（iPhone 截屏存成 PNG 时写在 XMP 里）。比现在还晚、或者早于两年前的不用

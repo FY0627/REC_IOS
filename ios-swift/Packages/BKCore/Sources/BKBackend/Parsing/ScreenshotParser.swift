@@ -133,7 +133,8 @@ enum ScreenshotParser {
         return rows.filter { !$0.isEmpty }.joined(separator: "\n")
     }
 
-    static func parse(_ text: String, referenceDate: Date, calendar: Calendar) -> ScreenshotReading {
+    /// `sender` 是截图这条输入的发送方：成功页对勾的颜色认出的 App（「微信支付」「支付宝」，`ScreenshotIcon`），页面上的字认不出时用它
+    static func parse(_ text: String, referenceDate: Date, calendar: Calendar, sender inputSender: String? = nil) -> ScreenshotReading {
         let cleaned = cleaned(text)
         let rows = cleaned.split(separator: "\n").map(String.init)
         func result(_ classification: MessageClassification, _ events: [ParsedEvent] = [], wallet: String? = nil, bank: String? = nil, tails: [String] = [],
@@ -216,11 +217,13 @@ enum ScreenshotParser {
         guard paymentLike else { return result(.noFinancialContent) }
 
         // 3. 哪个 App：页面上的字；支付方式写了零钱、余额也算。
-        // 微信聊天里点开的转账页只有「某某已收款」「转账时间」「收款时间」：要对方点收款的转账是微信的
+        // 微信聊天里点开的转账页只有「某某已收款」「转账时间」「收款时间」：要对方点收款的转账是微信的。
+        // 字上看不出时看成功页对勾的颜色（新版微信扫码付款的成功页只有「支付成功」、商家、金额、「返回商家」）
         let method = values[.method]?.value
         let receiver = Self.receiver(rows: rows, before: amountRow, labelRows: labelRows)
         var app = whichApp(cleaned)
         if app == nil, receiver != nil || (timeValues["转账时间"] != nil && timeValues["收款时间"] != nil) { app = "wechatpay" }
+        if app == nil { app = WalletDirectory.identify(sender: inputSender, text: "") }
         if let method {
             if method.contains("零钱") { app = "wechatpay" } else if method.contains("余额宝") || method.contains("花呗") || method.contains("账户余额") || method == "余额" { app = "alipay" }
         }

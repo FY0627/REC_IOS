@@ -237,6 +237,110 @@ final class ScreenshotTests: XCTestCase {
         let item = try await backend.openPendingItems()[0]
         XCTAssertEqual(item.reason, .ambiguousAccount)
         XCTAssertEqual(Set(item.candidateAccountIDs), [wechat.id, alipay.id])
+        XCTAssertEqual(result.items.first?.accountTitle, "微信或支付宝", "没写卡：通知不写「未知尾号的卡」")
+    }
+
+    // MARK: 成功页对勾的颜色
+
+    /// 新版微信扫码付款的成功页：只有「支付成功」、商家、金额和「返回商家」，对勾在标题左边被认成「•」
+    /// （照真机截图的版式，商家、金额换过）
+    let wechatMerchantSuccess = """
+    15:16
+    • 支付成功
+    示例商家
+    ¥0.02
+    返回商家
+    """
+
+    func testSuccessPageWithTwoWalletsUsesTheCheckMarkColor() async throws {
+        let backend = try makeBackend()
+        let wechat = try await addWechat(backend)
+        let alipay = try await addAlipay(backend)
+        let unknown = ScreenshotParser.parse(wechatMerchantSuccess, referenceDate: now, calendar: calendar)
+        XCTAssertNil(unknown.message.walletHint, "页面上没有只有一边才有的字")
+
+        let green = try await backend.ingestScreenshot(text: wechatMerchantSuccess, capturedAt: at(15, 16), iconApp: "wechatpay")
+        XCTAssertEqual(green.recordedCount, 1, green.summary)
+        let r = try await backend.records()[0].record
+        XCTAssertEqual(r.accountID, wechat.id, "对勾是绿的：微信")
+        XCTAssertEqual(r.counterparty, "示例商家")
+        XCTAssertEqual(r.amountMinor, 2)
+        XCTAssertEqual(r.kind, .purchase)
+
+        let blue = try await backend.ingestScreenshot(text: wechatSuccess, capturedAt: at(14, 31), iconApp: "alipay")
+        XCTAssertEqual(blue.recordedCount, 1, blue.summary)
+        let count = try await backend.recordCount(accountID: alipay.id)
+        XCTAssertEqual(count, 1, "对勾是蓝的：支付宝")
+    }
+
+    func testPageWordsWinOverTheCheckMarkColor() {
+        let reading = ScreenshotParser.parse(wechatTransferIn, referenceDate: now, calendar: calendar, sender: "支付宝")
+        XCTAssertEqual(reading.message.walletHint, "wechatpay", "页面上写了零钱、转账单号")
+    }
+
+    func testCheckMarkColorIsKeptUntilTheWalletIsAdded() async throws {
+        let backend = try makeBackend()
+        let result = try await backend.ingestScreenshot(text: wechatMerchantSuccess, capturedAt: at(15, 16), iconApp: "wechatpay")
+        XCTAssertEqual(result.pendingCount, 1)
+        XCTAssertEqual(result.items.first?.accountTitle, "微信支付")
+        try await addAlipay(backend)
+        var count = try await backend.recordCount()
+        XCTAssertEqual(count, 0, "加的是支付宝：不是它")
+        let wechat = try await addWechat(backend)
+        count = try await backend.recordCount(accountID: wechat.id)
+        XCTAssertEqual(count, 1, "添加微信钱包后自动记上")
+    }
+
+    /// 一块 RGBA 图：白底，中间一个实心圆（对勾），旁边几笔黑字
+    func iconPatch(_ color: (UInt8, UInt8, UInt8), size: Int = 120, radius: Int = 24) -> [UInt8] {
+        var pixels = [UInt8](repeating: 255, count: size * size * 4)
+        for y in 0..<size {
+            for x in 0..<size {
+                let i = (y * size + x) * 4
+                let dx = x - size / 2, dy = y - size / 2
+                if dx * dx + dy * dy <= radius * radius {
+                    pixels[i] = color.0; pixels[i + 1] = color.1; pixels[i + 2] = color.2
+                } else if y > size - 20, x % 3 == 0 {
+                    pixels[i] = 20; pixels[i + 1] = 20; pixels[i + 2] = 20
+                }
+            }
+        }
+        return pixels
+    }
+
+    func testCheckMarkColorPicksTheApp() {
+        XCTAssertEqual(ScreenshotIcon.app(rgba: iconPatch((7, 193, 96)), width: 120, height: 120, lineHeight: 40), "wechatpay", "微信绿")
+        XCTAssertEqual(ScreenshotIcon.app(rgba: iconPatch((6, 174, 86)), width: 120, height: 120, lineHeight: 40), "wechatpay", "深色模式的微信绿")
+        XCTAssertEqual(ScreenshotIcon.app(rgba: iconPatch((22, 119, 255)), width: 120, height: 120, lineHeight: 40), "alipay", "支付宝蓝")
+        XCTAssertEqual(ScreenshotIcon.app(rgba: iconPatch((16, 142, 233)), width: 120, height: 120, lineHeight: 40), "alipay", "旧版支付宝蓝")
+        XCTAssertNil(ScreenshotIcon.app(rgba: iconPatch((60, 60, 60)), width: 120, height: 120, lineHeight: 40), "灰的不算")
+        XCTAssertNil(ScreenshotIcon.app(rgba: iconPatch((7, 193, 96), radius: 2), width: 120, height: 120, lineHeight: 40), "太少：不是对勾")
+        // 绿蓝各一半：认不出
+        var mixed = iconPatch((7, 193, 96))
+        for i in stride(from: 0, to: mixed.count / 2, by: 4) where mixed[i + 1] == 193 { mixed[i] = 22; mixed[i + 1] = 119; mixed[i + 2] = 255 }
+        XCTAssertNil(ScreenshotIcon.app(rgba: mixed, width: 120, height: 120, lineHeight: 40))
+    }
+
+    func testCheckMarkIsLookedForBesideTheSuccessTitle() throws {
+        let lines = [
+            ScreenTextLine(text: "15:16", x: 0.125, y: 0.015625, width: 0.125, height: 0.015625),
+            ScreenTextLine(text: "支付成功后可在账单中查看", x: 0.25, y: 0.0625, width: 0.5, height: 0.015625),
+            ScreenTextLine(text: "• 支付成功", x: 0.5, y: 0.125, width: 0.125, height: 0.015625),
+            ScreenTextLine(text: "示例商家", x: 0.5, y: 0.1875, width: 0.125, height: 0.015625),
+        ]
+        let title = try XCTUnwrap(ScreenshotIcon.successTitle(in: lines))
+        XCTAssertEqual(title.text, "• 支付成功", "长句子不算标题")
+        let rect = try XCTUnwrap(ScreenshotIcon.sampleRect(around: title, imageWidth: 1024, imageHeight: 2048))
+        // 字高 32 像素：左边多 96、上面多 160、右边和下面各多 16
+        XCTAssertEqual(rect.x, 512 - 96)
+        XCTAssertEqual(rect.y, 256 - 160)
+        XCTAssertEqual(rect.width, 640 + 16 - 416)
+        XCTAssertEqual(rect.height, 288 + 16 - 96)
+        // 标题在最上面：不超出图
+        let top = ScreenTextLine(text: "支付成功", x: 0, y: 0, width: 0.125, height: 0.015625)
+        let clipped = try XCTUnwrap(ScreenshotIcon.sampleRect(around: top, imageWidth: 1024, imageHeight: 2048))
+        XCTAssertEqual(clipped.x, 0)
+        XCTAssertEqual(clipped.y, 0)
     }
 
     func testCardPaymentIsRecordedToTheCard() async throws {

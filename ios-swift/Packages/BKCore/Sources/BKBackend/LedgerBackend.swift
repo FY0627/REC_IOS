@@ -75,14 +75,16 @@ public final class LedgerBackend: Sendable {
         }
     }
 
-    /// 付款页截图（ADR 0021）：App 在手机上识别出的文字行和位置，`capturedAt` 是截图的时间（没有就是现在）
-    public func ingestScreenshot(lines: [ScreenTextLine], capturedAt: Date?) async throws -> IngestResult {
-        try await ingestScreenshot(text: ScreenLayout.text(lines), capturedAt: capturedAt)
+    /// 付款页截图（ADR 0021）：App 在手机上识别出的文字行和位置，`capturedAt` 是截图的时间（没有就是现在）。
+    /// `iconApp` 是成功页对勾的颜色认出的 App（`ScreenshotIcon`）
+    public func ingestScreenshot(lines: [ScreenTextLine], capturedAt: Date?, iconApp: String? = nil) async throws -> IngestResult {
+        try await ingestScreenshot(text: ScreenLayout.text(lines), capturedAt: capturedAt, iconApp: iconApp)
     }
 
-    /// 付款页截图的文字：快捷指令「从图像中提取文本」交过来的也一样，一行一行
-    public func ingestScreenshot(text: String, capturedAt: Date?) async throws -> IngestResult {
-        try await ingest(IngestRequest(text: text, source: .screenshot, receivedAt: capturedAt ?? clock()))
+    /// 付款页截图的文字：快捷指令「从图像中提取文本」交过来的也一样，一行一行。
+    /// 对勾颜色认出的 App 存成这条输入的发送方（「微信支付」「支付宝」），重读、导出时都还在
+    public func ingestScreenshot(text: String, capturedAt: Date?, iconApp: String? = nil) async throws -> IngestResult {
+        try await ingest(IngestRequest(text: text, source: .screenshot, sender: WalletDirectory.profile(id: iconApp)?.name, receivedAt: capturedAt ?? clock()))
     }
 
     // MARK: 账户
@@ -1235,7 +1237,7 @@ public final class LedgerBackend: Sendable {
         for item in try PendingDAO.open(db) {
             // 截图记到的钱包还没添加（ADR 0021）：按截图重新找账户，找到一个就记
             if item.reason == .noWalletAccount, let draft = item.draft, let raw = item.rawText, let meta = try IngestDAO.meta(db, id: item.ingestID) {
-                let reading = ScreenshotParser.parse(raw, referenceDate: meta.receivedAt ?? meta.processedAt, calendar: engine.calendar)
+                let reading = ScreenshotParser.parse(raw, referenceDate: meta.receivedAt ?? meta.processedAt, calendar: engine.calendar, sender: meta.sender)
                 let route = engine.screenshotRoute(draft, reading: reading, accounts: accounts)
                 guard let account = route.account else { continue }
                 let outcome = try engine.commit(

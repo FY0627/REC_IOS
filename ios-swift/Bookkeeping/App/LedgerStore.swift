@@ -494,7 +494,7 @@ final class LedgerStore {
         for data in images {
             do {
                 let reading = try await ScreenshotReader.read(data)
-                let result = try await backend.ingestScreenshot(lines: reading.lines, capturedAt: reading.capturedAt ?? Date())
+                let result = try await backend.ingestScreenshot(lines: reading.lines, capturedAt: reading.capturedAt ?? Date(), iconApp: reading.iconApp)
                 recorded += result.recordedCount
                 merged += result.mergedCount
                 pending += result.pendingCount

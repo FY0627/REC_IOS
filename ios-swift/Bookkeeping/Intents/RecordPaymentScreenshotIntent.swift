@@ -55,7 +55,7 @@ struct RecordPaymentScreenshotIntent: LiveActivityIntent {
         let result: IngestResult
         if let image {
             let reading = try await ScreenshotReader.read(image.data)
-            result = try await backend.ingestScreenshot(lines: reading.lines, capturedAt: reading.capturedAt ?? Date())
+            result = try await backend.ingestScreenshot(lines: reading.lines, capturedAt: reading.capturedAt ?? Date(), iconApp: reading.iconApp)
         } else {
             result = try await backend.ingestScreenshot(text: text ?? "", capturedAt: Date())
         }

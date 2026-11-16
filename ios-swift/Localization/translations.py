@@ -733,6 +733,7 @@ t("截图没有认全，已放入待处理", "截圖沒有完整辨識，已放�
 t("收到一条无法识别的银行通知，已放入待处理", "收到一則無法辨識的銀行通知，已放入待處理", "A bank alert couldn’t be read. Moved to To Review.")
 t("尾号 %@ 卡", "末四碼 %@ 的卡", "Card ending in %@")
 t("未知尾号的卡", "末四碼不明的卡", "Unknown card")
+t("微信或支付宝", "微信或支付寶", "WeChat Pay or Alipay")
 t("按%@扣 %@", "以%@扣 %@", "Charged in %@: %@")
 t("按%@扣约 %@", "以%@扣約 %@", "Charged in %@: ≈ %@")
 t("按%@扣（还没有汇率）", "以%@扣（還沒有匯率）", "Charged in %@ (no rate yet)")

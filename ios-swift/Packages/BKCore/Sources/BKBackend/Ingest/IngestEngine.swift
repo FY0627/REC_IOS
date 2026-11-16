@@ -106,7 +106,7 @@ struct IngestEngine {
     private func process(_ request: IngestRequest, ingestID: String, fingerprint: String?, processedAt: Date) throws -> IngestResult {
         // 付款页截图（ADR 0021）走自己的解析：认页面、按标签读，不按银行通知的写法
         let screenshot = request.source == .screenshot
-            ? ScreenshotParser.parse(request.text, referenceDate: request.receivedAt ?? processedAt, calendar: calendar) : nil
+            ? ScreenshotParser.parse(request.text, referenceDate: request.receivedAt ?? processedAt, calendar: calendar, sender: request.sender) : nil
         var parsed = screenshot?.message ?? MessageParser.parse(MessageContext(
             text: request.text, source: request.source, sender: request.sender, subject: request.subject,
             referenceDate: request.receivedAt ?? processedAt, calendar: calendar
@@ -223,7 +223,7 @@ struct IngestEngine {
                     let candidates = candidates.isEmpty ? named.map(\.id) : candidates
                     try PendingDAO.insert(db, id: newID(), ingestID: ingestID, partIndex: draft.partIndex, reason: reason, draft: draft, candidates: candidates, duplicateOf: duplicateOf, now: now)
                     pending += 1
-                    items.append(Self.pendingItem(draft, reason: reason))
+                    items.append(Self.pendingItem(draft, reason: reason, screenshot: screenshot != nil && exchangeRoute == nil))
                 }
             }
             if exchangeIDs.count == 2, exchangeIDs[0] != exchangeIDs[1] { try pairExchange(exchangeIDs) }
@@ -279,15 +279,16 @@ struct IngestEngine {
     }
 
     /// 没有入账的一笔：只有通知里写的尾号和金额原文
-    static func pendingItem(_ draft: EventDraft, reason: PendingReason) -> IngestItem {
-        pendingItem(draft, result: .pending(reason))
+    static func pendingItem(_ draft: EventDraft, reason: PendingReason, screenshot: Bool = false) -> IngestItem {
+        pendingItem(draft, result: .pending(reason), screenshot: screenshot)
     }
 
-    private static func pendingItem(_ draft: EventDraft, result: IngestItem.Result) -> IngestItem {
+    private static func pendingItem(_ draft: EventDraft, result: IngestItem.Result, screenshot: Bool = false) -> IngestItem {
         let candidates = draft.amount.currencyCandidates
         let currency = draft.amount.preferredCurrency ?? (candidates.count == 1 ? candidates[0] : nil)
-        // 钱包的收支没写卡号：通知写钱包的名称
-        let wallet = draft.cardTail == nil ? WalletDirectory.profile(id: draft.walletHint)?.name : nil
+        // 钱包的收支没写卡号：通知写钱包的名称。截图没写卡、又认不出是哪个 App：不是卡，是微信或支付宝
+        var wallet = draft.cardTail == nil ? WalletDirectory.profile(id: draft.walletHint)?.name : nil
+        if screenshot, wallet == nil, draft.cardTail == nil, draft.bankHint == nil { wallet = "微信或支付宝" }
         return IngestItem(
             cardTail: draft.cardTail, kind: draft.kind, status: draft.status, amountMinor: nil, currency: currency, amountText: draft.amount.digits, result: result,
             accountTitle: wallet, counterparty: draft.counterparty
