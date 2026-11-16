@@ -46,9 +46,6 @@ struct CategoryActivityAttributes: ActivityAttributes {
         var isOpening: Bool { notice != nil }
         var isReminderOnly: Bool { reminderOnly ?? false }
         var step: ChosenStep { chosenStep ?? .clearing }
-        var isDrawn: Bool { chosen != nil && step >= .drawn }
-        var isSettled: Bool { chosen != nil && step >= .settled }
-        var isLeaving: Bool { chosen != nil && step == .leaving }
 
         /// 圆圈画一整圈要多久（默认，用户在真机上调的）
         static let ringDuration: TimeInterval = 0.25
@@ -69,9 +66,10 @@ struct CategoryActivityAttributes: ActivityAttributes {
     }
 
     /// 选好以后的几步，一步只做一件事。真机录屏看到：同一次更新里又换内容又改岛的大小，系统整个变形，内容被切、字叠成两层；
-    /// 新加进来的东西只会淡入，不会从下面滚上来；一直在的东西改位置、透明度才有动画（对勾的黑块、往上走掉都放出来了）。
+    /// 新加进来的东西只会淡入，不会从下面滚上来；一直在的东西改位置、透明度才有动画（从下往上出来放出来了）。
     /// 岛的大小从头到尾不变（和选分类时一样高），顶上的商户、金额一直留着。
-    /// 右边的圆圈和对勾不占步：系统按 `ringStart` 到点自己画。画完以后两步换成不跟着时间画的那份（`ChosenCheck`）
+    /// 右边的圆圈和对勾不占步：系统按 `ringStart` 到点自己画。画完以后不再更新（每次更新按时间画的东西都会暗一下），
+    /// 停一下就收起灵动岛或直接换下一笔（`LiveCategoryActivity.pick`）
     enum ChosenStep: Int, Codable, Hashable, Comparable {
         /// 按钮淡出
         case clearing = 1
@@ -79,12 +77,6 @@ struct CategoryActivityAttributes: ActivityAttributes {
         case placed
         /// 选好的样子从下往上出来；快到位时圆圈从 12 点顺时针画一圈，接着画出对勾（像面容 ID 认出来那样）
         case showing
-        /// 圆圈和对勾都画完了：上面一样的那份淡入
-        case drawn
-        /// 下面按时间画的那份淡出：往上走掉时只剩上面那份，和左边的图标一起走
-        case settled
-        /// 往上走掉，接着结束或换下一笔
-        case leaving
 
         static func < (lhs: Self, rhs: Self) -> Bool { lhs.rawValue < rhs.rawValue }
     }

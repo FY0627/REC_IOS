@@ -20,7 +20,7 @@ struct CategoryActivityBundle: WidgetBundle {
 /// - 按钮：分类是主题色的圆和图标，「全部」「更多」是白色的圆，字在圆下面；
 /// - 选好：岛的大小不变，顶上的商户、金额留着；按钮那一块换成一行：左边主题色圆里是选中的分类图标，中间灰色「已分类」、白色分类名，
 ///   右边主题色圆圈。一步一次更新（`ChosenStep`）：按钮淡出 → 这一行从下往上出来 → 系统按时间接着画：圆圈从 12 点顺时针一圈、
-///   圆圈里从左往右画出对勾（像面容 ID 认出来，`ChosenCheck`）→ 整块往上走掉，岛收回去或换下一笔；
+///   圆圈里从左往右画出对勾（像面容 ID 认出来，`ChosenCheck`）→ 停一下，最后一笔就收起灵动岛，还有下一笔就直接换过去；
 /// - 收起：只有左边的分类图标（还没选是统一的标签图标），右边空着、不放金额；minimal 只放图标；
 /// - 锁屏：黑色卡片，同样的三页和按钮；没有灵动岛的手机只放提醒（`ContentState.reminderOnly`），这张卡片也是屏幕上方弹出的横幅；
 /// - 换页、选好、换下一笔：整页上下滚过去，返回时反过来（`IslandMotion`）。
@@ -134,7 +134,7 @@ enum IslandLayout {
     static let noticeDrop: CGFloat = 10
     /// 中间两行字离左边的图标再远一点：真机上只隔了约 8 点，太挤
     static let badgeTextGap: CGFloat = 10
-    /// 选好的样子出来和走掉时上下移动多少
+    /// 选好的样子出来时从下面多远上来
     static let revealRise: CGFloat = 16
     /// 锁屏卡片的边距：苹果规范里锁屏实时活动的标准边距是 14 点
     static let lockMargin: CGFloat = 14
@@ -174,10 +174,7 @@ extension CategoryActivityAttributes.ContentState {
 }
 
 extension CategoryActivityAttributes.ContentState {
-    /// 锁屏卡片下面的按钮：换页、选好、走掉、换下一笔时变。选好以后的其他几步不算
-    var screenKey: String { "\(recordID)|\(screen.page.token)|\(chosen?.id ?? "")|\(isLeaving ? "leave" : "")" }
-
-    /// 岛下面那一块：换页、选好、换下一笔时变。选好以后一直是同一个，往上走掉也只改位置、透明度（系统才有动画）
+    /// 岛下面那一块、锁屏卡片下面的按钮：换页、选好、换下一笔时变。选好以后的几步不算，一直是同一个（只改位置、透明度系统才有动画）
     var bottomKey: String { "\(recordID)|\(screen.page.token)|\(chosen?.id ?? "")" }
 
     /// 左边：返回和标题跟着页变；选好了回到商户（第 1 页的样子）；换下一笔时换
@@ -212,20 +209,12 @@ extension View {
         .animation(IslandMotion.scroll, value: key)
     }
 
-    /// 选好的一行：放好那一步看不见、在下面一点；下一步出来；往上走掉那一步往上、看不见。
-    /// 从放好到走掉一直是同一个视图，只改位置和透明度：系统只对这个放动画（新加进来的只会淡入）
+    /// 选好的一行：放好那一步看不见、在下面一点；下一步出来。
+    /// 从放好到出来一直是同一个视图，只改位置和透明度：系统只对这个放动画（新加进来的只会淡入）
     func chosenReveal(_ step: CategoryActivityAttributes.ChosenStep) -> some View {
-        let shown = step >= .showing && step < .leaving
-        return opacity(shown ? 1 : 0)
-            .offset(y: step <= .placed ? IslandLayout.revealRise : step == .leaving ? -IslandLayout.revealRise : 0)
+        opacity(step >= .showing ? 1 : 0)
+            .offset(y: step <= .placed ? IslandLayout.revealRise : 0)
             .animation(IslandMotion.scroll, value: step)
-    }
-
-    /// 选好以后顶上的商户、金额：一直留着，最后和选好的一行一起往上走掉
-    func leaveWith(_ state: CategoryActivityAttributes.ContentState) -> some View {
-        opacity(state.isLeaving ? 0 : 1)
-            .offset(y: state.isLeaving ? -IslandLayout.revealRise : 0)
-            .animation(IslandMotion.scroll, value: state.isLeaving)
     }
 
     /// 提醒左边的图标、右边的圆环：靠边（和岛的圆角同心，见 `noticeBadge`），往下放，下沿和中间两行字的下沿对齐
@@ -243,24 +232,22 @@ extension View {
     }
 }
 
-/// 展开的岛左边：顶上一行（`HeaderLeading`）；选好以后是商户，最后往上走掉
+/// 展开的岛左边：顶上一行（`HeaderLeading`）；选好以后是商户
 struct IslandLeading: View {
     let state: CategoryActivityAttributes.ContentState
 
     var body: some View {
         HeaderLeading(state: state, inline: false)
-            .leaveWith(state)
             .islandHeader(.leading)
     }
 }
 
-/// 展开的岛右边：金额；选好以后留着，最后往上走掉
+/// 展开的岛右边：金额；选好以后留着
 struct IslandTrailing: View {
     let state: CategoryActivityAttributes.ContentState
 
     var body: some View {
         AmountText(amount: state.amount)
-            .leaveWith(state)
             .islandHeader(.trailing)
     }
 }
@@ -402,10 +389,7 @@ struct ChosenRow: View {
         HStack(spacing: IslandLayout.chosenGap) {
             ChosenIcon(symbol: chosen.symbol, tint: state.tintColor)
             BadgeText(caption: state.chosenCaption ?? "", title: chosen.name, large: true)
-            ChosenCheck(
-                ring: state.ringRange, check: state.checkRange, drawn: state.isDrawn, settled: state.isSettled,
-                tint: state.tintColor
-            )
+            ChosenCheck(ring: state.ringRange, check: state.checkRange, tint: state.tintColor)
         }
         .padding(.horizontal, IslandLayout.chosenInset)
         .frame(maxWidth: .infinity, minHeight: IslandLayout.grid, maxHeight: IslandLayout.grid)
@@ -416,40 +400,24 @@ struct ChosenRow: View {
 /// 实时活动里只有按时间走的计时文字和进度条系统会自己一帧一帧往前画；别的改动都要等下一次更新，形状也不会在两次更新之间变
 /// （SF Symbols 的 Draw On、`trim` 改终点、转半平面真机上都是直接出现）。
 /// 直接放系统的圆环（`ProgressView(timerInterval:)` 圆形的）真机上看到：底下有一圈浅色的底；画满的圆是两段，淡出时 12 点、6 点的接头比别处亮；
-/// 往上走掉时它不跟着走。所以圆圈和对勾都是自己画好的、一直在，系统按时间画的进度条只当遮罩把它们露出来（`TimedReveal`）：
+/// 整块往上移时它不跟着移。所以圆圈和对勾都是自己画好的、一直在，系统按时间画的进度条只当遮罩把它们露出来（`TimedReveal`）：
 /// 遮罩只看透明度，圆圈是自己画的一笔，没有接头；对勾的遮罩是横条，从左往右。
-/// 往上走掉时按时间画的东西不跟着走、在原地暗下去（真机录屏），所以走掉的必须是不跟着时间画的一份。
-/// 真机录屏还看到：这一块里加进、拿掉东西的那次更新，按时间画的进度条会暗一下再亮回来（遮罩跟着暗，圆圈和对勾闪一下）；
-/// `transition(.identity)`、`animation(nil)` 在实时活动里也不管用（拿掉的那份一直留在原地，直到岛收回去）。
-/// 只改一直在的东西的透明度、位置才是好好的动画。所以两份一直都在，不加不拿，只改透明度：
-/// 下面一份按时间画（`TimedReveal`）；上面一份是一样的圆圈和对勾，一开始透明。
-/// 画完（`drawn`）上面那份淡入，和下面那份一模一样，看不出变化；再过一步（`settled`）下面那份淡出，被上面那份盖着也看不出；
-/// 往上走掉时只剩上面那份，和左边的图标一样走。
+/// 真机录屏逐帧看到：画完以后 App 每发一次更新，按时间画的进度条都会暗一下再亮回来（遮罩跟着暗，圆圈和对勾闪一下），
+/// 不管这次改的是什么；`transition(.identity)`、`animation(nil)` 在实时活动里也关不掉。
+/// 所以画完以后不再更新：停一下，最后一笔直接收起灵动岛，还有下一笔就直接整页换过去（`LiveCategoryActivity.pick`）。
 /// 系统的圆环线宽是直径的十分之一、外沿贴着框（真机截图量的）；自己画的圆圈在它中间、里外各窄 0.5 点，
-/// 遮罩边上的半透明碰不到它，上下两份一样粗
+/// 遮罩边上的半透明碰不到它，画满时和没有遮罩一样粗
 struct ChosenCheck: View {
     /// 圆圈从空画到满的时间（`ContentState.ringRange`）
     let ring: ClosedRange<Date>
     /// 对勾画出来的时间（`ContentState.checkRange`）
     let check: ClosedRange<Date>
-    /// 上面那份淡入
-    let drawn: Bool
-    /// 下面按时间画的那份淡出
-    let settled: Bool
     let tint: Color
 
     var body: some View {
         ZStack {
-            ZStack {
-                ringShape.modifier(TimedReveal(range: ring, style: .ring))
-                checkShape.modifier(TimedReveal(range: check, style: .wipe))
-            }
-            .opacity(settled ? 0 : 1)
-            ZStack {
-                ringShape
-                checkShape
-            }
-            .opacity(drawn ? 1 : 0)
+            ringShape.modifier(TimedReveal(range: ring, style: .ring))
+            checkShape.modifier(TimedReveal(range: check, style: .wipe))
         }
         .frame(width: IslandLayout.chosenBadge, height: IslandLayout.chosenBadge)
     }
@@ -529,16 +497,7 @@ struct CheckShape: Shape {
     }
 }
 
-/// 顶上一行右边的金额；选好以后留着，最后往上走掉
-struct HeaderAmount: View {
-    let state: CategoryActivityAttributes.ContentState
-
-    var body: some View {
-        AmountText(amount: state.amount)
-            .leaveWith(state)
-    }
-}
-
+/// 顶上一行右边的金额；选好以后留着
 struct AmountText: View {
     let amount: String
 
@@ -578,10 +537,7 @@ struct PickerBody: View {
 
     var body: some View {
         Group {
-            if state.isLeaving {
-                // 选好了、没有下一笔：整页往上走掉，岛接着收回去
-                Color.clear
-            } else if let chosen = state.chosen {
+            if let chosen = state.chosen {
                 // 锁屏卡片：和岛上选好的一行一样（岛上用 `IslandBottom`）
                 ChosenRow(state: state, chosen: chosen)
                     .chosenReveal(state.step)
@@ -671,15 +627,14 @@ struct LockScreenCard: View {
         VStack(spacing: 6) {
             HStack {
                 HeaderLeading(state: state, inline: true)
-                    .leaveWith(state)
                     .islandSwap(state.headerKey, back: state.isBack)
                 Spacer(minLength: 8)
-                HeaderAmount(state: state)
+                AmountText(amount: state.amount)
                     .islandSwap(state.amountKey, back: state.isBack)
             }
             .frame(height: 30)
             PickerBody(state: state)
-                .islandSwap(state.screenKey, back: state.isBack)
+                .islandSwap(state.bottomKey, back: state.isBack)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)

@@ -53,14 +53,9 @@ enum LiveCategoryActivity {
     ]
     /// 点到分类后多久开始画圆圈（快到位时）：系统到点自己画圆圈、接着画对勾（`ContentState.ringStart`）
     private static let ringDelay: TimeInterval = 0.8
-    /// 圆圈和对勾画完后多久淡入上面不跟着时间画的那份（`drawn`）；它淡入完（约 0.35 秒）再淡出下面按时间画的那份（`settled`），
-    /// 那份淡得差不多了再往上走掉
-    private static let drawnDelay: Duration = .milliseconds(50)
-    private static let settleDelay: Duration = .milliseconds(380)
-    private static let leaveDelay: Duration = .milliseconds(300)
-    /// 往上走掉以后再结束或换下一笔。实时活动的动画用系统自己的时长（ActivityKit 文档：忽略 `animation` 修饰符），
-    /// 0.35 秒就结束，往上走还没走完岛就收了（录屏里往上走约 0.4 秒）；留 0.5 秒
-    private static let leaveTime: Duration = .milliseconds(500)
+    /// 圆圈和对勾画完后停多久，再收起灵动岛或换下一笔。画完以后这中间不发更新：
+    /// 每次更新按时间画的进度条都会暗一下，圆圈和对勾跟着闪（真机录屏逐帧看的）
+    private static let doneDisplay: Duration = .milliseconds(600)
     /// 没有灵动岛时提醒横幅的声音：一段没有声音的文件（提醒必须带声音；短信、推送本身已经响过，截图是自己敲的）
     private static let silentSound = "Silence.wav"
     /// 新开启的岛先放提醒多久，再换成按钮：系统自己展开几秒没有公开的数字，用户在真机上量的是 3 秒，试过 3 秒刚好
@@ -163,7 +158,8 @@ enum LiveCategoryActivity {
     }
 
     /// 点到一个分类：岛上一步一步换成选好的样子（`ChosenStep`，一步一次更新，每步等上一步的动画放完）：
-    /// 按钮淡出 → 选好的一行从下往上出来 → 圆圈画一圈 → 对勾画出来 → 整块往上走掉，再结束或换成排着的下一笔；岛的大小一直不变。
+    /// 按钮淡出 → 选好的一行从下往上出来 → 圆圈画一圈 → 对勾画出来 → 停一下，没有排着的就收起灵动岛，有就直接换成下一笔；
+    /// 岛的大小一直不变。画圆圈和对勾是系统按时间画的，画完以后不再发更新（每次更新它们都会闪一下）。
     /// 第一步放出来就写进账本（学习和通知上选分类一样），不等写完再显示，点了不用多等。
     /// 写不进去（开机后还没解锁过）时岛换回按钮，可以再点或单点打开 App；这一笔已经删了就直接换下一笔
     @MainActor
@@ -207,20 +203,17 @@ enum LiveCategoryActivity {
         NotificationCenter.default.post(name: .ledgerDidChange, object: nil)
         guard let activity else { return }
         // 后面几步到点再走。这期间来了新的一笔、岛已经换成它了，就不动
-        let drawnAt = Duration.seconds(ringDelay + ringSeconds + checkSeconds) + drawnDelay
-        let steps = chosenSteps + [
-            (CategoryActivityAttributes.ChosenStep.drawn, drawnAt), (.settled, drawnAt + settleDelay),
-        ]
-        for (step, time) in steps {
+        for (step, time) in chosenSteps {
             try? await Task.sleep(until: shownAt + time, clock: .continuous)
             guard activity.content.state.recordID == recordID, activity.content.state.chosen != nil else { return }
             var next = activity.content.state
             next.chosenStep = step
             await present(activity, next)
         }
-        try? await Task.sleep(until: shownAt + drawnAt + settleDelay + leaveDelay, clock: .continuous)
+        let doneAt = Duration.seconds(ringDelay + ringSeconds + checkSeconds) + doneDisplay
+        try? await Task.sleep(until: shownAt + doneAt, clock: .continuous)
         guard activity.content.state.recordID == recordID else { return }
-        await advance(activity, from: recordID, backend: backend, leave: true)
+        await advance(activity, from: recordID, backend: backend)
     }
 
     /// 写不进账本：岛上换回这一笔的按钮
@@ -344,12 +337,11 @@ enum LiveCategoryActivity {
     // MARK: 下一笔
 
     /// 岛上这一笔选好了（或者在 App 里选了、删了）：换成排着的最近一笔，跳过已经分好类、删了的；没有了就结束。
-    /// 在同一个岛上接着换内容，不提醒：展开着就还展开着，收着就还收着。
-    /// `leave`：在岛上选好的，选好的样子先往上走掉，再结束（和岛收回去的方向一样）或换下一笔
+    /// 在同一个岛上接着换内容（整页滚过去），不提醒：展开着就还展开着，收着就还收着。
+    /// 结束时不给最后的内容（nil，用岛上现在的）：不再更新一次，画好的圆圈和对勾不闪
     @MainActor
     private static func advance(
-        _ activity: Activity<CategoryActivityAttributes>, from recordID: String, backend: LedgerBackend,
-        leave: Bool = false
+        _ activity: Activity<CategoryActivityAttributes>, from recordID: String, backend: LedgerBackend
     ) async {
         clearStored(recordID)
         var queue = loadQueue()
@@ -366,17 +358,11 @@ enum LiveCategoryActivity {
             break
         }
         saveQueue(queue)
-        if leave {
-            var leaving = activity.content.state
-            leaving.chosenStep = .leaving
-            await present(activity, leaving)
-            try? await Task.sleep(for: leaveTime)
-        }
         if let upcoming {
             await present(activity, upcoming)
             return
         }
-        await activity.end(leave ? ActivityContent(state: activity.content.state, staleDate: nil) : nil, dismissalPolicy: .immediate)
+        await activity.end(nil, dismissalPolicy: .immediate)
     }
 
     /// 排着的这一笔还要选：还在、还没分类、有分类可选
