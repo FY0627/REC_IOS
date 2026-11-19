@@ -224,7 +224,7 @@ docker run --rm -v "<仓库>/ios-swift/Packages/BKCore:/pkg:ro" bk-swift bash -l
 | 深色 | `AppIconDark`：默认外观也用深色的颜色 |
 
 - 三个 `.icon` 的图层一样，只有 `icon.json` 里的颜色不同；改图形或颜色时三个一起改。着色外观三个都一样。
-- 「我的 › 图标」不写浅色、深色的文字菜单，三个图标直接排出来点选（`UI/Profile/AppIconPicker.swift`；跟随系统的左上半浅色、右下半深色）。
+- 「我的 › 图标」不写浅色、深色的文字菜单，三个图标直接排出来点选，不写名字（`UI/Profile/AppIconPicker.swift`；跟随系统的左上半浅色、右下半深色）。
   系统不给读备用图标的图，预览用资源目录 `Assets.xcassets/IconLayers` 里同一套 SVG 图层按 `icon.json` 的颜色画平面版；改图形或颜色时这里也一起改。
 - 构建设置 `ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = "AppIconLight AppIconDark"` 让 actool 把两个备用图标编进去，
   写进 Info.plist 的 `CFBundleAlternateIcons`（CI 第 6 步检查）。

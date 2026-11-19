@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// 「我的 › 显示 › 图标」：三个桌面图标直接排出来点选，一眼看得出哪个浅色、哪个深色。
-/// 跟随系统的那个左上半浅色、右下半深色。
+/// 只放图标不写名字；跟随系统的那个左上半浅色、右下半深色。
 struct AppIconPicker: View {
     @Binding var selection: String
 
@@ -11,21 +11,17 @@ struct AppIconPicker: View {
             HStack(spacing: 0) {
                 ForEach(AppearanceMode.allCases) { mode in
                     let selected = selection == mode.rawValue
+                    // 只放图标，不写名字：看图标就知道是哪个（名字用 `L` 算，换语言时「我的」不重建，会停在原来的语言）
                     Button { selection = mode.rawValue } label: {
-                        VStack(spacing: 6) {
-                            AppIconPreview(mode: mode)
-                                .frame(width: 60, height: 60)
-                                .padding(3)
-                                .overlay {
-                                    RoundedRectangle(cornerRadius: 17, style: .continuous)
-                                        .strokeBorder(selected ? AnyShapeStyle(.tint) : AnyShapeStyle(Color.clear), lineWidth: 2)
-                                }
-                            Text(mode.title)
-                                .font(.caption)
-                                .foregroundStyle(selected ? AnyShapeStyle(.tint) : AnyShapeStyle(Color.primary))
-                        }
-                        .frame(maxWidth: .infinity)
-                        .contentShape(Rectangle())
+                        AppIconPreview(mode: mode)
+                            .frame(width: 60, height: 60)
+                            .padding(3)
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 17, style: .continuous)
+                                    .strokeBorder(selected ? AnyShapeStyle(.tint) : AnyShapeStyle(Color.clear), lineWidth: 2)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(mode.title)
