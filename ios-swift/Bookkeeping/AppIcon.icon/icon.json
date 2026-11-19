@@ -8,13 +8,13 @@
     {
       "appearance": "dark",
       "value": {
-        "solid": "srgb:0.04314,0.11765,0.22745,1.00000"
+        "solid": "srgb:0.07843,0.07843,0.09020,1.00000"
       }
     },
     {
       "appearance": "tinted",
       "value": {
-        "solid": "extended-gray:0.04007,1.00000"
+        "solid": "extended-gray:0.04000,1.00000"
       }
     }
   ],
@@ -22,12 +22,31 @@
     {
       "layers": [
         {
-          "glass": false,
-          "image-name": "front.png",
+          "fill-specializations": [
+            {
+              "value": {
+                "solid": "srgb:1.00000,0.78431,0.19608,1.00000"
+              }
+            },
+            {
+              "appearance": "dark",
+              "value": {
+                "solid": "srgb:1.00000,0.81569,0.27059,1.00000"
+              }
+            },
+            {
+              "appearance": "tinted",
+              "value": {
+                "solid": "extended-gray:0.92000,1.00000"
+              }
+            }
+          ],
+          "glass": true,
+          "image-name": "front.svg",
           "name": "front"
         }
       ],
-      "lighting": "combined",
+      "lighting": "individual",
       "name": "Front",
       "shadow": {
         "kind": "neutral",
@@ -35,19 +54,134 @@
       },
       "specular": true,
       "translucency": {
-        "enabled": false,
-        "value": 0.1
+        "enabled": true,
+        "value": 0.35
       }
     },
     {
       "layers": [
         {
-          "glass": false,
-          "image-name": "fillings.png",
-          "name": "fillings"
+          "fill-specializations": [
+            {
+              "value": {
+                "solid": "srgb:0.20392,0.78039,0.34902,1.00000"
+              }
+            },
+            {
+              "appearance": "dark",
+              "value": {
+                "solid": "srgb:0.18824,0.81961,0.34510,1.00000"
+              }
+            },
+            {
+              "appearance": "tinted",
+              "value": {
+                "solid": "extended-gray:0.72000,1.00000"
+              }
+            }
+          ],
+          "glass": true,
+          "image-name": "lettuce.svg",
+          "name": "lettuce"
+        },
+        {
+          "fill-specializations": [
+            {
+              "value": {
+                "solid": "srgb:0.68235,0.68235,0.69804,1.00000"
+              }
+            },
+            {
+              "appearance": "dark",
+              "value": {
+                "solid": "srgb:0.55686,0.55686,0.57647,1.00000"
+              }
+            },
+            {
+              "appearance": "tinted",
+              "value": {
+                "solid": "extended-gray:0.55000,1.00000"
+              }
+            }
+          ],
+          "glass": true,
+          "image-name": "lines.svg",
+          "name": "lines"
+        },
+        {
+          "fill-specializations": [
+            {
+              "value": {
+                "solid": "srgb:1.00000,1.00000,1.00000,1.00000"
+              }
+            },
+            {
+              "appearance": "dark",
+              "value": {
+                "solid": "srgb:0.94902,0.94902,0.96863,1.00000"
+              }
+            },
+            {
+              "appearance": "tinted",
+              "value": {
+                "solid": "extended-gray:1.00000,1.00000"
+              }
+            }
+          ],
+          "glass": true,
+          "image-name": "receipts.svg",
+          "name": "receipts"
+        },
+        {
+          "fill-specializations": [
+            {
+              "value": {
+                "solid": "srgb:0.00000,0.31373,0.72157,1.00000"
+              }
+            },
+            {
+              "appearance": "dark",
+              "value": {
+                "solid": "srgb:0.00000,0.38431,0.83922,1.00000"
+              }
+            },
+            {
+              "appearance": "tinted",
+              "value": {
+                "solid": "extended-gray:0.42000,1.00000"
+              }
+            }
+          ],
+          "glass": true,
+          "image-name": "stripe.svg",
+          "name": "stripe"
+        },
+        {
+          "fill-specializations": [
+            {
+              "value": {
+                "solid": "srgb:0.03922,0.47843,1.00000,1.00000"
+              }
+            },
+            {
+              "appearance": "dark",
+              "value": {
+                "solid": "srgb:0.03922,0.51765,1.00000,1.00000"
+              }
+            },
+            {
+              "appearance": "tinted",
+              "value": {
+                "solid": "extended-gray:0.66000,1.00000"
+              }
+            }
+          ],
+          "glass": true,
+          "image-name": "card.svg",
+          "name": "card"
         }
       ],
-      "lighting": "combined",
+      "lighting": "individual",
       "name": "Fillings",
       "shadow": {
         "kind": "neutral",
@@ -55,28 +189,47 @@
       },
       "specular": true,
       "translucency": {
-        "enabled": false,
-        "value": 0.1
+        "enabled": true,
+        "value": 0.2
       }
     },
     {
       "layers": [
         {
-          "glass": false,
-          "image-name": "back.png",
+          "fill-specializations": [
+            {
+              "value": {
+                "solid": "srgb:0.89804,0.60392,0.07843,1.00000"
+              }
+            },
+            {
+              "appearance": "dark",
+              "value": {
+                "solid": "srgb:0.94118,0.64706,0.14902,1.00000"
+              }
+            },
+            {
+              "appearance": "tinted",
+              "value": {
+                "solid": "extended-gray:0.55000,1.00000"
+              }
+            }
+          ],
+          "glass": true,
+          "image-name": "back.svg",
           "name": "back"
         }
       ],
-      "lighting": "combined",
+      "lighting": "individual",
       "name": "Back",
       "shadow": {
-        "kind": "none",
+        "kind": "neutral",
         "opacity": 0.5
       },
-      "specular": false,
+      "specular": true,
       "translucency": {
-        "enabled": false,
-        "value": 0.1
+        "enabled": true,
+        "value": 0.15
       }
     }
   ],
