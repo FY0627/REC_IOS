@@ -2,13 +2,13 @@
   "fill-specializations": [
     {
       "value": {
-        "solid": "srgb:1.00000,0.95686,0.89020,1.00000"
+        "solid": "srgb:1.00000,1.00000,1.00000,1.00000"
       }
     },
     {
       "appearance": "dark",
       "value": {
-        "solid": "srgb:1.00000,0.95686,0.89020,1.00000"
+        "solid": "srgb:1.00000,1.00000,1.00000,1.00000"
       }
     },
     {
@@ -21,30 +21,6 @@
   "groups": [
     {
       "layers": [
-        {
-          "fill-specializations": [
-            {
-              "value": {
-                "solid": "srgb:0.99608,0.84706,0.36078,1.00000"
-              }
-            },
-            {
-              "appearance": "dark",
-              "value": {
-                "solid": "srgb:0.99608,0.84706,0.36078,1.00000"
-              }
-            },
-            {
-              "appearance": "tinted",
-              "value": {
-                "solid": "extended-gray:0.98000,1.00000"
-              }
-            }
-          ],
-          "glass": true,
-          "image-name": "rim.svg",
-          "name": "rim"
-        },
         {
           "fill-specializations": [
             {
@@ -74,12 +50,12 @@
       "name": "Front",
       "shadow": {
         "kind": "neutral",
-        "opacity": 0.5
+        "opacity": 0.25
       },
       "specular": true,
       "translucency": {
-        "enabled": true,
-        "value": 0.35
+        "enabled": false,
+        "value": 0.5
       }
     },
     {
@@ -209,12 +185,12 @@
       "name": "Fillings",
       "shadow": {
         "kind": "neutral",
-        "opacity": 0.5
+        "opacity": 0.25
       },
       "specular": true,
       "translucency": {
-        "enabled": true,
-        "value": 0.2
+        "enabled": false,
+        "value": 0.5
       }
     },
     {
@@ -248,12 +224,12 @@
       "name": "Back",
       "shadow": {
         "kind": "neutral",
-        "opacity": 0.5
+        "opacity": 0.25
       },
       "specular": true,
       "translucency": {
-        "enabled": true,
-        "value": 0.15
+        "enabled": false,
+        "value": 0.5
       }
     }
   ],
