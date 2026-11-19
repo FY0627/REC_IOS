@@ -21,23 +21,27 @@ struct ShortcutsView: View {
 
     var body: some View {
         List {
-            // 分段选择放在一个空分组的标题位置：上面贴着导航栏（和「我的 › 分类」一样），
-            // 下面和设置隔开一组的距离（放在一行里时上面空一大段）
-            Section {} header: {
-                Picker("快捷指令", selection: $kind) {
-                    ForEach(Kind.allCases, id: \.self) { Text($0.title).tag($0) }
-                }
-                .pickerStyle(.segmented)
-                .textCase(nil)
-                .listRowInsets(EdgeInsets())
-            }
             switch kind {
-            case .bank: AutoSetupSections()
-            case .screenshot: ScreenshotSetupSections()
-            case .rates: ExchangeRateSetupSections()
+            case .bank: AutoSetupSections(header: picker)
+            case .screenshot: ScreenshotSetupSections(header: picker)
+            case .rates: ExchangeRateSetupSections(header: picker)
             }
         }
         .navigationTitle("快捷指令")
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    /// 放在第一组的标题位置（和「我的 › 分类」一样）：上面贴着导航栏，下面和设置隔开固定的一段。
+    /// 单独占一行或一个空分组时，上面或下面会多出一大段
+    private var picker: AnyView {
+        AnyView(
+            Picker("快捷指令", selection: $kind) {
+                ForEach(Kind.allCases, id: \.self) { Text($0.title).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            .textCase(nil)
+            .listRowInsets(EdgeInsets())
+            .padding(.bottom, 16)
+        )
     }
 }

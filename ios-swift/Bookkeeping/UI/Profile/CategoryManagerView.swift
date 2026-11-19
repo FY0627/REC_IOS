@@ -6,7 +6,7 @@ import BKBackend
 /// 删除时原来的记录回到待分类，记录不删。转帐和系统分类（手续费、扣息）自动记账要用，只能改名、换图标。
 ///
 /// 分类排成和记账页一样的格子（同一个 `CategoryGrid`）：点一下打开分类（只改名称和图标），有小类的先展开；
-/// 大类和小类两行最后一格是「添加」；长按拖动排顺序，小类拖到别的大类上就挪进去；长按一浮起来就在旁边弹出删除（样子和系统菜单一样），手指挪开就收起（和 iPhone 主屏幕一样）。
+/// 大类和小类两行最后一格是「添加」；长按拖动排顺序，小类拖到别的大类上就挪进去；拖到屏幕下方的删除图标上松手就删掉，不弹菜单。
 /// 都存进账本，记账页、通知、灵动岛跟着变
 struct CategoryManagerView: View {
     @Environment(LedgerStore.self) private var store
@@ -39,14 +39,13 @@ struct CategoryManagerView: View {
         .navigationTitle("分类")
         // 拖动时列表不滚，浮起来的图标盖在整个列表上
         .scrollDisabled(arrangement.active)
-        // 长按弹出的菜单和浮起来的图标都盖在整个列表上
+        // 删除图标和浮起来的图标都盖在整个列表上
         .overlay {
             ZStack {
-                CategoryMenuOverlay(arrangement: arrangement)
+                CategoryDeleteZone(arrangement: arrangement)
                 CategoryDragOverlay(arrangement: arrangement)
             }
         }
-        .onChange(of: type) { arrangement.menu = nil }
         .navigationDestination(item: $opened) { id in
             CategoryDetailView(categoryID: id)
         }
@@ -86,7 +85,7 @@ private struct CategoryForm: View {
     }
 }
 
-/// 一个分类：只改名称和图标（小类在分类页上排，删除在分类页上长按）
+/// 一个分类：只改名称和图标（小类在分类页上排，删除是在分类页上拖到删除图标上）
 private struct CategoryDetailView: View {
     let categoryID: String
 

@@ -41,7 +41,7 @@ public struct LedgerCategory: Identifiable, Hashable, Sendable {
     /// SF Symbols 图标名
     public var symbol: String
     public var sortOrder: Int
-    /// 隐藏：记账时不出现，已有记录不变
+    /// 已删除（「我的 › 分类」里删的）：选分类、建议、自动归类里不出现，原来记在上面的流水照样显示它
     public var hidden: Bool
     /// 自动归类用的标识（手续费、扣息、工资、转帐……）；用户自己加的分类为 nil
     public var autoKey: String?
@@ -108,7 +108,7 @@ public struct CategoryTree: Hashable, Sendable {
         self.all = all
     }
 
-    /// 某种类型的大类和小类；`includeHidden` 为 false 时去掉隐藏的
+    /// 某种类型的大类和小类；`includeHidden` 为 false 时去掉已删除的
     public func nodes(_ type: CategoryType, includeHidden: Bool = false) -> [Node] {
         let visible = all.filter { $0.type == type && (includeHidden || !$0.hidden) }
         let children = Dictionary(grouping: visible.filter { $0.parentID != nil }, by: { $0.parentID ?? "" })

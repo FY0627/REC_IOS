@@ -572,9 +572,10 @@ final class LedgerTypeTests: XCTestCase {
 
         try await backend.deleteCategory(id: pets.id, moveRecordsTo: nil)
         row = try await backend.records().first
-        XCTAssertNil(row?.category, "删除分类：记录回到待分类，不删记录")
-        let categories = try await backend.categories()
-        XCTAssertFalse(categories.contains { $0.id == pets.id || $0.id == food.id })
+        XCTAssertEqual(row?.category?.fullName, "宠物 · 猫粮和猫砂", "删除分类：原来的流水还记在上面")
+        let tree = CategoryTree(try await backend.categories())
+        XCTAssertFalse(tree.nodes(.expense).contains { $0.id == pets.id }, "删掉的分类选不到")
+        XCTAssertTrue(tree.category(pets.id)?.hidden == true && tree.category(food.id)?.hidden == true, "大类连小类一起删")
 
         let fee = try await category(backend, "手续费")
         do {

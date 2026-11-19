@@ -223,9 +223,9 @@ enum DataExport {
 
     // MARK: 分类
 
-    static let categoryHeader = ["编号", "类型", "大类", "名称", "图标", "顺序", "隐藏", "系统标识", "不能删除"]
+    static let categoryHeader = ["编号", "类型", "大类", "名称", "图标", "顺序", "已删除", "系统标识", "不能删除"]
 
-    /// 按分类页的顺序：大类后面跟着它的小类，隐藏的也在
+    /// 按分类页的顺序：大类后面跟着它的小类，删除了的也在（流水还记在上面）
     static func categoryRows(_ tree: CategoryTree) -> [[String]] {
         CategoryType.allCases.flatMap { type in
             tree.nodes(type, includeHidden: true).flatMap { node in

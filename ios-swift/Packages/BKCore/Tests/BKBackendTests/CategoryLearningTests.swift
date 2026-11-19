@@ -465,18 +465,21 @@ final class CategoryLearningTests: XCTestCase {
         XCTAssertEqual(suggestions.categories.first?.id, other.id, "选过的记录跟着流水走")
     }
 
-    func testDeletingCategoryWithoutTargetForgetsIt() async throws {
+    func testDeletingCategoryWithoutTargetKeepsRecordsButForgetsIt() async throws {
         let backend = try await makeBackend()
         let daily = try await category(backend, "日用品")
         for _ in 0..<3 { try await spendAndPick(backend, at: "测试超市", daily.id) }
         let auto = try await spend(backend, at: "测试超市")
         try await backend.deleteCategory(id: daily.id, moveRecordsTo: nil)
 
-        let back = try await record(backend, auto.recordID)
-        XCTAssertNil(back.category)
-        XCTAssertFalse(back.record.categoryAuto, "回到待分类，不再是自动归类的")
-        let suggestions = try await backend.categorySuggestions(recordID: back.id)
+        let kept = try await record(backend, auto.recordID)
+        XCTAssertEqual(kept.category?.id, daily.id, "原来的流水还记在删掉的分类上")
+        let next = try await spend(backend, at: "测试超市")
+        let row = try await record(backend, next.recordID)
+        XCTAssertNil(row.category, "删掉的分类不再自动归类")
+        let suggestions = try await backend.categorySuggestions(recordID: row.id)
         XCTAssertNil(suggestions.preferredID, "这个商户学到的清掉了")
+        XCTAssertFalse(suggestions.categories.contains { $0.id == daily.id }, "删掉的分类不当建议")
     }
 
     // MARK: 升级时回放

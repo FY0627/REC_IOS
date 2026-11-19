@@ -14,12 +14,16 @@ struct ScreenshotSetupGuideView: View {
 
 /// 「设置截图记账」的内容：「我的」里的设置页和新手引导共用
 struct ScreenshotSetupSections: View {
+    /// 放在第一组标题位置的东西：「我的 › 快捷指令」放分段选择
+    var header: AnyView?
     @Environment(\.openURL) private var openURL
 
     var body: some View {
         if SharedShortcuts.available {
             Section {
                 Button("添加快捷指令", systemImage: "plus.square.on.square") { openURL(SharedShortcuts.paymentScreenshot) }
+            } header: {
+                header
             }
             Section {
                 Text(Self.sharedLine)
@@ -29,6 +33,8 @@ struct ScreenshotSetupSections: View {
                 Button("打开快捷指令", systemImage: "arrow.up.forward.app") {
                     if let url = URL(string: "shortcuts://") { openURL(url) }
                 }
+            } header: {
+                header
             }
             Section {
                 ForEach(Array(Self.steps.enumerated()), id: \.offset) { index, step in

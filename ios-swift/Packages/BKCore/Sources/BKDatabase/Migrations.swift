@@ -248,7 +248,7 @@ public enum Migrations {
         ALTER TABLE records ADD COLUMN merged_category_id TEXT;
         ALTER TABLE records ADD COLUMN merged_category_auto INTEGER NOT NULL DEFAULT 0;
         """),
-        // 「我的 › 分类」不再能隐藏分类（2026-11-19）：以前隐藏的都显示出来，免得找不回来。`hidden` 列留着不用
+        // 「我的 › 分类」不再能隐藏分类（2026-11-19）：以前隐藏的都显示出来，免得找不回来。之后 `hidden` 用来标记删除了的分类（流水还记在上面）
         (13, """
         UPDATE categories SET hidden = 0 WHERE hidden <> 0;
         """),

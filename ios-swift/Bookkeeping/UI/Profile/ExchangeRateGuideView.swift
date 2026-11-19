@@ -17,6 +17,8 @@ struct ExchangeRateGuideView: View {
 
 /// 「用快捷指令更新汇率」的内容：「我的 › 快捷指令」和新手引导共用
 struct ExchangeRateSetupSections: View {
+    /// 放在第一组标题位置的东西：「我的 › 快捷指令」放分段选择
+    var header: AnyView?
     @Environment(\.openURL) private var openURL
     @State private var copied = false
 
@@ -38,6 +40,8 @@ struct ExchangeRateSetupSections: View {
                     if let url = URL(string: "shortcuts://") { leave(to: url) }
                 }
             }
+        } header: {
+            header
         }
 
         if sharedShortcutWorks {

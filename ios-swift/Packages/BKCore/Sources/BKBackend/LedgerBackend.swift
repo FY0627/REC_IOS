@@ -704,8 +704,9 @@ public final class LedgerBackend: Sendable {
         }
     }
 
-    /// 删除分类（连同它的小类）。原来记在上面的流水改记到 `moveRecordsTo`；nil 时回到待分类。记录不删。
-    /// 学到的跟着流水走，但不再自动归类，要重新学；回到待分类时清掉
+    /// 删除分类（连同它的小类）。原来记在上面的流水改记到 `moveRecordsTo`，学到的跟着流水走，但不再自动归类，要重新学。
+    /// `moveRecordsTo` 为 nil（「我的 › 分类」里拖到删除图标上）时不动原来的流水：分类只标成删除（`hidden`），
+    /// 流水列表、统计照样显示它；选分类、建议、自动归类、灵动岛和通知上不再出现。这个分类学到的清掉
     public func deleteCategory(id: String, moveRecordsTo targetID: String?) async throws {
         try await database.write { db in
             guard let category = try CategoryDAO.find(db, id: id) else { throw BackendError.notFound }
@@ -716,12 +717,13 @@ public final class LedgerBackend: Sendable {
                     throw BackendError.invalidCategory
                 }
             }
-            try RecordDAO.reassignCategory(db, from: removed, to: targetID)
-            if let targetID {
-                try MerchantCategoryDAO.move(db, from: removed, to: targetID, keepStreak: false)
-            } else {
+            guard let targetID else {
                 try MerchantCategoryDAO.remove(db, categoryIDs: removed)
+                for removedID in removed { try CategoryDAO.setHidden(db, id: removedID, hidden: true) }
+                return
             }
+            try RecordDAO.reassignCategory(db, from: removed, to: targetID)
+            try MerchantCategoryDAO.move(db, from: removed, to: targetID, keepStreak: false)
             for child in removed.dropFirst() { try CategoryDAO.delete(db, id: child) }
             try CategoryDAO.delete(db, id: id)
         }

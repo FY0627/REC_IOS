@@ -27,6 +27,8 @@ struct AutoSetupGuideView: View {
 
 /// 「设置自动记账」的内容：「我的」里的设置页和新手引导共用，两边一样
 struct AutoSetupSections: View {
+    /// 放在第一组标题位置的东西：「我的 › 快捷指令」放分段选择
+    var header: AnyView?
     @Environment(\.openURL) private var openURL
 
     private var useShared: Bool { SharedShortcuts.available }
@@ -40,6 +42,8 @@ struct AutoSetupSections: View {
             Section {
                 // 点「添加快捷指令」已经进了快捷指令 App，不再放「打开快捷指令」
                 Button("添加快捷指令", systemImage: "plus.square.on.square") { openURL(SharedShortcuts.bankMessage) }
+            } header: {
+                header
             }
             if choosesApps {
                 Section {
@@ -53,6 +57,8 @@ struct AutoSetupSections: View {
                 Button("打开快捷指令", systemImage: "arrow.up.forward.app") {
                     if let url = URL(string: "shortcuts://") { openURL(url) }
                 }
+            } header: {
+                header
             }
 
             steps(choosesApps ? Self.smsSteps : Self.sms26Steps)

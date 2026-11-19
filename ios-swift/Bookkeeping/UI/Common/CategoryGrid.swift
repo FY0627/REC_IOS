@@ -12,7 +12,7 @@ import BKModel
 ///
 /// 「我的 › 分类」也用它（`arrangement` 不为 nil）：点一下打开这个分类，有小类的先展开，
 /// 展开那一行第一格是大类自己。两行最后一格是「添加」（`add`）。长按拖动排顺序，其他图标让位；小类拖到上面的大类上，放下就挪进那个大类。
-/// 长按浮起来时像 iPhone 主屏幕那样马上在旁边弹出菜单（`CategoryMenuOverlay`，样子和系统菜单一样，只有删除），手指挪开就收起、变成拖动。
+/// 能删的分类浮起来时屏幕下方出现一个删除图标（`CategoryDeleteZone`），拖到上面松手就删掉；不弹菜单。
 struct CategoryGrid: View {
     let type: CategoryType
     var selected: String?
@@ -54,7 +54,7 @@ struct CategoryGrid: View {
 
     var body: some View {
         let tree = store.categoryTree
-        let nodes = arranged(tree.nodes(type), key: CategoryArrangement.topKey(type))
+        let nodes = arranged(tree.nodes(type), key: CategoryArrangement.topKey(type)).filter { $0.id != arrangement?.leaving }
         let selectedTop = tree.topLevel(selected)?.id
         let tops = nodes.map(\.id)
         let holders = Set(nodes.filter { !$0.category.locked }.map(\.id))
@@ -202,6 +202,12 @@ struct CategoryGrid: View {
         .accessibilityHint(Text(cell.hasChildren ? "展开小类" : ""))
         .accessibilityAddTraits(.isButton)
         .accessibilityAction { action() }
+        // 读屏时没法拖到删除图标上：动作里给一个删除
+        .accessibilityActions {
+            if level != nil, store.categoryTree.category(cell.id)?.locked == false {
+                Button("删除") { delete(cell.id) }
+            }
+        }
         if let level {
             // 点一下、长按到时间浮起来、跟着手指走是三个手势：长按和点一下互斥，跟手指的一直同时在跑，
             // 不和长按串成一个（串起来时手指一按下就算开始，点一下永远轮不到）
@@ -231,7 +237,7 @@ struct CategoryGrid: View {
         let center = CategoryGridLayout.center(of: index + offset, count: level.cellCount, in: frame)
         arrangement.begin(
             CategoryArrangement.Lift(
-                id: id, name: category.localizedName, symbol: category.symbol,
+                id: id, name: category.localizedName, symbol: category.symbol, deletable: !category.locked,
                 key: level.parentID ?? CategoryArrangement.topKey(type), parentID: level.parentID,
                 order: level.ids, original: level.ids, tops: level.tops, holders: level.holders,
                 cellCount: level.cellCount, topCount: level.topCount,
@@ -239,20 +245,22 @@ struct CategoryGrid: View {
             ),
             at: center
         )
-        // 和 iPhone 主屏幕一样：一浮起来就弹出菜单，不用等松手；手指挪开就收起，变成拖动
-        arrangement.menuAnchor = center
-        withAnimation(.snappy(duration: 0.2)) { arrangement.menu = hasMenu(id) ? id : nil }
     }
 
-    /// 大类在大类里让位；小类在自己那一行里让位，拖到上面的大类上时那个大类变大，放下就挪进去
+    /// 大类在大类里让位；小类在自己那一行里让位，拖到上面的大类上时那个大类变大，放下就挪进去。
+    /// 拖到下方的删除图标上时它变红、轻震一下，这时不让位
     private func follow(_ id: String, _ drag: DragGesture.Value) {
         guard let arrangement, var lift = arrangement.lift, lift.id == id, arrangement.settling == nil else { return }
         arrangement.follow(drag.location, start: drag.startLocation)
-        if arrangement.moved, arrangement.menu != nil {
-            withAnimation(.snappy(duration: 0.15)) { arrangement.menu = nil }
-        }
         let point = drag.location
-        if lift.parentID == nil {
+        let overDelete = lift.deletable && arrangement.deleteFrame.contains(point)
+        if overDelete != arrangement.overDelete {
+            if overDelete { arrangement.feedback(.target) }
+            withAnimation(.snappy(duration: 0.2)) { arrangement.overDelete = overDelete }
+        }
+        if overDelete {
+            lift.target = nil
+        } else if lift.parentID == nil {
             if let slot = CategoryGridLayout.slot(at: point, count: lift.cellCount, in: arrangement.topFrame) {
                 lift.move(to: min(slot, lift.order.count - 1))
             }
@@ -275,10 +283,26 @@ struct CategoryGrid: View {
         withAnimation(.snappy(duration: 0.25)) { arrangement.lift = lift }
     }
 
-    /// 松手：浮起来的图标先回到格子（或缩进拖到的大类），再存进账本。
-    /// 长按以后没动就松开：回到格子，浮起来时弹出的菜单留着（`CategoryMenuOverlay`），点一项或点别处收起
+    /// 松手：浮起来的图标先回到格子（或缩进拖到的大类、删除图标），再存进账本
     private func drop() {
         guard let arrangement, let lift = arrangement.lift, arrangement.settling == nil else { return }
+        if arrangement.overDelete {
+            arrangement.feedback(.drop)
+            withAnimation(.snappy(duration: 0.2)) {
+                arrangement.overDelete = false
+                arrangement.settle(at: CGPoint(x: arrangement.deleteFrame.midX, y: arrangement.deleteFrame.midY), into: true)
+            }
+            Task {
+                try? await Task.sleep(for: .milliseconds(200))
+                withAnimation(.snappy(duration: 0.3)) {
+                    arrangement.leaving = lift.id
+                    arrangement.finish()
+                }
+                await arrangement.run { try await store.deleteCategory(id: lift.id, moveRecordsTo: nil) }
+                arrangement.leaving = nil
+            }
+            return
+        }
         if !arrangement.moved, lift.order == lift.original, lift.target == nil {
             let offset = lift.parentID == nil ? 0 : 1
             let frame = lift.parentID == nil ? arrangement.topFrame : arrangement.childFrame
@@ -292,7 +316,6 @@ struct CategoryGrid: View {
             }
             return
         }
-        arrangement.menu = nil
         arrangement.feedback(.drop)
         if let target = lift.target, let index = lift.tops.firstIndex(of: target) {
             withAnimation(.snappy(duration: 0.2)) {
@@ -328,10 +351,10 @@ struct CategoryGrid: View {
         }
     }
 
-    /// 长按弹出的菜单只有删除：系统分类和转帐的分类（自动记账要用）不能删，不弹，长按直接拖
-    private func hasMenu(_ id: String) -> Bool {
-        guard let category = store.categoryTree.category(id) else { return false }
-        return !category.locked
+    /// 记录不删，回到待分类；大类连小类一起删
+    private func delete(_ id: String) {
+        guard let arrangement else { return }
+        Task { await arrangement.run { try await store.deleteCategory(id: id, moveRecordsTo: nil) } }
     }
 
     /// 「我的 › 分类」量两块格子在屏幕上的位置（手指在第几格按它算）；选分类时不量
@@ -434,6 +457,8 @@ final class CategoryArrangement {
         let id: String
         let name: String
         let symbol: String
+        /// 能删（不是系统分类）：拖起来时下方出现删除图标
+        let deletable: Bool
         /// 存顺序用的键：`topKey` 或所在大类的 id
         let key: String
         /// 小类所在的大类；大类是 nil
@@ -462,7 +487,7 @@ final class CategoryArrangement {
     enum Settling {
         /// 回到格子
         case back
-        /// 缩进拖到的大类
+        /// 缩进拖到的大类或删除图标
         case into
     }
 
@@ -478,13 +503,13 @@ final class CategoryArrangement {
     /// 挪去别的大类的小类：存好之前不在原来那一行
     var leaving: String?
     var failure: String?
-    /// 弹出菜单的分类：长按浮起来时弹出，手指挪开（开始拖动）收起，没挪就松手留着等点
-    var menu: String?
-    /// 菜单挨着的那一格的中心（屏幕坐标）
-    @ObservationIgnored var menuAnchor: CGPoint = .zero
+    /// 手指在下方的删除图标上：图标变红，松手就删
+    var overDelete = false
+    /// 删除图标那一块在屏幕上的位置（比图标大一圈，好拖进去）
+    @ObservationIgnored var deleteFrame: CGRect = .zero
 
     @ObservationIgnored private var grabbed = false
-    /// 浮起来以后手指挪开过（超过 10 点）：松手是放下，不弹菜单
+    /// 浮起来以后手指挪开过（超过 10 点）：没挪过就松手是原样放回
     @ObservationIgnored private(set) var moved = false
     @ObservationIgnored private var liftedAt: CGPoint = .zero
     /// 大类、小类两块格子在屏幕上的位置。滚动时一直在变，不触发重画
@@ -553,6 +578,7 @@ final class CategoryArrangement {
 
     func finish() {
         lift = nil
+        overDelete = false
         settling = nil
         active = false
     }
@@ -570,78 +596,34 @@ final class CategoryArrangement {
     }
 }
 
-/// 长按弹出的菜单，像 iPhone 主屏幕长按图标：挨着那一格，下面放不下就放在上面；其他东西不变暗，只有按着的那一格浮起来。
-/// 样子照系统菜单（Liquid Glass 的圆角底、左边图标右边文字，一行时是胶囊形）；现在只有删除（大类连小类一起删）。
-/// 不用系统的 `contextMenu`：放在列表里时它把整行格子一起浮起来、一起拖走，也不能接着手指拖动排顺序。
-/// 手指还按着时（可能接着拖）不挡触摸；松手以后点别处收起，点一项执行。盖在整个分类页上，和浮起来的图标一起
-struct CategoryMenuOverlay: View {
+/// 拖动能删的分类时屏幕下方出现的删除图标（只有垃圾桶，不写字）：拖到上面变红变大，松手就删（记录回到待分类，大类连小类一起删）。
+/// 系统分类和转帐的分类（自动记账要用）不能删，拖它们时不出现。盖在整个分类页上，不挡触摸
+struct CategoryDeleteZone: View {
     let arrangement: CategoryArrangement
-    @Environment(LedgerStore.self) private var store
-
-    private static let width: CGFloat = 250
-    private static let rowHeight: CGFloat = 52
-    /// 格子中心到格子上下边的距离（图标 48 + 名字一行）
-    private static let cellHalfHeight: CGFloat = 40
 
     var body: some View {
-        GeometryReader { proxy in
-            if let id = arrangement.menu, let category = store.categoryTree.category(id), !category.locked {
-                let frame = proxy.frame(in: .global)
-                let height = Self.rowHeight
-                let anchor = CGPoint(x: arrangement.menuAnchor.x - frame.minX, y: arrangement.menuAnchor.y - frame.minY)
-                let below = anchor.y + Self.cellHalfHeight + 10 + height <= proxy.size.height - 8
-                let y = below ? anchor.y + Self.cellHalfHeight + 10 + height / 2 : anchor.y - Self.cellHalfHeight - 10 - height / 2
-                let x = min(max(anchor.x, 16 + Self.width / 2), max(proxy.size.width - 16 - Self.width / 2, 16 + Self.width / 2))
-                ZStack {
-                    Color.clear
-                        .contentShape(Rectangle())
-                        .gesture(DragGesture(minimumDistance: 0).onEnded { _ in close() })
-                        .allowsHitTesting(arrangement.lift == nil)
-                    menu(category)
-                        .frame(width: Self.width)
-                        .position(x: x, y: y)
-                        .transition(.scale(scale: 0.6, anchor: below ? .top : .bottom).combined(with: .opacity))
-                        .allowsHitTesting(arrangement.lift == nil)
-                }
+        VStack {
+            Spacer()
+            if arrangement.lift?.deletable == true, arrangement.settling == nil {
+                let over = arrangement.overDelete
+                Image(systemName: "trash")
+                    .font(.system(size: 24, weight: .semibold))
+                    .foregroundStyle(over ? AnyShapeStyle(Color.white) : AnyShapeStyle(Color.red))
+                    .frame(width: 64, height: 64)
+                    .background(over ? AnyShapeStyle(Color.red) : AnyShapeStyle(Color.clear), in: Circle())
+                    .glassEffect(.regular, in: Circle())
+                    .scaleEffect(over ? 1.2 : 1)
+                    // 能拖进去的范围比图标大一圈
+                    .padding(28)
+                    .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { arrangement.deleteFrame = $0 }
+                    .transition(.scale(scale: 0.6).combined(with: .opacity))
+                    .accessibilityLabel(Text("删除"))
             }
         }
-    }
-
-    private func menu(_ category: LedgerCategory) -> some View {
-        // 记录不删，回到待分类；大类连小类一起删
-        let hasChildren = store.categoryTree.all.contains { $0.parentID == category.id }
-        return VStack(spacing: 0) {
-            row(hasChildren ? "连小类一起删除" : "删除", systemImage: "trash", role: .destructive) {
-                await arrangement.run { try await store.deleteCategory(id: category.id, moveRecordsTo: nil) }
-            }
-        }
-        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: Self.rowHeight / 2, style: .continuous))
-        .shadow(color: .black.opacity(0.12), radius: 20, y: 8)
-    }
-
-    private func row(_ title: LocalizedStringKey, systemImage: String, role: ButtonRole?, action: @escaping () async -> Void) -> some View {
-        Button(role: role) {
-            close()
-            Task { await action() }
-        } label: {
-            HStack(spacing: 14) {
-                Image(systemName: systemImage)
-                    .font(.body.weight(.medium))
-                    .frame(width: 24)
-                Text(title)
-                Spacer(minLength: 0)
-            }
-            .font(.body)
-            .padding(.horizontal, 22)
-            .frame(height: Self.rowHeight)
-            .contentShape(Rectangle())
-            .foregroundStyle(role == .destructive ? AnyShapeStyle(Color.red) : AnyShapeStyle(Color.primary))
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func close() {
-        withAnimation(.snappy(duration: 0.15)) { arrangement.menu = nil }
+        .frame(maxWidth: .infinity)
+        .padding(.bottom, 12)
+        .animation(.snappy(duration: 0.2), value: arrangement.lift?.id)
+        .allowsHitTesting(false)
     }
 }
 
