@@ -21,14 +21,15 @@ struct ShortcutsView: View {
 
     var body: some View {
         List {
-            // 分段选择单独占一组、不要白底：和下面的设置隔开一组的距离
-            Section {
+            // 分段选择放在一个空分组的标题位置：上面贴着导航栏（和「我的 › 分类」一样），
+            // 下面和设置隔开一组的距离（放在一行里时上面空一大段）
+            Section {} header: {
                 Picker("快捷指令", selection: $kind) {
                     ForEach(Kind.allCases, id: \.self) { Text($0.title).tag($0) }
                 }
                 .pickerStyle(.segmented)
+                .textCase(nil)
                 .listRowInsets(EdgeInsets())
-                .listRowBackground(Color.clear)
             }
             switch kind {
             case .bank: AutoSetupSections()
