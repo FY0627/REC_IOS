@@ -116,6 +116,26 @@ final class LedgerTypeTests: XCTestCase {
         XCTAssertEqual(cny.expenseCategories.first { $0.categoryID == clothes.id }?.amountMinor, 59_00)
     }
 
+    /// 首页每天的支出：按天分，减去退款，不算收入和转帐，没有支出的天不在结果里
+    func testDailyExpensesGroupByDay() async throws {
+        let backend = try makeBackend()
+        let cash = try await backend.addAccount(.pocket(name: "现金", type: .cash, currency: .cny, paletteID: "ocean"))
+        let wallet = try await backend.addAccount(.pocket(name: "零钱", type: .wallet, currency: .cny, paletteID: "ocean"))
+        let earlier = now.addingTimeInterval(-2 * 86_400)
+        try await backend.addRecord(ManualEntry(type: .expense, accountID: cash.id, amountMinor: 30_00, currency: .cny, time: now))
+        try await backend.addRecord(ManualEntry(type: .expense, accountID: cash.id, amountMinor: 24_00, currency: .cny, time: now))
+        try await backend.addRecord(ManualEntry(type: .expense, accountID: cash.id, amountMinor: 4_00, currency: .cny, isRefund: true, time: now))
+        try await backend.addRecord(ManualEntry(type: .income, accountID: cash.id, amountMinor: 500_00, currency: .cny, time: earlier))
+        try await backend.addRecord(ManualEntry(type: .transfer, accountID: cash.id, toAccountID: wallet.id, amountMinor: 80_00, currency: .cny, time: earlier))
+
+        let calendar = ParserSampleTests.calendar
+        let today = calendar.startOfDay(for: now)
+        let days = try await backend.dailyExpenses(
+            from: today.addingTimeInterval(-7 * 86_400), to: today.addingTimeInterval(86_400), convertTo: .cny
+        )
+        XCTAssertEqual(days, [today: 50_00], "收入、转帐不算，退款减掉；那天只有收入和转帐的不写")
+    }
+
     /// 自己记的退款（或者通知没写商户、找不到唯一原交易的）可以手动关联到原交易，两边都能发起，也能取消
     func testRefundCanBeLinkedToOriginalByHand() async throws {
         let backend = try makeBackend()

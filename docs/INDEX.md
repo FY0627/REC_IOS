@@ -22,9 +22,9 @@
 | 卡包、卡号、卡面、管理银行卡 | [0010](decisions/0010-ios-swift-card-number-and-face.md) | `UI/{Assets,Shell}/`、`BKModel/BankCatalog.swift` |
 | 卡包转场卡顿、玻璃按钮（UIKit + Core Animation） | [0012](decisions/0012-ios-swift-wallet-core-animation.md) | `UI/Assets/{WalletController,CardMotion}.swift`、`UI/Common/GlassControls.swift` |
 | 表结构、迁移、事务、并发 | [0007](decisions/0007-ios-swift-sqlite.md) | `BKDatabase/` |
-| 导出、导入 | [0019](decisions/0019-ios-swift-export-and-import.md) | `BKBackend/{DataExport,BackupImport,BackupExtras,ZipStore}.swift`、`UI/Profile/Data*View.swift` |
+| 导出（勾选导出哪几样）、导入 | [0019](decisions/0019-ios-swift-export-and-import.md) | `BKBackend/{DataExport,BackupImport,BackupExtras,ZipStore}.swift`、`UI/Profile/Data*View.swift` |
 | 演示数据 | [0025](decisions/0025-ios-swift-demo-ledger.md) | `App/DemoMode.swift`、`BKBackend/DemoLedger.swift` |
-| 「我的」页、主题色、反馈、新手引导 | [ios-swift/README.md](../ios-swift/README.md) | `UI/Profile/`、`UI/Shell/OnboardingView.swift` |
+| 「我的」页、快捷指令页、通知页、语言、主题色、反馈、新手引导 | [ios-swift/README.md](../ios-swift/README.md) | `UI/Profile/`（`ShortcutsView`、`NotificationSettingsView`）、`UI/Shell/OnboardingView.swift` |
 | 语言、翻译表 | [0022](decisions/0022-ios-swift-languages.md) | `App/AppLanguage.swift`、`ios-swift/Localization/` |
 | 真机验收、性能改动怎么测 | [guides/ios-swift-device-checklist.md](guides/ios-swift-device-checklist.md) | — |
 | CI、IPA、iLoader 安装与续签 | [guides/ios-swift-windows-iloader.md](guides/ios-swift-windows-iloader.md)、[0009](decisions/0009-ios-swift-ci-sideloadly.md)、[0016](decisions/0016-ios-swift-iloader.md) | `.github/workflows/ios-swift-build.yml`、`ios-swift/ci/` |

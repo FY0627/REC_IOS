@@ -23,7 +23,7 @@ struct ProfileView: View {
 
 /// 「我的」推进去的二级页面
 enum ProfileRoute: Hashable {
-    case language, primaryCurrency, exchangeRates, categories, autoSetup, screenshotSetup, categoryCheckup, templates, dataExport, dataImport, simulation
+    case shortcuts, notifications, primaryCurrency, exchangeRates, categories, autoSetup, screenshotSetup, categoryCheckup, templates, dataExport, dataImport, simulation
 }
 
 /// 「我的」的列表和导航栈。顶部一行和首页、资产页一样高、一样的位置；列表滚到它下面时垫一层磨砂背景（和首页一样）。
@@ -32,7 +32,6 @@ private struct ProfileList: View {
     @Binding var path: [ProfileRoute]
 
     @Environment(LedgerStore.self) private var store
-    @Environment(ExchangeRateStore.self) private var rates
     @AppStorage("appearance") private var appearance = AppearanceMode.system.rawValue
     @AppStorage(AppearanceMode.iconKey) private var appIcon = AppearanceMode.system.rawValue
     @AppStorage(ThemeColor.key) private var themeColor = ThemeColor.blue.rawValue
@@ -51,38 +50,31 @@ private struct ProfileList: View {
     @State private var versionTaps = 0
     @State private var lastVersionTap = Date.distantPast
     @State private var retention = 30
-    @State private var notifyDenied = false
     @State private var scrolledUnderBar = false
     @State private var choosingTheme = false
     @State private var showingOnboarding = false
     /// 导航栈外面的安全区：状态栏的高度
     @State private var stackSafeTop: CGFloat = 0
-    @Environment(\.openURL) private var openURL
 
     var body: some View {
         NavigationStack(path: $path) {
             List {
                 // 常用的在前面：自动记账、记账；外观这类设一次的放后面
                 Section("自动记账") {
-                    NavigationLink(value: ProfileRoute.autoSetup) {
-                        Label("设置自动记账", systemImage: "bolt.badge.automatic")
-                    }
-                    NavigationLink(value: ProfileRoute.screenshotSetup) {
-                        Label("设置截图记账", systemImage: "camera.viewfinder")
+                    // 自动记账、截图记账、更新汇率三个快捷指令都在这一页
+                    NavigationLink(value: ProfileRoute.shortcuts) {
+                        Label("快捷指令", systemImage: "bolt.badge.automatic")
                     }
                     NavigationLink(value: ProfileRoute.templates) {
                         Label("识别模板", systemImage: "text.viewfinder")
                     }
-                    // 菜单按钮右边的文字（选中的项）换了主题色不会马上重画，按主题色重建这一行
-                    Picker(selection: $notifyMode) {
-                        ForEach(IngestNotifier.Mode.allCases) { Text($0.title).tag($0.rawValue) }
-                    } label: {
-                        Label("记账结果", systemImage: "bell.badge")
-                    }
-                    .id("notify-\(themeColor)")
-                    .onChange(of: notifyMode) { _, mode in
-                        guard mode != IngestNotifier.Mode.off.rawValue else { return }
-                        askPermission { notifyMode = IngestNotifier.Mode.off.rawValue }
+                    // 记账结果、导入汇率两种通知，打开的下面有演示
+                    NavigationLink(value: ProfileRoute.notifications) {
+                        LabeledContent {
+                            Text(notificationStatus)
+                        } label: {
+                            Label("通知", systemImage: "bell.badge")
+                        }
                     }
                 }
 
@@ -96,20 +88,6 @@ private struct ProfileList: View {
                         } label: {
                             Label("主要币种", systemImage: "dollarsign.circle")
                         }
-                    }
-                    NavigationLink(value: ProfileRoute.exchangeRates) {
-                        LabeledContent {
-                            Text(rateStatus)
-                        } label: {
-                            Label("汇率", systemImage: "arrow.triangle.2.circlepath")
-                        }
-                    }
-                    Toggle(isOn: $notifyRates) {
-                        Label("导入汇率通知", systemImage: "arrow.left.arrow.right.circle")
-                    }
-                    .onChange(of: notifyRates) { _, on in
-                        guard on else { return }
-                        askPermission { notifyRates = false }
                     }
                 }
 
@@ -127,7 +105,7 @@ private struct ProfileList: View {
                     } label: {
                         Label("原始通知保留", systemImage: "clock.arrow.circlepath")
                     }
-                    .id("retention-\(themeColor)")
+                    .id("retention-\(themeColor)-\(language)")
                 }
 
                 Section("显示") {
@@ -136,13 +114,13 @@ private struct ProfileList: View {
                     } label: {
                         Label("外观", systemImage: "circle.lefthalf.filled")
                     }
-                    .id("appearance-\(themeColor)")
+                    .id("appearance-\(themeColor)-\(language)")
                     Picker(selection: $appIcon) {
                         ForEach(AppearanceMode.allCases) { Text($0.title).tag($0.rawValue) }
                     } label: {
                         Label("图标", systemImage: "app")
                     }
-                    .id("icon-\(themeColor)")
+                    .id("icon-\(themeColor)-\(language)")
                     .onChange(of: appIcon) { AppearanceMode.applyIcon() }
                     Button { choosingTheme = true } label: {
                         LabeledContent {
@@ -156,17 +134,18 @@ private struct ProfileList: View {
                         }
                         .background(UndimmedList())
                     }
-                    NavigationLink(value: ProfileRoute.language) {
-                        LabeledContent {
-                            Text((AppLanguage(rawValue: language) ?? .system).title)
-                        } label: {
-                            Label("语言", systemImage: "globe")
-                        }
+                    // 几种语言直接在菜单里选。「我的」不重建、原地换字（`RootView`），列表停在原处，选错了还在这一行改回来。
+                    // 每种语言用它自己的文字写，看不懂现在的语言也认得出来
+                    Picker(selection: Binding(get: { AppLanguage(rawValue: language) ?? .system }, set: { AppLanguage.select($0) })) {
+                        ForEach(AppLanguage.allCases) { Text($0.title).tag($0) }
+                    } label: {
+                        Label("语言", systemImage: "globe")
                     }
+                    .id("language-\(themeColor)-\(language)")
                 }
 
                 Section("关于") {
-                    LabeledContent("版本", value: BuildInfo.summary)
+                    LabeledContent("版本", value: BuildInfo.version)
                         .font(.subheadline.monospaced())
                         .contentShape(Rectangle())
                         .onTapGesture(perform: tapVersion)
@@ -235,14 +214,6 @@ private struct ProfileList: View {
             .sensoryFeedback(.success, trigger: showDevTools)
             .sheet(isPresented: $choosingTheme) { ThemeColorSheet(selection: $themeColor) }
             .fullScreenCover(isPresented: $showingOnboarding) { OnboardingView { showingOnboarding = false } }
-            .alert("没有通知权限", isPresented: $notifyDenied) {
-                Button("去设置") {
-                    if let url = URL(string: UIApplication.openNotificationSettingsURLString) { openURL(url) }
-                }
-                Button("取消", role: .cancel) {}
-            } message: {
-                Text("在系统设置里允许 Tacito 发送通知。")
-            }
             .alert("演示数据", isPresented: Binding(get: { store.demoError != nil }, set: { if !$0 { store.demoError = nil } })) {
                 Button("好", role: .cancel) {}
             } message: {
@@ -257,9 +228,10 @@ private struct ProfileList: View {
                 ToolbarItem(placement: .principal) { Color.clear.frame(width: 1, height: 1) }
                     .sharedBackgroundVisibility(.hidden)
             }
-            // 系统的大标题比资产页的标题行低，自己放一行
+            // 系统的大标题比资产页的标题行低，自己放一行。标题是 UIKit 画的，换语言时重建
             .safeAreaBar(edge: .top) {
                 TitleBar(title: "我的")
+                    .id(language)
                     .frame(height: GlassControls.size)
                     .padding(.horizontal, AppLayout.cardInset)
                     .padding(.top, stackSafeTop + 2)
@@ -290,7 +262,8 @@ private struct ProfileList: View {
     @ViewBuilder
     private func destination(_ route: ProfileRoute) -> some View {
         switch route {
-        case .language: LanguageSettingsView()
+        case .shortcuts: ShortcutsView()
+        case .notifications: NotificationSettingsView()
         case .primaryCurrency: CurrencyPicker(title: "主要币种", selection: primaryCurrencyList, multiple: false)
         case .exchangeRates: ExchangeRateGuideView()
         case .categories: CategoryManagerView()
@@ -314,18 +287,15 @@ private struct ProfileList: View {
         withAnimation { showDevTools.toggle() }
     }
 
-    /// 打开一种通知时要通知权限；被拒绝就关回去，提示去系统设置
-    private func askPermission(revert: @escaping () -> Void) {
-        Task {
-            if !(await IngestNotifier.requestAuthorization()) {
-                revert()
-                notifyDenied = true
-            }
+    /// 「通知」右边写开了哪几种
+    private var notificationStatus: String {
+        let results = (IngestNotifier.Mode(rawValue: notifyMode) ?? .off) != .off
+        switch (results, notifyRates) {
+        case (true, true): return L("记账结果、汇率")
+        case (true, false): return L("记账结果")
+        case (false, true): return L("汇率")
+        case (false, false): return L("关闭（通知）")
         }
-    }
-
-    private var rateStatus: String {
-        rates.rates.map { L("更新于 \(Fmt.dateTime($0.updatedAt))") } ?? L("尚未导入")
     }
 
     /// 选币种页面用的单选列表
@@ -358,11 +328,17 @@ private struct UndimmedList: UIViewRepresentable {
 }
 
 enum BuildInfo {
-    static var summary: String {
+    /// 「我的 › 关于」里显示的：版本号和构建号
+    static var version: String {
         let info = Bundle.main.infoDictionary ?? [:]
         let version = info["CFBundleShortVersionString"] as? String ?? "?"
         let build = info["CFBundleVersion"] as? String ?? "?"
-        let commit = (info["BKBuildCommit"] as? String).map { String($0.prefix(7)) } ?? L("本地构建")
-        return "\(version) (\(build)) · \(commit)"
+        return "\(version) (\(build))"
+    }
+
+    /// 反馈问卷里预先填的：再加上 CI 构建的提交（自己在 Xcode 里构建的没有）
+    static var summary: String {
+        guard let commit = Bundle.main.infoDictionary?["BKBuildCommit"] as? String else { return version }
+        return "\(version) · \(commit.prefix(7))"
     }
 }

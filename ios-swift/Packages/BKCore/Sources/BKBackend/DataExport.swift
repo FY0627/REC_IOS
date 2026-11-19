@@ -15,7 +15,19 @@ public struct DataExportSummary: Hashable, Sendable {
     }
 }
 
-/// 导出全部数据：一个 zip（`ZipStore`），里面一个文件夹，放每种数据一个 CSV（Numbers、Excel 都能打开），
+/// 导出哪几样账本的内容（卡面图片、设置是 App 给的 `extras`，不给就没有）
+public struct ExportParts: OptionSet, Hashable, Sendable {
+    public let rawValue: Int
+    public init(rawValue: Int) { self.rawValue = rawValue }
+
+    /// 能导回来的数据库副本（`DataExport.backupName`）
+    public static let database = ExportParts(rawValue: 1 << 0)
+    /// 每种数据一个 CSV，给人看
+    public static let tables = ExportParts(rawValue: 1 << 1)
+    public static let all: ExportParts = [.database, .tables]
+}
+
+/// 导出数据：一个 zip（`ZipStore`），里面一个文件夹，放每种数据一个 CSV（Numbers、Excel 都能打开），
 /// 和一份完整的数据库副本（`backupName`，「导入数据」读的就是它，见 `BackupImport`）。ADR 0019。
 ///
 /// - 账本以外的文件（卡面图片、「我的」里的设置，`BackupExtras`）由 App 给，放在同一个文件夹里；
@@ -27,15 +39,24 @@ enum DataExport {
     /// zip 里的数据库副本
     static let backupName = "备份（导入用）.sqlite"
 
-    /// 打成 zip：`folderName` 是 zip 里那个文件夹的名字，`extras` 是账本以外的文件（文件夹里的路径 → 内容）。不放说明文件
+    /// 打成 zip：`folderName` 是 zip 里那个文件夹的名字，`parts` 是放账本的哪几样（用户在导出页面勾选），
+    /// `extras` 是账本以外的文件（文件夹里的路径 → 内容）。不放说明文件
     static func archive(
-        _ db: SQLiteConnection, folderName: String, extras: [String: Data] = [:], calendar: Calendar, now: Date
+        _ db: SQLiteConnection, folderName: String, parts: ExportParts = .all, extras: [String: Data] = [:], calendar: Calendar, now: Date
     ) throws -> (data: Data, summary: DataExportSummary) {
         var entries: [ZipStore.Entry] = []
-        let summary = try tables(db, calendar: calendar) { name, text in
-            entries.append(ZipStore.Entry(name: "\(folderName)/\(name)", data: Data(text.utf8)))
+        var summary: DataExportSummary
+        if parts.contains(.tables) {
+            summary = try tables(db, calendar: calendar) { name, text in
+                entries.append(ZipStore.Entry(name: "\(folderName)/\(name)", data: Data(text.utf8)))
+            }
+        } else {
+            let info = try BackupImport.info(db)
+            summary = DataExportSummary(records: info.records, accounts: info.accounts, files: [])
         }
-        entries.append(ZipStore.Entry(name: "\(folderName)/\(backupName)", data: try databaseCopy(db)))
+        if parts.contains(.database) {
+            entries.append(ZipStore.Entry(name: "\(folderName)/\(backupName)", data: try databaseCopy(db)))
+        }
         for (path, data) in extras.sorted(by: { $0.key < $1.key }) {
             entries.append(ZipStore.Entry(name: "\(folderName)/\(path)", data: data))
         }

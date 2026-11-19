@@ -70,7 +70,7 @@ struct BookkeepingApp: App {
     @AppStorage("appearance") private var appearance = AppearanceMode.system.rawValue
     @AppStorage(ThemeColor.key) private var themeColor = ThemeColor.blue.rawValue
     @AppStorage(ExchangeRateStore.primaryKey) private var primaryCurrency = "CNY"
-    /// 换了语言、换了账本（演示数据）整个界面重建（`AppLanguage`）；停在哪个标签放在外面，重建后还在这个标签
+    /// 换了语言：根视图的 `locale` 跟着换（`Text` 按它查翻译），除「我的」以外的标签页按语言重建（`RootView`）
     @AppStorage(AppLanguage.key) private var language = AppLanguage.system.rawValue
     @State private var tab: AppTab = .home
     @Environment(\.scenePhase) private var scenePhase
@@ -81,12 +81,19 @@ struct BookkeepingApp: App {
 
     private var appearanceMode: AppearanceMode { AppearanceMode(rawValue: appearance) ?? .system }
 
+    /// 选的语言的地区设置。读一下 `language`：换语言时这里重新算，环境里的 `locale` 才会换
+    private var locale: Locale {
+        _ = language
+        return AppLanguage.locale
+    }
+
     var body: some Scene {
         WindowGroup {
             RootView(tab: $tab)
-                // 换了演示数据（ADR 0025）也整个重建：停在另一个账本里的页面都关掉
-                .id("\(language)|\(store.ledgerGeneration)")
-                .environment(\.locale, AppLanguage.locale)
+                // 换了演示数据（ADR 0025）整个重建：停在另一个账本里的页面都关掉。
+                // 停在哪个标签放在外面，重建后还在这个标签
+                .id(store.ledgerGeneration)
+                .environment(\.locale, locale)
                 .environment(store)
                 .environment(rates)
                 .preferredColorScheme(appearanceMode.colorScheme)

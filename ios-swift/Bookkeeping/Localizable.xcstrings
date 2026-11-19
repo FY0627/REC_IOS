@@ -465,6 +465,28 @@
         }
       }
     },
+    "%lld 张 · %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Images: %lld · %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld 张 · %@"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld 張 · %@"
+          }
+        }
+      }
+    },
     "%lld 张打不开" : {
       "localizations" : {
         "en" : {
@@ -737,6 +759,28 @@
         }
       }
     },
+    "%lld 笔流水 · %lld 个账户 · %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Transactions: %lld · Accounts: %lld · %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld 笔流水 · %lld 个账户 · %@"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld 筆明細 · %lld 個帳戶 · %@"
+          }
+        }
+      }
+    },
     "**来源** 选 **自动**，点 **完成**。不是动账通知的内容不会保存。" : {
       "localizations" : {
         "en" : {
@@ -887,28 +931,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "AEON 信貸財務"
-          }
-        }
-      }
-    },
-    "App 语言" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "App Language"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "App 语言"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "App 語言"
           }
         }
       }
@@ -7959,24 +7981,24 @@
         }
       }
     },
-    "导入汇率通知" : {
+    "导出" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Rate Import Notifications"
+            "value" : "Export"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "导入汇率通知"
+            "value" : "导出"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "匯入匯率通知"
+            "value" : "匯出"
           }
         }
       }
@@ -7999,6 +8021,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "匯出全部資料"
+          }
+        }
+      }
+    },
+    "导出内容" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Include"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "导出内容"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "匯出內容"
           }
         }
       }
@@ -8495,6 +8539,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "已匯入 %lld 種幣別的匯率，資料更新於%@"
+          }
+        }
+      }
+    },
+    "已收到过银行通知" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bank alerts received"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已收到过银行通知"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已收到過銀行通知"
           }
         }
       }
@@ -9487,6 +9553,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "必選"
+          }
+        }
+      }
+    },
+    "快捷指令" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Shortcuts"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "快捷指令"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "捷徑"
           }
         }
       }
@@ -10789,6 +10877,28 @@
         }
       }
     },
+    "支出 %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spent %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "支出 %@"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "支出 %@"
+          }
+        }
+      }
+    },
     "支出分类" : {
       "localizations" : {
         "en" : {
@@ -10895,6 +11005,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "收到一則無法辨識的銀行通知，已放入待處理"
+          }
+        }
+      }
+    },
+    "效果演示" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preview"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "效果演示"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "效果示範"
           }
         }
       }
@@ -11757,6 +11889,28 @@
         }
       }
     },
+    "更新汇率" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Update Rates"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "更新汇率"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "更新匯率"
+          }
+        }
+      }
+    },
     "最晚一笔" : {
       "localizations" : {
         "en" : {
@@ -11929,28 +12083,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "本週"
-          }
-        }
-      }
-    },
-    "本地构建" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Local Build"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "本地构建"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "本機建置"
           }
         }
       }
@@ -14265,6 +14397,28 @@
         }
       }
     },
+    "现在" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "now"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "现在"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "現在"
+          }
+        }
+      }
+    },
     "现金" : {
       "localizations" : {
         "en" : {
@@ -16113,6 +16267,28 @@
         }
       }
     },
+    "表格（CSV）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spreadsheets (CSV)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "表格（CSV）"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "表格（CSV）"
+          }
+        }
+      }
+    },
     "裕信银行" : {
       "localizations" : {
         "en" : {
@@ -16553,6 +16729,28 @@
         }
       }
     },
+    "记账结果、汇率" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Results, Rates"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "记账结果、汇率"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "記帳結果、匯率"
+          }
+        }
+      }
+    },
     "设备自开机后尚未解锁，账本暂时无法读写。解锁一次后会恢复。" : {
       "localizations" : {
         "en" : {
@@ -16615,6 +16813,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "設定截圖記帳"
+          }
+        }
+      }
+    },
+    "设置步骤" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Setup Steps"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "设置步骤"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "設定步驟"
           }
         }
       }
@@ -17165,6 +17385,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "帳本還沒開啟"
+          }
+        }
+      }
+    },
+    "账本（导入用）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ledger (for Import)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "账本（导入用）"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "帳本（匯入用）"
           }
         }
       }
@@ -18353,6 +18595,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "選擇要拆出去的幾筆"
+          }
+        }
+      }
+    },
+    "通知" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Notifications"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通知"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通知"
           }
         }
       }

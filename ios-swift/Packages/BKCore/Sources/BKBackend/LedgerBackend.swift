@@ -302,28 +302,43 @@ public final class LedgerBackend: Sendable {
 
     // MARK: 导出、导入（ADR 0019）
 
-    /// 把全部数据导出成一个 zip（`DataExport`）写到 `url`；zip 里的文件夹和文件同名（去掉 .zip）。
-    /// `extras`：账本以外的文件（卡面图片、设置，`BackupExtras`）。在数据库队列上生成和写文件，不占主线程
-    public func exportData(to url: URL, extras: [String: Data] = [:]) async throws -> DataExportSummary {
+    /// 把数据导出成一个 zip（`DataExport`）写到 `url`；zip 里的文件夹和文件同名（去掉 .zip）。
+    /// `parts`：账本放哪几样（数据库副本、CSV）；`extras`：账本以外的文件（卡面图片、设置，`BackupExtras`）。
+    /// 在数据库队列上生成和写文件，不占主线程
+    public func exportData(to url: URL, parts: ExportParts = .all, extras: [String: Data] = [:]) async throws -> DataExportSummary {
         let calendar = calendar
         let now = clock()
         return try await database.read { db in
             let folder = url.deletingPathExtension().lastPathComponent
-            let result = try DataExport.archive(db, folderName: folder, extras: extras, calendar: calendar, now: now)
+            let result = try DataExport.archive(db, folderName: folder, parts: parts, extras: extras, calendar: calendar, now: now)
             try result.data.write(to: url, options: .atomic)
             return result.summary
         }
     }
 
-    /// 选了导出的 zip、还没导入：里面有什么
+    /// 现在的账本有多少流水、账户（导出页面在勾选旁边写）
+    public func ledgerInfo() async throws -> BackupInfo {
+        try await database.read { db in try BackupImport.info(db) }
+    }
+
+    /// 选了导出的 zip、还没导入：里面有什么。导出时没勾账本的 zip 没有数据库副本（`hasLedger` 是 false），
+    /// 只能导入卡面图片、设置；三样都没有的不认
     public func backupInfo(archive: Data) async throws -> BackupInfo {
         try await database.read { _ in
-            let work = Self.workFile()
-            defer { try? FileManager.default.removeItem(at: work) }
-            var info = try BackupImport.info(try BackupImport.open(archive: archive, work: work))
+            let entries: [ZipStore.Entry]
+            do { entries = try ZipStore.entries(archive) } catch { throw BackendError.backupUnreadable }
+            var info: BackupInfo
+            if entries.contains(where: { $0.name.hasSuffix(DataExport.backupName) }) {
+                let work = Self.workFile()
+                defer { try? FileManager.default.removeItem(at: work) }
+                info = try BackupImport.info(try BackupImport.open(archive: archive, work: work))
+            } else {
+                info = BackupInfo(records: 0, accounts: 0, lastRecordAt: nil, hasLedger: false)
+            }
             let extras = try BackupExtras.files(in: archive)
             info.faceImages = BackupExtras.faceImages(extras).count
             info.hasSettings = extras[BackupExtras.settingsName] != nil
+            guard info.hasLedger || info.faceImages > 0 || info.hasSettings else { throw BackendError.backupUnreadable }
             return info
         }
     }
@@ -1371,6 +1386,22 @@ public final class LedgerBackend: Sendable {
                 )
             }
             return stats
+        }
+    }
+
+    /// 首页每天的分组标题旁写的当天支出：和本月合计一样换算成 `primary`、减去退款、不算转帐
+    /// （`StatsCalculator.converted`），按交易时间所在的那天分（含 `from`，不含 `to`）。没有支出的天不在结果里
+    public func dailyExpenses(from: Date, to: Date, convertTo primary: CurrencyCode) async throws -> [Date: Int64] {
+        let calendar = calendar
+        return try await database.read { db in
+            let charges = ChargeCalculator(db: db, calendar: calendar)
+            let days = Dictionary(grouping: try RecordDAO.inRange(db, from: from, to: to)) { calendar.startOfDay(for: $0.effectiveAt) }
+            var result: [Date: Int64] = [:]
+            for (day, records) in days {
+                let expense = try StatsCalculator.converted(records, to: primary, charges: charges).expenseMinor
+                if expense != 0 { result[day] = expense }
+            }
+            return result
         }
     }
 

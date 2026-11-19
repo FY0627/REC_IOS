@@ -15,7 +15,7 @@ struct ExchangeRateGuideView: View {
     }
 }
 
-/// 「用快捷指令更新汇率」的内容：「我的 › 记账 › 汇率」和新手引导共用
+/// 「用快捷指令更新汇率」的内容：「我的 › 快捷指令 › 设置步骤」（自己侧载的）和新手引导共用
 struct ExchangeRateSetupSections: View {
     @Environment(\.openURL) private var openURL
     @State private var copied = false
@@ -56,7 +56,7 @@ struct ExchangeRateSetupSections: View {
         }
     }
 
-    /// 「我的 › 记账」里开着导入汇率通知时，离开 App 前先要通知权限
+    /// 「我的 › 通知」里开着导入汇率通知时，离开 App 前先要通知权限
     private func leave(to url: URL) {
         Task {
             if ImportExchangeRatesIntent.notifies { _ = await IngestNotifier.requestAuthorization() }

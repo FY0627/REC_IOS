@@ -29,6 +29,9 @@ struct HomeView: View {
     @State private var scrolledUnderBar = false
     @State private var listInset: CGFloat = 0
     @State private var swipe = RecordSwipeState()
+    /// 每天的支出（换算成主要币种），写在首页每天的分组标题右边；搜索结果不写（那是当天全部的，不是搜到的）
+    @State private var dayExpenses: [Date: Int64] = [:]
+    @AppStorage(ExchangeRateStore.primaryKey) private var primaryCurrency = CurrencyCode.cny.rawValue
 
     enum SearchScope: Hashable, CaseIterable {
         case all, expense, income, transfer
@@ -65,6 +68,13 @@ struct HomeView: View {
     struct SearchPage {
         var rows: [RecordRow]
         var hasMore: Bool
+    }
+
+    /// 每天的支出按这些重新算：翻到了更早的一天、数据变了、换了主要币种
+    struct DayExpensesKey: Equatable {
+        var oldestDay: Date?
+        var revision: Int
+        var currency: String
     }
 
     private var trimmedQuery: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -105,6 +115,14 @@ struct HomeView: View {
             .task(id: SearchKey(text: trimmedQuery, scope: scope, revision: store.revision)) {
                 await search(SearchKey(text: trimmedQuery, scope: scope, revision: store.revision))
             }
+            .task(id: dayExpensesKey) {
+                guard let oldest = dayExpensesKey.oldestDay,
+                      let end = Calendar.current.date(byAdding: .day, value: 1, to: Calendar.current.startOfDay(for: Date())) else {
+                    dayExpenses = [:]
+                    return
+                }
+                dayExpenses = await store.dailyExpenses(from: oldest, to: max(end, oldest))
+            }
         }
     }
 
@@ -130,13 +148,15 @@ struct HomeView: View {
             Section("流水") { emptyState }
         } else {
             ForEach(RecordDay.group(store.homeRows), id: \.day) { group in
-                Section(group.title) {
+                Section {
                     ForEach(group.rows) { row in
                         recordLink(row)
                             .onAppear {
                                 if row.id == store.homeRows.last?.id { Task { await store.loadMoreHome() } }
                             }
                     }
+                } header: {
+                    dayHeader(group)
                 }
             }
             if store.homeHasMore {
@@ -148,6 +168,26 @@ struct HomeView: View {
     private func recordLink(_ row: RecordRow) -> some View {
         NavigationLink(value: row) { RecordRowView(row: row, timeOnly: true) }
             .recordSwipe(row, state: $swipe)
+    }
+
+    /// 每天的分组标题：左边日期，右边当天支出（换算成主要币种，和本月支出一样算；当天没有支出不写）
+    private func dayHeader(_ group: RecordDay) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(group.title)
+            Spacer(minLength: 8)
+            if let expense = dayExpenses[group.day] {
+                Text(L("支出 \(Fmt.money(expense, CurrencyCode(primaryCurrency)))"))
+                    .monospacedDigit()
+                    .lineLimit(1)
+            }
+        }
+    }
+
+    private var dayExpensesKey: DayExpensesKey {
+        DayExpensesKey(
+            oldestDay: store.homeRows.last.map { Calendar.current.startOfDay(for: $0.record.effectiveAt) },
+            revision: store.revision, currency: primaryCurrency
+        )
     }
 
     // MARK: 搜索

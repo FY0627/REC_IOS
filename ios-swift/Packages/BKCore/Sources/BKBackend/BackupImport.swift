@@ -20,13 +20,16 @@ public struct BackupInfo: Hashable, Sendable {
     public var faceImages: Int
     /// 带了「我的」里的设置（以前的备份没有）
     public var hasSettings: Bool
+    /// 带了能导回来的账本（数据库副本）。导出时没勾账本的没有，流水、账户都是 0
+    public var hasLedger: Bool
 
-    public init(records: Int, accounts: Int, lastRecordAt: Date?, faceImages: Int = 0, hasSettings: Bool = false) {
+    public init(records: Int, accounts: Int, lastRecordAt: Date?, faceImages: Int = 0, hasSettings: Bool = false, hasLedger: Bool = true) {
         self.records = records
         self.accounts = accounts
         self.lastRecordAt = lastRecordAt
         self.faceImages = faceImages
         self.hasSettings = hasSettings
+        self.hasLedger = hasLedger
     }
 }
 

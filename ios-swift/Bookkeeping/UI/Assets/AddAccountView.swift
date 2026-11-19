@@ -305,7 +305,7 @@ struct AddAccountView: View {
             extraCurrencies: Array(currencies.dropFirst()), extraOpeningBalances: openings.filter { $0.key != currency }
         )
         do {
-            // 加卡后不带去设置自动记账：新手引导里设置，之后在「我的 › 设置自动记账」
+            // 加卡后不带去设置自动记账：新手引导里设置，之后在「我的 › 快捷指令」
             let account = try await store.addAccount(draft)
             await applyPhoto(to: account)
             errorText = nil

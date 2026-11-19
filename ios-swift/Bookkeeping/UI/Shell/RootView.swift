@@ -65,6 +65,9 @@ struct RootView: View {
     @State private var sheet: ActiveSheet?
     @State private var assetsReselectCount = 0
     @AppStorage(OnboardingView.doneKey) private var onboardingDone = false
+    /// 换语言时首页、资产、统计按新语言重建（里面有 UIKit 画的字、算好的日期标题）；
+    /// 「我的」不重建，原地换字：用户就在这一页换语言，列表停在原处，选错了马上能改回来（`AppLanguage`）
+    @AppStorage(AppLanguage.key) private var language = AppLanguage.system.rawValue
     @State private var onboarding = false
 
     /// 再点一次当前的标签时系统也会调用 set：其他页面的列表由系统滚回顶部，
@@ -85,12 +88,15 @@ struct RootView: View {
         TabView(selection: selection) {
             Tab(AppTab.home.title, systemImage: AppTab.home.symbol, value: AppTab.home) {
                 HomeView(openPending: { sheet = .pending })
+                    .id(language)
             }
             Tab(AppTab.assets.title, systemImage: AppTab.assets.symbol, value: AppTab.assets) {
                 AssetsView(openAddAccount: { sheet = .addAccount }, reselectCount: assetsReselectCount)
+                    .id(language)
             }
             Tab(AppTab.stats.title, systemImage: AppTab.stats.symbol, value: AppTab.stats) {
                 StatsView()
+                    .id(language)
             }
             Tab(AppTab.profile.title, systemImage: AppTab.profile.symbol, value: AppTab.profile) {
                 ProfileView()

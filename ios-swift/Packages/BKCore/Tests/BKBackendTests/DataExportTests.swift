@@ -119,6 +119,38 @@ final class DataExportTests: XCTestCase {
         XCTAssertTrue(info.hasSettings)
     }
 
+    /// 导出时只勾了一部分：没勾的不在 zip 里；没有账本的 zip 只能导入卡面图片、设置
+    func testExportOnlyChosenParts() async throws {
+        let backend = try LedgerBackend.inMemory(calendar: ParserSampleTests.calendar, clock: { ParserSampleTests.reference })
+        let url = temporaryURL("Tacito 数据 2026-10-21.zip")
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+
+        _ = try await backend.exportData(to: url, parts: .database)
+        var names = try ZipStore.entries(try Data(contentsOf: url)).map(\.name)
+        XCTAssertEqual(names, ["Tacito 数据 2026-10-21/\(DataExport.backupName)"], "只要账本时不写 CSV")
+
+        let summary = try await backend.exportData(to: url, parts: .tables)
+        names = try ZipStore.entries(try Data(contentsOf: url)).map(\.name)
+        XCTAssertEqual(names.count, summary.files.count)
+        XCTAssertFalse(names.contains { $0.hasSuffix(DataExport.backupName) }, "只要表格时不放数据库副本")
+
+        let settings = Data(#"{"primaryCurrency":"HKD"}"#.utf8)
+        _ = try await backend.exportData(to: url, parts: [], extras: [BackupExtras.settingsName: settings])
+        let zip = try Data(contentsOf: url)
+        XCTAssertEqual(try ZipStore.entries(zip).map(\.name), ["Tacito 数据 2026-10-21/设置.json"])
+        let info = try await backend.backupInfo(archive: zip)
+        XCTAssertFalse(info.hasLedger)
+        XCTAssertTrue(info.hasSettings)
+        XCTAssertEqual(info.records, 0)
+
+        _ = try await backend.exportData(to: url, parts: .tables)
+        do {
+            _ = try await backend.backupInfo(archive: try Data(contentsOf: url))
+            XCTFail("只有 CSV 的 zip 没有能导入的东西")
+        } catch BackendError.backupUnreadable {}
+    }
+
     func testFaceImagesIgnoreOddNames() {
         let files: [String: Data] = [
             "卡面图片/ok.jpg": Data([1]),

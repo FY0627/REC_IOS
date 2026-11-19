@@ -2,8 +2,8 @@ import SwiftUI
 import UniformTypeIdentifiers
 import BKBackend
 
-/// 导入数据（「我的 › 隐私与数据」，ADR 0019）：选一个「导出数据」得到的 zip，先看里面有什么，勾选导入哪几样
-/// （账本、卡面图片、设置，默认全选），账本再选增量或覆盖（`BackupImport`）。
+/// 导入数据（「我的 › 数据」，ADR 0019）：选一个「导出数据」得到的 zip，先看里面有什么，勾选导入哪几样
+/// （账本、卡面图片、设置，文件里有的默认全选；导出时没勾的不出现），账本再选增量或覆盖（`BackupImport`）。
 /// 覆盖要在按钮弹出的小菜单里再点一下。导入账本前自动把现在的数据存一份，可以撤销上次导入
 struct DataImportView: View {
     @Environment(LedgerStore.self) private var store
@@ -29,16 +29,21 @@ struct DataImportView: View {
                 }
             }
             if let info, archive != nil, result == nil, restored.isEmpty {
-                Section("「\(fileName)」里有") {
-                    LabeledContent("流水", value: L("\(info.records) 笔"))
-                    LabeledContent("账户", value: L("\(info.accounts) 个"))
-                    if let last = info.lastRecordAt {
-                        LabeledContent("最晚一笔", value: Fmt.dateTime(last))
+                // 导出时没勾账本的文件只有卡面图片、设置
+                if info.hasLedger {
+                    Section("「\(fileName)」里有") {
+                        LabeledContent("流水", value: L("\(info.records) 笔"))
+                        LabeledContent("账户", value: L("\(info.accounts) 个"))
+                        if let last = info.lastRecordAt {
+                            LabeledContent("最晚一笔", value: Fmt.dateTime(last))
+                        }
                     }
                 }
                 if info.faceImages > 0 || info.hasSettings {
                     Section("导入") {
-                        Toggle(isOn: $includeLedger) { Label("账本", systemImage: "list.bullet.rectangle") }
+                        if info.hasLedger {
+                            Toggle(isOn: $includeLedger) { Label("账本", systemImage: "list.bullet.rectangle") }
+                        }
                         if info.faceImages > 0 {
                             Toggle(isOn: $includeFaces) { Label(L("卡面图片 \(info.faceImages) 张"), systemImage: "photo") }
                         }
@@ -133,7 +138,7 @@ struct DataImportView: View {
             info = try await store.backupInfo(archive: data)
             archive = data
             fileName = url.lastPathComponent
-            includeLedger = true
+            includeLedger = info?.hasLedger ?? true
             includeFaces = true
             includeSettings = true
             result = nil

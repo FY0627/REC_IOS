@@ -2,11 +2,12 @@ import SwiftUI
 import ObjectiveC
 import BKModel
 
-/// App 的显示语言：跟随系统，或者在「我的 › 语言」里选的简体中文、繁體中文、English（ADR 0022）。
+/// App 的显示语言：跟随系统，或者在「我的 › 显示 › 语言」的菜单里选的简体中文、繁體中文、English（ADR 0022）。
 ///
 /// 选的语言写在 App 自己的 `AppleLanguages` 里，和系统「设置 › Tacito › 语言」是同一个值：下次打开 App 时
-/// 系统直接按它加载，日期、系统按钮也跟着变。当时就换：界面文字按选的语言查（`L`、`.loc`、根视图的 `locale`），
-/// 根视图按语言重建（`BookkeepingApp`）。
+/// 系统直接按它加载，日期、系统按钮也跟着变。当时就换：界面文字按选的语言查（`L`、`.loc`、根视图的 `locale`）。
+/// 首页、资产、统计按语言重建；「我的」不重建，原地换字，换语言时列表不动（`RootView`）。
+/// 「我的」里自己算的文字（`L`）跟着列表重画；UIKit 画的标题和菜单行按语言换 `id`。
 ///
 /// 文字在 `Localizable.xcstrings`：键就是简体中文原文，另有 zh-Hant（台湾用语）和 en。
 enum AppLanguage: String, CaseIterable, Identifiable {

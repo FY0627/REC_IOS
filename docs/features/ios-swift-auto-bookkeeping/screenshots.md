@@ -3,7 +3,7 @@
 选型见 [ADR 0021](../../decisions/0021-ios-swift-payment-screenshots.md)。代码：`Bookkeeping/Intents/RecordPaymentScreenshotIntent.swift`、`Bookkeeping/App/ScreenshotReader.swift`（Vision 识别）
 → `BKBackend/Parsing/ScreenshotParser.swift`（排成行、认页面、读字段）→ `IngestEngine`（`screenshotRoute`、`screenshotTwin`、`mergeScreenshot`）。
 
-- 入口：快捷指令「截屏 → 记录付款截图」设到轻点背面（「我的 › 自动记账 › 设置截图记账」）；「记一笔 › 从相册选截图」补记以前的。动作也接受「从图像中提取文本」的文字。
+- 入口：快捷指令「截屏 → 记录付款截图」设到轻点背面（「我的 › 快捷指令 › 截图记账」）；「记一笔 › 从相册选截图」补记以前的。动作也接受「从图像中提取文本」的文字。
 - 认的页面：付款成功页、账单详情（付款、转账、红包、退款）、聊天里点开的转账页、零钱提现和充值、微信收款商业版的收款和经营账户提现。不是付款页的截图不保存；像付款页又读不全的进待处理，可以「拷贝原文」。
 - 转账页按标题看谁收的钱：「你已收款」是收到，「阿翔已收款」「待阿翔确认收款」是转给阿翔。
 - 哪个 App：看页面上只有一边有的字（「零钱」「经营账户」「聊天位置」，「余额宝」「账单分类」）。都没有时，标题写着谁收款、或者同时有「转账时间」「收款时间」的是微信转账页（要对方点收款的只有微信）。

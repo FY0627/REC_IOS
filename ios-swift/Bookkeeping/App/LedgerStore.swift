@@ -538,19 +538,66 @@ final class LedgerStore {
 
     // MARK: 导出、导入（ADR 0019）
 
-    /// 导出全部数据：一个 zip 写在临时目录，给分享菜单用。上一次导出的先删掉，临时目录系统也会自己清理
-    /// 导出全部数据；`faceImages`：带上了几张卡面图片（设置总是带上）
-    func exportData() async throws -> (url: URL, summary: DataExportSummary, faceImages: Int) {
+    /// 导出页面勾选的几样（ADR 0019 修订）
+    struct ExportChoice: Equatable {
+        /// 能导回来的账本（数据库副本）
+        var ledger = true
+        /// 每种数据一个 CSV，给人看
+        var tables = true
+        var faceImages = true
+        var settings = true
+
+        var isEmpty: Bool { !ledger && !tables && !faceImages && !settings }
+
+        var parts: ExportParts {
+            var parts: ExportParts = []
+            if ledger { parts.insert(.database) }
+            if tables { parts.insert(.tables) }
+            return parts
+        }
+    }
+
+    /// 导出页面在勾选旁边写的：账本有多少流水、账户，大概多大；卡面图片几张、多大
+    struct ExportPreview: Equatable {
+        var records = 0
+        var accounts = 0
+        var databaseBytes: Int64 = 0
+        var faceImages = 0
+        var faceImageBytes: Int64 = 0
+    }
+
+    func exportPreview() async -> ExportPreview {
+        var preview = await Task.detached(priority: .userInitiated) { () -> ExportPreview in
+            var preview = ExportPreview()
+            let size = { (url: URL) in Int64((try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0) }
+            preview.databaseBytes = size(AppServices.databaseURL)
+            let folder = CardFaceImages.fileURL("x").deletingLastPathComponent()
+            let names = (try? FileManager.default.contentsOfDirectory(atPath: folder.path)) ?? []
+            for name in names where name.hasSuffix(".jpg") {
+                preview.faceImages += 1
+                preview.faceImageBytes += size(folder.appendingPathComponent(name))
+            }
+            return preview
+        }.value
+        if let info = try? await backend?.ledgerInfo() {
+            preview.records = info.records
+            preview.accounts = info.accounts
+        }
+        return preview
+    }
+
+    /// 按勾选的导出成一个 zip，写在临时目录给分享菜单用。上一次导出的先删掉，临时目录系统也会自己清理
+    func exportData(_ choice: ExportChoice) async throws -> (url: URL, summary: DataExportSummary) {
         guard let backend else { throw BackendError.notFound }
         let day = Date().formatted(Date.ISO8601FormatStyle(timeZone: .current).year().month().day())
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("export", isDirectory: true)
         try? FileManager.default.removeItem(at: root)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         let url = root.appendingPathComponent(L("Tacito 数据 \(day).zip"))
-        var extras = await Task.detached(priority: .userInitiated) { Self.faceImageFiles() }.value
-        let faceImages = extras.count
-        extras[BackupExtras.settingsName] = try AppSettingsBackup.current().encoded()
-        return (url, try await backend.exportData(to: url, extras: extras), faceImages)
+        var extras: [String: Data] = [:]
+        if choice.faceImages { extras = await Task.detached(priority: .userInitiated) { Self.faceImageFiles() }.value }
+        if choice.settings { extras[BackupExtras.settingsName] = try AppSettingsBackup.current().encoded() }
+        return (url, try await backend.exportData(to: url, parts: choice.parts, extras: extras))
     }
 
     /// 这台手机上的卡面图片，按 zip 里的路径（`BackupExtras.faceImagePath`）。不要在主线程调用
@@ -638,6 +685,11 @@ final class LedgerStore {
     /// `accountID`：只算这个账户
     func stats(from: Date?, to: Date?, converted: Bool = false, accountID: String? = nil) async -> MonthStats? {
         try? await backend?.stats(from: from, to: to, convertTo: converted ? ExchangeRateStore.primaryCurrency : nil, accountID: accountID)
+    }
+
+    /// 首页每天的支出，换算成主要币种（`LedgerBackend.dailyExpenses`）
+    func dailyExpenses(from: Date, to: Date) async -> [Date: Int64] {
+        (try? await backend?.dailyExpenses(from: from, to: to, convertTo: ExchangeRateStore.primaryCurrency)) ?? [:]
     }
 
     /// 账户没有这个币种时，按它的主币种大概扣（入）多少（手动记一笔时提示）
