@@ -53,8 +53,6 @@ struct AutoSetupSections: View {
                 Button("打开快捷指令", systemImage: "arrow.up.forward.app") {
                     if let url = URL(string: "shortcuts://") { openURL(url) }
                 }
-            } footer: {
-                Text("只需设置一次，之后添加的卡不用再设置。")
             }
 
             steps(choosesApps ? Self.smsSteps : Self.sms26Steps)

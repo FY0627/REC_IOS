@@ -1,6 +1,5 @@
 import SwiftUI
 import UIKit
-import UniformTypeIdentifiers
 import BKModel
 
 /// 选分类：大类排成格子，点一下就选上；有小类的大类名称旁有个小箭头，点它也先选上大类，同时在下面展开小类
@@ -12,8 +11,8 @@ import BKModel
 /// 格子不用懒加载的网格：放在列表的一行里时，懒加载会在行高变化时重新摆放，图标上下跳一下。
 ///
 /// 「我的 › 分类」也用它（`arrangement` 不为 nil）：点一下打开这个分类，有小类的先展开，
-/// 展开那一行第一格是大类自己。两行最后一格是「添加」（`add`）。
-/// 长按弹出系统的菜单（删除）；接着拖动就是系统的拖放：排顺序，其他图标让位；小类拖到上面的大类上，放下就挪进那个大类。
+/// 展开那一行第一格是大类自己。两行最后一格是「添加」（`add`）。长按拖动排顺序，其他图标让位；小类拖到上面的大类上，放下就挪进那个大类。
+/// 长按浮起来时像 iPhone 主屏幕那样马上在旁边弹出菜单（`CategoryMenuOverlay`，样子和系统菜单一样，只有删除），手指挪开就收起、变成拖动。
 struct CategoryGrid: View {
     let type: CategoryType
     var selected: String?
@@ -28,6 +27,8 @@ struct CategoryGrid: View {
 
     @Environment(LedgerStore.self) private var store
     @State private var expanded: String?
+    /// 手指按在能拖的格子上；松手或被打断时回到 false，拖起来了就这时放下
+    @GestureState private var touching = false
 
     static let columns = CategoryGridLayout.columns
 
@@ -43,8 +44,12 @@ struct CategoryGrid: View {
         let parentID: String?
         /// 这一层现在的顺序
         let ids: [String]
-        /// 能放小类的大类：小类拖到大类上时用
+        /// 大类现在的顺序、能放小类的大类：小类拖到大类上时用
+        let tops: [String]
         let holders: Set<String>
+        /// 这一块格子一共几格、大类那块一共几格（算上第一格的大类自己和最后的「添加」）：按格子数算行数
+        let cellCount: Int
+        let topCount: Int
     }
 
     var body: some View {
@@ -54,7 +59,8 @@ struct CategoryGrid: View {
         let tops = nodes.map(\.id)
         let holders = Set(nodes.filter { !$0.category.locked }.map(\.id))
         let addsTop = add != nil && type != .transfer
-        let topLevel = Level(parentID: nil, ids: tops, holders: holders)
+        let topCount = tops.count + (addsTop ? 1 : 0)
+        let topLevel = Level(parentID: nil, ids: tops, tops: tops, holders: holders, cellCount: topCount, topCount: topCount)
         // 「我的 › 分类」：能放小类的大类没有小类也能展开，展开那一行有「添加」
         let topCells = nodes.map {
             Cell(
@@ -66,10 +72,10 @@ struct CategoryGrid: View {
             if arrangement == nil {
                 button(cell, isSelected: selectedTop == cell.id) { tap(cell, selectedTop: selectedTop) }
             } else {
-                arrangedCell(cell, level: topLevel, row: .top, isSelected: expanded == cell.id) { openOrExpand(cell) }
+                arrangedCell(cell, level: topLevel, isSelected: expanded == cell.id) { openOrExpand(cell) }
             }
         }
-        .modifier(GridDrop(enabled: arrangement != nil, perform: finishDrop))
+        .modifier(frameReporter(children: false))
         .padding(.vertical, 6)
         // 和下面小类那一行之间的分隔线从格子的左边开始
         .alignmentGuide(.listRowSeparatorLeading) { $0[.leading] }
@@ -87,10 +93,16 @@ struct CategoryGrid: View {
                 withAnimation(.snappy(duration: 0.3)) { expanded = parent }
             }
         }
+        .onChange(of: touching) { _, now in
+            if !now { drop() }
+        }
         if let node = nodes.first(where: { $0.id == expanded }) {
             let children = arranged(node.children, key: node.id).filter { $0.id != arrangement?.leaving }
             let addsChild = add != nil && holders.contains(node.id)
-            let childLevel = Level(parentID: node.id, ids: children.map(\.id), holders: holders)
+            let childLevel = Level(
+                parentID: node.id, ids: children.map(\.id), tops: tops, holders: holders,
+                cellCount: children.count + 1 + (addsChild ? 1 : 0), topCount: topCount
+            )
             VStack(alignment: .leading, spacing: 10) {
                 Text(L("\(node.category.localizedName)的小类")).font(.footnote).foregroundStyle(.secondary)
                 let first = Cell(id: node.id, name: arrangement == nil ? L("不细分") : node.category.localizedName, symbol: node.category.symbol)
@@ -101,13 +113,13 @@ struct CategoryGrid: View {
                             withAnimation(.snappy(duration: 0.25)) { pick(cell.id) }
                         }
                     } else if cell.id == node.id {
-                        // 第一格是大类自己：打开它，不能拖；小类拖到这一格上是排到最前面
-                        arrangedCell(cell, level: nil, row: .children(node.id), isSelected: false) { pick(cell.id) }
+                        // 第一格是大类自己：打开它，不能拖
+                        arrangedCell(cell, level: nil, isSelected: false) { pick(cell.id) }
                     } else {
-                        arrangedCell(cell, level: childLevel, row: .children(node.id), isSelected: false) { pick(cell.id) }
+                        arrangedCell(cell, level: childLevel, isSelected: false) { pick(cell.id) }
                     }
                 }
-                .modifier(GridDrop(enabled: arrangement != nil, perform: finishDrop))
+                .modifier(frameReporter(children: true))
             }
             .padding(.vertical, 6)
             // 换一个大类展开时，整行换掉（列表的删除 / 插入动画），不是在同一行里改内容
@@ -162,14 +174,7 @@ struct CategoryGrid: View {
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 
-    // MARK: 「我的 › 分类」长按菜单、拖动
-
-    /// 一格在哪一行：拖进来时按这个决定是让位还是挪进大类
-    private enum Row {
-        case top
-        /// 某个大类展开的那一行
-        case children(String)
-    }
+    // MARK: 「我的 › 分类」长按拖动
 
     /// 拖动中、刚放下还没存好时，按拖出来的顺序摆；别的时候是账本里的顺序
     private func arranged<Item: Identifiable>(_ items: [Item], key: String) -> [Item] where Item.ID == String {
@@ -180,151 +185,175 @@ struct CategoryGrid: View {
             .map(\.element)
     }
 
-    /// 能长按的一格（`level` 为 nil 时只能点）：长按弹出系统菜单，接着拖动是系统的拖放。每一格也是放下的地方
+    /// 能长按拖动的一格（`level` 为 nil 时只能点）。拖起来的那一格原地空着，浮起来的图标由 `CategoryDragOverlay` 画
     @ViewBuilder
-    private func arrangedCell(_ cell: Cell, level: Level?, row: Row, isSelected: Bool, action: @escaping () -> Void) -> some View {
-        let target = arrangement?.drag?.target
+    private func arrangedCell(_ cell: Cell, level: Level?, isSelected: Bool, action: @escaping () -> Void) -> some View {
+        let lift = arrangement?.lift
         let face = CategoryCell(
-            name: cell.name, symbol: cell.symbol, isSelected: isSelected || target == cell.id,
+            name: cell.name, symbol: cell.symbol, isSelected: isSelected || lift?.target == cell.id,
             hasChildren: cell.hasChildren, expanded: expanded == cell.id
         )
-        .scaleEffect(target == cell.id ? 1.12 : 1)
-        .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .contentShape(.dragPreview, RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .onTapGesture(perform: action)
+        .scaleEffect(lift?.target == cell.id ? 1.12 : 1)
+        .opacity(lift?.id == cell.id ? 0 : 1)
+        // 拖起来的那一格看不见了也还按得着：手势接着走
+        .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(cell.name)
         .accessibilityHint(Text(cell.hasChildren ? "展开小类" : ""))
         .accessibilityAddTraits(.isButton)
         .accessibilityAction { action() }
-        .onDrop(of: [.text], delegate: CategoryDrop(
-            enter: { hover(cell.id, row: row, entered: true) },
-            exit: { hover(cell.id, row: row, entered: false) },
-            perform: finishDrop
-        ))
         if let level {
+            // 点一下、长按到时间浮起来、跟着手指走是三个手势：长按和点一下互斥，跟手指的一直同时在跑，
+            // 不和长按串成一个（串起来时手指一按下就算开始，点一下永远轮不到）
             face
-                .modifier(DeleteMenu(category: store.categoryTree.category(cell.id), tree: store.categoryTree) { delete(cell.id) })
-                .onDrag { pickUp(cell.id, level: level) }
+                .onTapGesture(perform: action)
+                .onLongPressGesture(minimumDuration: 0.3) { pickUp(cell.id, level: level) }
+                .simultaneousGesture(followGesture(cell.id))
         } else {
-            face
+            face.onTapGesture(perform: action)
         }
     }
 
-    /// 系统开始拖动：记下拖的是哪一格、这一层原来的顺序。上一次拖完没放在格子上（拖出去取消了）的顺序先存掉
-    private func pickUp(_ id: String, level: Level) -> NSItemProvider {
-        if let arrangement {
-            arrangement.settleLingering(store: store)
-            arrangement.drag = CategoryArrangement.Drag(
-                id: id, key: level.parentID ?? CategoryArrangement.topKey(type), parentID: level.parentID,
-                order: level.ids, original: level.ids, holders: level.holders
-            )
-        }
-        return NSItemProvider(object: id as NSString)
+    /// 手指按下就开始跟：还没浮起来时什么也不做，浮起来后让位、找目标
+    private func followGesture(_ id: String) -> some Gesture {
+        DragGesture(minimumDistance: 0, coordinateSpace: .global)
+            .updating($touching) { _, state, _ in state = true }
+            .onChanged { follow(id, $0) }
     }
 
-    /// 拖到一格上：大类在大类里让位；小类在自己那一行里让位，拖到上面能放小类的大类上时那个大类变大，放下就挪进去
-    private func hover(_ cellID: String, row: Row, entered: Bool) {
-        guard let arrangement, var drag = arrangement.drag else { return }
-        switch row {
-        case .top:
-            if drag.parentID == nil {
-                guard entered, let index = drag.order.firstIndex(of: cellID) else { return }
-                drag.move(to: index)
-            } else if entered {
-                guard cellID != drag.parentID, drag.holders.contains(cellID) else { return }
-                drag.target = cellID
-            } else if drag.target == cellID {
-                drag.target = nil
+    private func pickUp(_ id: String, level: Level) {
+        // 已经松手了就不浮起来：没有下一次松手来放下它
+        guard touching, let arrangement, arrangement.lift == nil, let category = store.categoryTree.category(id),
+              let index = level.ids.firstIndex(of: id) else { return }
+        // 小类那一行第一格是大类自己
+        let offset = level.parentID == nil ? 0 : 1
+        let frame = level.parentID == nil ? arrangement.topFrame : arrangement.childFrame
+        let center = CategoryGridLayout.center(of: index + offset, count: level.cellCount, in: frame)
+        arrangement.begin(
+            CategoryArrangement.Lift(
+                id: id, name: category.localizedName, symbol: category.symbol,
+                key: level.parentID ?? CategoryArrangement.topKey(type), parentID: level.parentID,
+                order: level.ids, original: level.ids, tops: level.tops, holders: level.holders,
+                cellCount: level.cellCount, topCount: level.topCount,
+                width: CategoryGridLayout.cellWidth(frame.width)
+            ),
+            at: center
+        )
+        // 和 iPhone 主屏幕一样：一浮起来就弹出菜单，不用等松手；手指挪开就收起，变成拖动
+        arrangement.menuAnchor = center
+        withAnimation(.snappy(duration: 0.2)) { arrangement.menu = hasMenu(id) ? id : nil }
+    }
+
+    /// 大类在大类里让位；小类在自己那一行里让位，拖到上面的大类上时那个大类变大，放下就挪进去
+    private func follow(_ id: String, _ drag: DragGesture.Value) {
+        guard let arrangement, var lift = arrangement.lift, lift.id == id, arrangement.settling == nil else { return }
+        arrangement.follow(drag.location, start: drag.startLocation)
+        if arrangement.moved, arrangement.menu != nil {
+            withAnimation(.snappy(duration: 0.15)) { arrangement.menu = nil }
+        }
+        let point = drag.location
+        if lift.parentID == nil {
+            if let slot = CategoryGridLayout.slot(at: point, count: lift.cellCount, in: arrangement.topFrame) {
+                lift.move(to: min(slot, lift.order.count - 1))
             }
-        case .children(let parent):
-            guard entered, drag.parentID == parent else { return }
-            // 第一格是大类自己：排到最前面
-            guard let index = cellID == parent ? 0 : drag.order.firstIndex(of: cellID) else { return }
-            drag.target = nil
-            drag.move(to: index)
+        } else if let slot = CategoryGridLayout.slot(at: point, count: lift.cellCount, in: arrangement.childFrame) {
+            lift.target = nil
+            lift.move(to: min(max(slot - 1, 0), lift.order.count - 1))
+        } else if let slot = CategoryGridLayout.slot(at: point, count: lift.topCount, in: arrangement.topFrame),
+                  slot < lift.tops.count, lift.tops[slot] != lift.parentID, lift.holders.contains(lift.tops[slot]) {
+            lift.target = lift.tops[slot]
+        } else {
+            lift.target = nil
         }
-        guard let before = arrangement.drag, drag != before else { return }
+        guard let before = arrangement.lift, lift != before else { return }
         // 让一次位轻震一下；悬到能放的大类上再震一下
-        if drag.order != before.order {
+        if lift.order != before.order {
             arrangement.feedback(.move)
-        } else if drag.target != nil, drag.target != before.target {
+        } else if let target = lift.target, target != before.target {
             arrangement.feedback(.target)
         }
-        withAnimation(.snappy(duration: 0.25)) { arrangement.drag = drag }
+        withAnimation(.snappy(duration: 0.25)) { arrangement.lift = lift }
     }
 
-    /// 放下：拖到大类上的小类挪进去，其他的按拖出来的顺序存进账本
-    private func finishDrop() -> Bool {
-        guard let arrangement, let drag = arrangement.drag else { return false }
+    /// 松手：浮起来的图标先回到格子（或缩进拖到的大类），再存进账本。
+    /// 长按以后没动就松开：回到格子，浮起来时弹出的菜单留着（`CategoryMenuOverlay`），点一项或点别处收起
+    private func drop() {
+        guard let arrangement, let lift = arrangement.lift, arrangement.settling == nil else { return }
+        if !arrangement.moved, lift.order == lift.original, lift.target == nil {
+            let offset = lift.parentID == nil ? 0 : 1
+            let frame = lift.parentID == nil ? arrangement.topFrame : arrangement.childFrame
+            let index = (lift.order.firstIndex(of: lift.id) ?? 0) + offset
+            withAnimation(.snappy(duration: 0.2)) {
+                arrangement.settle(at: CategoryGridLayout.center(of: index, count: lift.cellCount, in: frame), into: false)
+            }
+            Task {
+                try? await Task.sleep(for: .milliseconds(200))
+                arrangement.finish()
+            }
+            return
+        }
+        arrangement.menu = nil
         arrangement.feedback(.drop)
-        guard let target = drag.target else {
-            arrangement.save(drag, store: store)
-            arrangement.drag = nil
-            return true
-        }
-        withAnimation(.snappy(duration: 0.3)) {
-            arrangement.leaving = drag.id
-            arrangement.drag = nil
-        }
-        Task {
-            let moved = await arrangement.run { try await store.moveCategory(id: drag.id, toParent: target) }
-            arrangement.leaving = nil
-            // 展开挪去的大类：看得到它排在最后
-            if moved { withAnimation(.snappy(duration: 0.3)) { expanded = target } }
-        }
-        return true
-    }
-
-    /// 记录不删，回到待分类；大类连小类一起删
-    private func delete(_ id: String) {
-        guard let arrangement else { return }
-        Task { await arrangement.run { try await store.deleteCategory(id: id, moveRecordsTo: nil) } }
-    }
-}
-
-/// 长按的系统菜单：删除。系统分类（自动记账要用）不能删，不弹菜单，长按直接拖
-private struct DeleteMenu: ViewModifier {
-    let category: LedgerCategory?
-    let tree: CategoryTree
-    let delete: () -> Void
-
-    @ViewBuilder
-    func body(content: Content) -> some View {
-        if let category, !category.locked {
-            let title: LocalizedStringKey = tree.all.contains { $0.parentID == category.id } ? "连小类一起删除" : "删除"
-            content.contextMenu {
-                Button(role: .destructive, action: delete) {
-                    Label(title, systemImage: "trash")
+        if let target = lift.target, let index = lift.tops.firstIndex(of: target) {
+            withAnimation(.snappy(duration: 0.2)) {
+                arrangement.settle(at: CategoryGridLayout.center(of: index, count: lift.topCount, in: arrangement.topFrame), into: true)
+            }
+            Task {
+                try? await Task.sleep(for: .milliseconds(200))
+                withAnimation(.snappy(duration: 0.3)) {
+                    arrangement.leaving = lift.id
+                    arrangement.finish()
                 }
+                let moved = await arrangement.run { try await store.moveCategory(id: lift.id, toParent: target) }
+                arrangement.leaving = nil
+                // 展开挪去的大类：看得到它排在最后
+                if moved { withAnimation(.snappy(duration: 0.3)) { expanded = target } }
             }
         } else {
-            content
+            let offset = lift.parentID == nil ? 0 : 1
+            let frame = lift.parentID == nil ? arrangement.topFrame : arrangement.childFrame
+            let index = (lift.order.firstIndex(of: lift.id) ?? 0) + offset
+            withAnimation(.snappy(duration: 0.2)) {
+                arrangement.settle(at: CategoryGridLayout.center(of: index, count: lift.cellCount, in: frame), into: false)
+            }
+            Task {
+                try? await Task.sleep(for: .milliseconds(200))
+                let changed = lift.order != lift.original
+                if changed { arrangement.pending[lift.key] = lift.order }
+                arrangement.finish()
+                guard changed else { return }
+                await arrangement.run { try await store.reorderCategories(lift.order) }
+                arrangement.pending[lift.key] = nil
+            }
         }
+    }
+
+    /// 长按弹出的菜单只有删除：系统分类和转帐的分类（自动记账要用）不能删，不弹，长按直接拖
+    private func hasMenu(_ id: String) -> Bool {
+        guard let category = store.categoryTree.category(id) else { return false }
+        return !category.locked
+    }
+
+    /// 「我的 › 分类」量两块格子在屏幕上的位置（手指在第几格按它算）；选分类时不量
+    private func frameReporter(children: Bool) -> GridFrame {
+        guard let arrangement else { return GridFrame(report: nil) }
+        return GridFrame(report: { (frame: CGRect) in
+            if children {
+                arrangement.childFrame = frame
+            } else {
+                arrangement.topFrame = frame
+            }
+        })
     }
 }
 
-/// 一格（或整块格子）是放下的地方：拖进来、拖出去、放下。显示成「移动」，不是带加号的「拷贝」
-private struct CategoryDrop: DropDelegate {
-    var enter: () -> Void = {}
-    var exit: () -> Void = {}
-    let perform: () -> Bool
-
-    func dropEntered(info: DropInfo) { enter() }
-    func dropExited(info: DropInfo) { exit() }
-    func dropUpdated(info: DropInfo) -> DropProposal? { DropProposal(operation: .move) }
-    func performDrop(info: DropInfo) -> Bool { perform() }
-}
-
-/// 格子之间的空隙、「添加」那一格上放下也算放下（不然拖动的顺序留着没存）
-private struct GridDrop: ViewModifier {
-    let enabled: Bool
-    let perform: () -> Bool
+private struct GridFrame: ViewModifier {
+    let report: ((CGRect) -> Void)?
 
     @ViewBuilder
     func body(content: Content) -> some View {
-        if enabled {
-            content.onDrop(of: [.text], delegate: CategoryDrop(perform: perform))
+        if let report {
+            content.onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { report($0) }
         } else {
             content
         }
@@ -372,14 +401,39 @@ struct CategoryGridLayout: Layout {
     static func cellWidth(_ total: CGFloat) -> CGFloat {
         max((total - spacing * CGFloat(columns - 1)) / CGFloat(columns), 0)
     }
+
+    /// 手指落在第几格（那一格有没有图标都算）；不在这块格子里是 nil。
+    /// 格子一样高，按位置算，不看图标现在动画到哪：让位时图标从手指下滑过也不会来回换
+    static func slot(at point: CGPoint, count: Int, in frame: CGRect) -> Int? {
+        guard count > 0, frame.width > 0, frame.contains(point) else { return nil }
+        let lines = (count + columns - 1) / columns
+        let height = (frame.height - lineSpacing * CGFloat(lines - 1)) / CGFloat(lines)
+        let column = min(max(Int((point.x - frame.minX) / (cellWidth(frame.width) + spacing)), 0), columns - 1)
+        let line = min(max(Int((point.y - frame.minY) / (height + lineSpacing)), 0), lines - 1)
+        return line * columns + column
+    }
+
+    /// 第几格的中心
+    static func center(of index: Int, count: Int, in frame: CGRect) -> CGPoint {
+        let lines = max((count + columns - 1) / columns, 1)
+        let width = cellWidth(frame.width)
+        let height = (frame.height - lineSpacing * CGFloat(lines - 1)) / CGFloat(lines)
+        return CGPoint(
+            x: frame.minX + CGFloat(index % columns) * (width + spacing) + width / 2,
+            y: frame.minY + CGFloat(index / columns) * (height + lineSpacing) + height / 2
+        )
+    }
 }
 
-/// 「我的 › 分类」拖动的状态。分类页持有，格子读写
+/// 「我的 › 分类」长按拖动的状态。分类页持有；格子写，浮起来的图标读。
+/// 手指位置只有浮起来的图标读：拖动时格子和列表不跟着每一下重画，只在让位、换目标、放下时重画
 @MainActor
 @Observable
 final class CategoryArrangement {
-    struct Drag: Equatable {
+    struct Lift: Equatable {
         let id: String
+        let name: String
+        let symbol: String
         /// 存顺序用的键：`topKey` 或所在大类的 id
         let key: String
         /// 小类所在的大类；大类是 nil
@@ -387,8 +441,14 @@ final class CategoryArrangement {
         /// 这一层的顺序，拖动中跟着变
         var order: [String]
         let original: [String]
-        /// 能放小类的大类（系统分类不能）
+        /// 大类的顺序、能放小类的大类（系统分类不能）
+        let tops: [String]
         let holders: Set<String>
+        /// 这一块、大类那块一共几格（`Level`）
+        let cellCount: Int
+        let topCount: Int
+        /// 格子宽度：浮起来的图标和格子里的一样宽
+        let width: CGFloat
         /// 小类悬在哪个大类上：放下就挪进去
         var target: String?
 
@@ -399,24 +459,53 @@ final class CategoryArrangement {
         }
     }
 
-    /// 正在拖的。系统的拖放没有「拖完了」的回调：没放在格子上（拖出去取消了）时留着，下次拖或离开页面时存掉
-    var drag: Drag?
+    enum Settling {
+        /// 回到格子
+        case back
+        /// 缩进拖到的大类
+        case into
+    }
+
+    var lift: Lift?
+    /// 拖起来到放好之间：列表不滚动
+    private(set) var active = false
+    private(set) var settling: Settling?
+    /// 手指的位置（屏幕坐标），按住的地方离图标中心多远
+    private(set) var location: CGPoint = .zero
+    private(set) var grab: CGSize = .zero
     /// 放下后、存好之前的顺序：免得先跳回原样再跳过去
     var pending: [String: [String]] = [:]
     /// 挪去别的大类的小类：存好之前不在原来那一行
     var leaving: String?
     var failure: String?
+    /// 弹出菜单的分类：长按浮起来时弹出，手指挪开（开始拖动）收起，没挪就松手留着等点
+    var menu: String?
+    /// 菜单挨着的那一格的中心（屏幕坐标）
+    @ObservationIgnored var menuAnchor: CGPoint = .zero
 
-    /// 震动：让位、悬到能放的大类上、放下（拖起来时系统自己震）
+    @ObservationIgnored private var grabbed = false
+    /// 浮起来以后手指挪开过（超过 10 点）：松手是放下，不弹菜单
+    @ObservationIgnored private(set) var moved = false
+    @ObservationIgnored private var liftedAt: CGPoint = .zero
+    /// 大类、小类两块格子在屏幕上的位置。滚动时一直在变，不触发重画
+    @ObservationIgnored var topFrame: CGRect = .zero
+    @ObservationIgnored var childFrame: CGRect = .zero
+
+    /// 震动：浮起来、让位、悬到能放的大类上、放下
     enum Feedback {
-        case move, target, drop
+        case lift, move, target, drop
     }
 
+    @ObservationIgnored private var liftHaptic = UIImpactFeedbackGenerator(style: .medium)
     @ObservationIgnored private var tickHaptic = UISelectionFeedbackGenerator()
     @ObservationIgnored private var lightHaptic = UIImpactFeedbackGenerator(style: .light)
 
     func feedback(_ kind: Feedback) {
         switch kind {
+        case .lift:
+            liftHaptic.impactOccurred()
+            tickHaptic.prepare()
+            lightHaptic.prepare()
         case .move:
             tickHaptic.selectionChanged()
             tickHaptic.prepare()
@@ -431,24 +520,41 @@ final class CategoryArrangement {
     static func topKey(_ type: CategoryType) -> String { "top." + type.rawValue }
 
     func order(_ key: String) -> [String]? {
-        drag?.key == key ? drag?.order : pending[key]
+        lift?.key == key ? lift?.order : pending[key]
     }
 
-    /// 顺序变了就存进账本；存好之前按拖出来的顺序摆
-    func save(_ drag: Drag, store: LedgerStore) {
-        guard drag.order != drag.original else { return }
-        pending[drag.key] = drag.order
-        Task {
-            await run { try await store.reorderCategories(drag.order) }
-            pending[drag.key] = nil
+    func begin(_ lift: Lift, at center: CGPoint) {
+        guard self.lift == nil else { return }
+        location = center
+        grab = .zero
+        grabbed = false
+        settling = nil
+        moved = false
+        self.lift = lift
+        active = true
+        feedback(.lift)
+    }
+
+    func follow(_ point: CGPoint, start: CGPoint) {
+        if !grabbed {
+            grabbed = true
+            grab = CGSize(width: start.x - location.x, height: start.y - location.y)
+            liftedAt = point
         }
+        if !moved, hypot(point.x - liftedAt.x, point.y - liftedAt.y) > 10 { moved = true }
+        location = point
     }
 
-    /// 上一次拖完没放在格子上：只存顺序，不挪大类（悬在大类上就取消了的不算放下）
-    func settleLingering(store: LedgerStore) {
-        guard let drag else { return }
-        self.drag = nil
-        save(drag, store: store)
+    func settle(at center: CGPoint, into: Bool) {
+        settling = into ? .into : .back
+        location = center
+        grab = .zero
+    }
+
+    func finish() {
+        lift = nil
+        settling = nil
+        active = false
     }
 
     @discardableResult
@@ -461,6 +567,103 @@ final class CategoryArrangement {
             failure = L("操作失败：\(error.localizedDescription)")
             return false
         }
+    }
+}
+
+/// 长按弹出的菜单，像 iPhone 主屏幕长按图标：挨着那一格，下面放不下就放在上面；其他东西不变暗，只有按着的那一格浮起来。
+/// 样子照系统菜单（Liquid Glass 的圆角底、左边图标右边文字，一行时是胶囊形）；现在只有删除（大类连小类一起删）。
+/// 不用系统的 `contextMenu`：放在列表里时它把整行格子一起浮起来、一起拖走，也不能接着手指拖动排顺序。
+/// 手指还按着时（可能接着拖）不挡触摸；松手以后点别处收起，点一项执行。盖在整个分类页上，和浮起来的图标一起
+struct CategoryMenuOverlay: View {
+    let arrangement: CategoryArrangement
+    @Environment(LedgerStore.self) private var store
+
+    private static let width: CGFloat = 250
+    private static let rowHeight: CGFloat = 52
+    /// 格子中心到格子上下边的距离（图标 48 + 名字一行）
+    private static let cellHalfHeight: CGFloat = 40
+
+    var body: some View {
+        GeometryReader { proxy in
+            if let id = arrangement.menu, let category = store.categoryTree.category(id), !category.locked {
+                let frame = proxy.frame(in: .global)
+                let height = Self.rowHeight
+                let anchor = CGPoint(x: arrangement.menuAnchor.x - frame.minX, y: arrangement.menuAnchor.y - frame.minY)
+                let below = anchor.y + Self.cellHalfHeight + 10 + height <= proxy.size.height - 8
+                let y = below ? anchor.y + Self.cellHalfHeight + 10 + height / 2 : anchor.y - Self.cellHalfHeight - 10 - height / 2
+                let x = min(max(anchor.x, 16 + Self.width / 2), max(proxy.size.width - 16 - Self.width / 2, 16 + Self.width / 2))
+                ZStack {
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .gesture(DragGesture(minimumDistance: 0).onEnded { _ in close() })
+                        .allowsHitTesting(arrangement.lift == nil)
+                    menu(category)
+                        .frame(width: Self.width)
+                        .position(x: x, y: y)
+                        .transition(.scale(scale: 0.6, anchor: below ? .top : .bottom).combined(with: .opacity))
+                        .allowsHitTesting(arrangement.lift == nil)
+                }
+            }
+        }
+    }
+
+    private func menu(_ category: LedgerCategory) -> some View {
+        // 记录不删，回到待分类；大类连小类一起删
+        let hasChildren = store.categoryTree.all.contains { $0.parentID == category.id }
+        return VStack(spacing: 0) {
+            row(hasChildren ? "连小类一起删除" : "删除", systemImage: "trash", role: .destructive) {
+                await arrangement.run { try await store.deleteCategory(id: category.id, moveRecordsTo: nil) }
+            }
+        }
+        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: Self.rowHeight / 2, style: .continuous))
+        .shadow(color: .black.opacity(0.12), radius: 20, y: 8)
+    }
+
+    private func row(_ title: LocalizedStringKey, systemImage: String, role: ButtonRole?, action: @escaping () async -> Void) -> some View {
+        Button(role: role) {
+            close()
+            Task { await action() }
+        } label: {
+            HStack(spacing: 14) {
+                Image(systemName: systemImage)
+                    .font(.body.weight(.medium))
+                    .frame(width: 24)
+                Text(title)
+                Spacer(minLength: 0)
+            }
+            .font(.body)
+            .padding(.horizontal, 22)
+            .frame(height: Self.rowHeight)
+            .contentShape(Rectangle())
+            .foregroundStyle(role == .destructive ? AnyShapeStyle(Color.red) : AnyShapeStyle(Color.primary))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func close() {
+        withAnimation(.snappy(duration: 0.15)) { arrangement.menu = nil }
+    }
+}
+
+/// 长按拖动时浮起来的图标，跟着手指走。盖在整个分类页的列表上：从小类那一行拖到大类那一行也不会被挡住
+struct CategoryDragOverlay: View {
+    let arrangement: CategoryArrangement
+
+    var body: some View {
+        GeometryReader { proxy in
+            if let lift = arrangement.lift {
+                let origin = proxy.frame(in: .global).origin
+                CategoryCell(name: lift.name, symbol: lift.symbol, isSelected: false)
+                    .frame(width: lift.width)
+                    .scaleEffect(arrangement.settling == .into ? 0.5 : (arrangement.settling == .back ? 1 : 1.15))
+                    .opacity(arrangement.settling == .into ? 0 : 1)
+                    .position(
+                        x: arrangement.location.x - arrangement.grab.width - origin.x,
+                        y: arrangement.location.y - arrangement.grab.height - origin.y
+                    )
+            }
+        }
+        .allowsHitTesting(false)
     }
 }
 

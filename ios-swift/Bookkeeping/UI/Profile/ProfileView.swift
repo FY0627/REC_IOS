@@ -109,15 +109,20 @@ private struct ProfileList: View {
                 }
 
                 Section("显示") {
+                    // 几种语言直接在菜单里选。「我的」不重建、原地换字（`RootView`），列表停在原处，选错了还在这一行改回来。
+                    // 每种语言用它自己的文字写，看不懂现在的语言也认得出来
+                    Picker(selection: Binding(get: { AppLanguage(rawValue: language) ?? .system }, set: { AppLanguage.select($0) })) {
+                        ForEach(AppLanguage.allCases) { Text($0.title).tag($0) }
+                    } label: {
+                        Label("语言", systemImage: "globe")
+                    }
+                    .id("language-\(themeColor)-\(language)")
                     Picker(selection: $appearance) {
                         ForEach(AppearanceMode.allCases) { Text($0.title).tag($0.rawValue) }
                     } label: {
                         Label("外观", systemImage: "circle.lefthalf.filled")
                     }
                     .id("appearance-\(themeColor)-\(language)")
-                    // 图标直接排出来点选：只写「浅色」「深色」看不出是哪个图标
-                    AppIconPicker(selection: $appIcon)
-                        .onChange(of: appIcon) { AppearanceMode.applyIcon() }
                     Button { choosingTheme = true } label: {
                         LabeledContent {
                             Text(ThemeColor.title(stored: themeColor)).foregroundStyle(.tint)
@@ -130,14 +135,9 @@ private struct ProfileList: View {
                         }
                         .background(UndimmedList())
                     }
-                    // 几种语言直接在菜单里选。「我的」不重建、原地换字（`RootView`），列表停在原处，选错了还在这一行改回来。
-                    // 每种语言用它自己的文字写，看不懂现在的语言也认得出来
-                    Picker(selection: Binding(get: { AppLanguage(rawValue: language) ?? .system }, set: { AppLanguage.select($0) })) {
-                        ForEach(AppLanguage.allCases) { Text($0.title).tag($0) }
-                    } label: {
-                        Label("语言", systemImage: "globe")
-                    }
-                    .id("language-\(themeColor)-\(language)")
+                    // 图标直接排出来点选：只写「浅色」「深色」看不出是哪个图标
+                    AppIconPicker(selection: $appIcon)
+                        .onChange(of: appIcon) { AppearanceMode.applyIcon() }
                 }
 
                 Section("关于") {

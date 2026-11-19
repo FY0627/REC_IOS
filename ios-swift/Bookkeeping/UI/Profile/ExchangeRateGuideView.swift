@@ -15,7 +15,7 @@ struct ExchangeRateGuideView: View {
     }
 }
 
-/// 「用快捷指令更新汇率」的内容：「我的 › 快捷指令 › 设置步骤」（自己侧载的）和新手引导共用
+/// 「用快捷指令更新汇率」的内容：「我的 › 快捷指令」和新手引导共用
 struct ExchangeRateSetupSections: View {
     @Environment(\.openURL) private var openURL
     @State private var copied = false
