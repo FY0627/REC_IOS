@@ -241,7 +241,7 @@ private struct ProfileList: View {
                 }
                 Button("取消", role: .cancel) {}
             } message: {
-                Text("在系统设置里允许 REC 发送通知。")
+                Text("在系统设置里允许 Tacito 发送通知。")
             }
             .alert("演示数据", isPresented: Binding(get: { store.demoError != nil }, set: { if !$0 { store.demoError = nil } })) {
                 Button("好", role: .cancel) {}

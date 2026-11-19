@@ -546,7 +546,7 @@ final class LedgerStore {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("export", isDirectory: true)
         try? FileManager.default.removeItem(at: root)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-        let url = root.appendingPathComponent(L("REC 数据 \(day).zip"))
+        let url = root.appendingPathComponent(L("Tacito 数据 \(day).zip"))
         var extras = await Task.detached(priority: .userInitiated) { Self.faceImageFiles() }.value
         let faceImages = extras.count
         extras[BackupExtras.settingsName] = try AppSettingsBackup.current().encoded()

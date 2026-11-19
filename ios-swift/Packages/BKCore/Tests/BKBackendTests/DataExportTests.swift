@@ -12,8 +12,8 @@ final class DataExportTests: XCTestCase {
 
     func testZipRoundTripKeepsChineseNames() throws {
         let entries = [
-            ZipStore.Entry(name: "REC 数据/流水.csv", data: Data("时间,金额\r\n".utf8)),
-            ZipStore.Entry(name: "REC 数据/空.txt", data: Data()),
+            ZipStore.Entry(name: "Tacito 数据/流水.csv", data: Data("时间,金额\r\n".utf8)),
+            ZipStore.Entry(name: "Tacito 数据/空.txt", data: Data()),
         ]
         let zip = ZipStore.archive(entries, modified: ParserSampleTests.reference, calendar: ParserSampleTests.calendar)
         XCTAssertEqual(try ZipStore.entries(zip), entries)
@@ -38,7 +38,7 @@ final class DataExportTests: XCTestCase {
         try await backend.setCategory(recordID: id, categoryID: lunch.id, note: #"午饭, 和"同事""#)
         let row = try await backend.recordDetail(id: id).row
 
-        let url = temporaryURL("REC 数据 2026-10-20.zip")
+        let url = temporaryURL("Tacito 数据 2026-10-20.zip")
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
         let summary = try await backend.exportData(to: url)
@@ -47,7 +47,7 @@ final class DataExportTests: XCTestCase {
         XCTAssertEqual(summary.files, ["流水.csv", "账户.csv", "余额.csv", "分类.csv", "学到的分类.csv", "识别模板.csv", "汇率.csv", "待处理.csv", "原始通知.csv", "通知里的余额.csv"])
 
         let entries = try ZipStore.entries(try Data(contentsOf: url))
-        XCTAssertEqual(entries.map(\.name), (summary.files + [DataExport.backupName]).map { "REC 数据 2026-10-20/\($0)" })
+        XCTAssertEqual(entries.map(\.name), (summary.files + [DataExport.backupName]).map { "Tacito 数据 2026-10-20/\($0)" })
         func read(_ name: String) throws -> [String] {
             let data = try XCTUnwrap(entries.first { $0.name.hasSuffix("/" + name) }?.data)
             XCTAssertEqual(Array(data.prefix(3)), [0xEF, 0xBB, 0xBF], "\(name) 带 BOM，Excel 才认得出中文")
@@ -96,7 +96,7 @@ final class DataExportTests: XCTestCase {
         let backend = try LedgerBackend.inMemory(calendar: ParserSampleTests.calendar, clock: { ParserSampleTests.reference })
         let photo = Data([0xFF, 0xD8, 0xFF, 0x01, 0x02])
         let settings = Data(#"{"primaryCurrency":"HKD"}"#.utf8)
-        let url = temporaryURL("REC 数据 2026-10-20.zip")
+        let url = temporaryURL("Tacito 数据 2026-10-20.zip")
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
         _ = try await backend.exportData(to: url, extras: [
@@ -106,8 +106,8 @@ final class DataExportTests: XCTestCase {
 
         let zip = try Data(contentsOf: url)
         let names = try ZipStore.entries(zip).map(\.name)
-        XCTAssertTrue(names.contains("REC 数据 2026-10-20/卡面图片/A1B2.jpg"))
-        XCTAssertTrue(names.contains("REC 数据 2026-10-20/设置.json"))
+        XCTAssertTrue(names.contains("Tacito 数据 2026-10-20/卡面图片/A1B2.jpg"))
+        XCTAssertTrue(names.contains("Tacito 数据 2026-10-20/设置.json"))
 
         let files = try BackupExtras.files(in: zip)
         XCTAssertEqual(Set(files.keys), ["卡面图片/A1B2.jpg", "设置.json"], "CSV 和数据库副本不算")
@@ -131,7 +131,7 @@ final class DataExportTests: XCTestCase {
 
     func testOldBackupHasNoExtras() async throws {
         let backend = try LedgerBackend.inMemory(calendar: ParserSampleTests.calendar, clock: { ParserSampleTests.reference })
-        let url = temporaryURL("REC 数据.zip")
+        let url = temporaryURL("Tacito 数据.zip")
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
         _ = try await backend.exportData(to: url)

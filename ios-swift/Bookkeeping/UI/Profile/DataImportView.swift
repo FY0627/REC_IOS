@@ -186,7 +186,7 @@ struct DataImportView: View {
     private func message(_ error: Error) -> String {
         switch error as? BackendError {
         case .backupUnreadable?: L("读不了这个文件")
-        case .backupTooNew?: L("这个文件来自更新版本的 REC，先更新 App")
+        case .backupTooNew?: L("这个文件来自更新版本的 Tacito，先更新 App")
         default: L("导入失败：\(error.localizedDescription)")
         }
     }

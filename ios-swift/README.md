@@ -1,4 +1,4 @@
-# REC · iOS 原生 Swift 版
+# Tacito · iOS 原生 Swift 版
 
 独立于 Flutter 的 iOS 版本（[ADR 0006](../docs/decisions/0006-ios-native-swift.md)）。只依赖用户自己的 iPhone：
 账户、流水、解析规则和设置保存在本机 SQLite；没有服务器、云数据库、远程解析或账号系统。
@@ -103,7 +103,7 @@ docker run --rm -v "<仓库>/ios-swift/Packages/BKCore:/pkg:ro" bk-swift bash -l
 - 币种从汇率数据源支持的全部 160 多个币种里选（`UI/Common/CurrencyPicker.swift`，按拼音首字母分组、侧边 A–Z 索引，搜索框在最下面）。
 - 「我的 › 记账 › 主要币种」选择主要币种；有汇率时资产页净资产按主要币种换算合计（`App/ExchangeRateStore.swift`）。
 - 汇率来源：共享的快捷指令「导入汇率」（「获取 URL 内容」→ App 动作「导入汇率」，`Intents/ImportExchangeRatesIntent.swift`），
-  「我的 › 记账 › 汇率」点「添加快捷指令」打开 iCloud 链接添加，用户再建一个「打开 REC 时」运行它的自动化（`UI/Profile/ExchangeRateGuideView.swift`）。
+  「我的 › 记账 › 汇率」点「添加快捷指令」打开 iCloud 链接添加，用户再建一个「打开 Tacito 时」运行它的自动化（`UI/Profile/ExchangeRateGuideView.swift`）。
   链接只认做链接时那个 App 的标识（含签名团队后缀）；别人自己侧载的 App 标识不同，页面改成自己搭的 4 步。
   导入成功后发一条本机通知（没有通知权限就不发；设置说明里点按钮离开 App 前先要权限）。
   数据源每天更新一次，在 UTC 0 点刚过（北京时间早上 8 点左右）。

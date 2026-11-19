@@ -1,17 +1,17 @@
 <p align="center">
-  <img src="docs/assets/icon.png" width="96" alt="REC 图标">
+  <img src="docs/assets/icon.png" width="96" alt="Tacito 图标">
 </p>
 
-<h1 align="center">REC</h1>
+<h1 align="center">Tacito</h1>
 
-<p align="center"><b>Record Every Cent</b><br>花了钱，账自动记好。</p>
+<p align="center"><b>Tacit + Taco: quietly wraps up every expense.</b><br>花了钱，账自动记好。</p>
 
-REC 是一款 iPhone 记账 App。你付完款，银行短信一到，它就在后台把账记好，连 App 都不用打开。
+Tacito 是一款 iPhone 记账 App。你付完款，银行短信一到，它就在后台把账记好，连 App 都不用打开。
 
 <table>
   <tr>
-    <td align="center"><img src="docs/assets/demo/auto-bookkeeping.gif" width="220" alt="微信用银行卡付款后，银行通知到达，REC 在后台记好这笔账，再在灵动岛上选分类"></td>
-    <td align="center"><img src="docs/assets/demo/screenshot-bookkeeping.gif" width="220" alt="微信、支付宝付款成功页轻点背面截屏，REC 记好这笔账"></td>
+    <td align="center"><img src="docs/assets/demo/auto-bookkeeping.gif" width="220" alt="微信用银行卡付款后，银行通知到达，Tacito 在后台记好这笔账，再在灵动岛上选分类"></td>
+    <td align="center"><img src="docs/assets/demo/screenshot-bookkeeping.gif" width="220" alt="微信、支付宝付款成功页轻点背面截屏，Tacito 记好这笔账"></td>
     <td align="center"><img src="docs/assets/demo/wallet.gif" width="220" alt="资产页的银行卡像钱包一样叠放，点开一张看流水再收回"></td>
   </tr>
   <tr>
@@ -60,4 +60,4 @@ REC 是一款 iPhone 记账 App。你付完款，银行短信一到，它就在�
 
 ## 许可证
 
-[Apache License 2.0](LICENSE)：可以自由使用、修改和商用，分发时需要保留版权声明和 [NOTICE](NOTICE)。许可证不授予使用 REC 名称的权利。
+[Apache License 2.0](LICENSE)：可以自由使用、修改和商用，分发时需要保留版权声明和 [NOTICE](NOTICE)。许可证不授予使用 Tacito 名称的权利。

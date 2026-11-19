@@ -20,7 +20,7 @@ public enum BackendError: Error, Equatable, Sendable {
     case invalidCategory
     /// 转帐和系统分类不能删除、合并
     case categoryLocked
-    /// 导入的不是 REC 导出的 zip，或者被别的软件改过（重新压缩了）
+    /// 导入的不是 Tacito 导出的 zip，或者被别的软件改过（重新压缩了）
     case backupUnreadable
     /// 备份来自更新版本的 App：先更新 App 再导入
     case backupTooNew

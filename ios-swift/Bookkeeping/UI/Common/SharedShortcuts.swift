@@ -3,7 +3,7 @@ import Foundation
 /// 共享的快捷指令（iCloud 链接，ADR 0023）：点一下添加，不用自己搭动作。
 /// iOS 27 的快捷指令自己带触发条件（链接里一起带过去），不用再另建自动化；iOS 26 打不开 iOS 27 做的链接，
 /// 自动化也和快捷指令分开、带不过去，自动记账分两个链接，iOS 26 的要用户自己建自动化。
-/// 链接里的动作按 App 标识找 REC，只认 TestFlight / App Store 装的 `com.fy0627.rec`；
+/// 链接里的动作按 App 标识找 Tacito，只认 TestFlight / App Store 装的 `com.fy0627.rec`；
 /// 自己侧载的 App 标识后面带签名团队，对不上，设置页改成自己搭的步骤。
 /// 换了快捷指令的内容或名字，要用 TestFlight 装的 App 重新做链接，再改这里（页面上的一句话也写着名字）
 enum SharedShortcuts {

@@ -14,7 +14,7 @@ import BKModel
 struct RecordBankMessageIntent: LiveActivityIntent {
     static let title: LocalizedStringResource = "记录银行动账通知"
     static let description = IntentDescription(
-        "把收到的银行短信或邮件交给 REC，在本机解析、匹配账户、去重并入账。不会打开 App，也不联网。",
+        "把收到的银行短信或邮件交给 Tacito，在本机解析、匹配账户、去重并入账。不会打开 App，也不联网。",
         categoryName: "自动记账",
         searchKeywords: ["记账", "银行", "短信", "邮件", "动账"]
     )

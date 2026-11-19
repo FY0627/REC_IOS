@@ -1045,28 +1045,6 @@
         }
       }
     },
-    "REC 数据 %@.zip" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "REC Data %@.zip"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "REC 数据 %@.zip"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "REC 資料 %@.zip"
-          }
-        }
-      }
-    },
     "Seven 银行" : {
       "localizations" : {
         "en" : {
@@ -1085,6 +1063,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Seven 銀行"
+          }
+        }
+      }
+    },
+    "Tacito 数据 %@.zip" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tacito Data %@.zip"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tacito 数据 %@.zip"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tacito 資料 %@.zip"
           }
         }
       }
@@ -5906,7 +5906,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Optional. The date the system received it. Leave it empty if there isn’t one; REC won’t substitute another time."
+            "value" : "Optional. The date the system received it. Leave it empty if there isn’t one; Tacito won’t substitute another time."
           }
         },
         "zh-Hans" : {
@@ -6732,7 +6732,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Choose **Import Rates** from the list. Rates will update every time you open REC."
+            "value" : "Choose **Import Rates** from the list. Rates will update every time you open Tacito."
           }
         },
         "zh-Hans" : {
@@ -6837,24 +6837,24 @@
         }
       }
     },
-    "在系统设置里允许 REC 发送通知。" : {
+    "在系统设置里允许 Tacito 发送通知。" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Allow REC to send notifications in Settings."
+            "value" : "Allow Tacito to send notifications in Settings."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "在系统设置里允许 REC 发送通知。"
+            "value" : "在系统设置里允许 Tacito 发送通知。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "請在系統設定裡允許 REC 傳送通知。"
+            "value" : "請在系統設定裡允許 Tacito 傳送通知。"
           }
         }
       }
@@ -10024,7 +10024,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Open REC"
+            "value" : "Open Tacito"
           }
         },
         "zh-Hans" : {
@@ -10173,46 +10173,46 @@
         }
       }
     },
-    "把「获取 URL 内容」下载的汇率数据导入 REC，资产页按主要币种换算净资产。App 自己不联网。" : {
+    "把「获取 URL 内容」下载的汇率数据导入 Tacito，资产页按主要币种换算净资产。App 自己不联网。" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Imports rates downloaded with Get Contents of URL into REC, so Assets can show your net worth in your primary currency. REC itself never goes online."
+            "value" : "Imports rates downloaded with Get Contents of URL into Tacito, so Assets can show your net worth in your primary currency. Tacito itself never goes online."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "把「获取 URL 内容」下载的汇率数据导入 REC，资产页按主要币种换算净资产。App 自己不联网。"
+            "value" : "把「获取 URL 内容」下载的汇率数据导入 Tacito，资产页按主要币种换算净资产。App 自己不联网。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "把「取得 URL 的內容」下載的匯率資料匯入 REC，資產頁會依主要幣別換算淨資產。App 本身不連網。"
+            "value" : "把「取得 URL 的內容」下載的匯率資料匯入 Tacito，資產頁會依主要幣別換算淨資產。App 本身不連網。"
           }
         }
       }
     },
-    "把收到的银行短信或邮件交给 REC，在本机解析、匹配账户、去重并入账。不会打开 App，也不联网。" : {
+    "把收到的银行短信或邮件交给 Tacito，在本机解析、匹配账户、去重并入账。不会打开 App，也不联网。" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Passes a bank text message or email to REC, which reads it on this iPhone, matches the account, skips duplicates and records it. REC doesn’t open and never goes online."
+            "value" : "Passes a bank text message or email to Tacito, which reads it on this iPhone, matches the account, skips duplicates and records it. Tacito doesn’t open and never goes online."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "把收到的银行短信或邮件交给 REC，在本机解析、匹配账户、去重并入账。不会打开 App，也不联网。"
+            "value" : "把收到的银行短信或邮件交给 Tacito，在本机解析、匹配账户、去重并入账。不会打开 App，也不联网。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "把收到的銀行簡訊或郵件交給 REC，在本機解析、配對帳戶、去除重複並入帳。不會打開 App，也不連網。"
+            "value" : "把收到的銀行簡訊或郵件交給 Tacito，在本機解析、配對帳戶、去除重複並入帳。不會打開 App，也不連網。"
           }
         }
       }
@@ -12906,7 +12906,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Account Not in REC"
+            "value" : "Account Not in Tacito"
           }
         },
         "zh-Hans" : {
@@ -14023,24 +14023,24 @@
         }
       }
     },
-    "点 **打开快捷指令**，在底部选 **自动化**，点右上角 **+**，选 **App** → **REC** → 勾选 **已打开**，选 **立即运行**，点 **下一步**。" : {
+    "点 **打开快捷指令**，在底部选 **自动化**，点右上角 **+**，选 **App** → **Tacito** → 勾选 **已打开**，选 **立即运行**，点 **下一步**。" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Tap **Open Shortcuts**, choose **Automation** at the bottom, tap **+** at the top right, choose **App** → **REC** → **Is Opened**, choose **Run Immediately** and tap **Next**."
+            "value" : "Tap **Open Shortcuts**, choose **Automation** at the bottom, tap **+** at the top right, choose **App** → **Tacito** → **Is Opened**, choose **Run Immediately** and tap **Next**."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "点 **打开快捷指令**，在底部选 **自动化**，点右上角 **+**，选 **App** → **REC** → 勾选 **已打开**，选 **立即运行**，点 **下一步**。"
+            "value" : "点 **打开快捷指令**，在底部选 **自动化**，点右上角 **+**，选 **App** → **Tacito** → 勾选 **已打开**，选 **立即运行**，点 **下一步**。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "點 **打開「捷徑」**，在底部選 **自動化**，點右上角 **+**，選 **App** → **REC** → 勾選 **已打開**，選 **立即執行**，點 **下一步**。"
+            "value" : "點 **打開「捷徑」**，在底部選 **自動化**，點右上角 **+**，選 **App** → **Tacito** → 勾選 **已打開**，選 **立即執行**，點 **下一步**。"
           }
         }
       }
@@ -14133,24 +14133,24 @@
         }
       }
     },
-    "点上面 **添加快捷指令**，在打开的页面点 **添加快捷指令**。它会下载最新汇率，交给 REC 导入。" : {
+    "点上面 **添加快捷指令**，在打开的页面点 **添加快捷指令**。它会下载最新汇率，交给 Tacito 导入。" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Tap **Add the Shortcut** above, then tap **Add Shortcut** on the page that opens. It downloads the latest rates and hands them to REC."
+            "value" : "Tap **Add the Shortcut** above, then tap **Add Shortcut** on the page that opens. It downloads the latest rates and hands them to Tacito."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "点上面 **添加快捷指令**，在打开的页面点 **添加快捷指令**。它会下载最新汇率，交给 REC 导入。"
+            "value" : "点上面 **添加快捷指令**，在打开的页面点 **添加快捷指令**。它会下载最新汇率，交给 Tacito 导入。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "點上面的 **加入捷徑**，在打開的頁面點 **加入捷徑**。它會下載最新匯率，交給 REC 匯入。"
+            "value" : "點上面的 **加入捷徑**，在打開的頁面點 **加入捷徑**。它會下載最新匯率，交給 Tacito 匯入。"
           }
         }
       }
@@ -17873,24 +17873,24 @@
         }
       }
     },
-    "这个文件来自更新版本的 REC，先更新 App" : {
+    "这个文件来自更新版本的 Tacito，先更新 App" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "This file is from a newer version of REC. Update the app first."
+            "value" : "This file is from a newer version of Tacito. Update the app first."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "这个文件来自更新版本的 REC，先更新 App"
+            "value" : "这个文件来自更新版本的 Tacito，先更新 App"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "這個檔案來自較新版本的 REC，請先更新 App"
+            "value" : "這個檔案來自較新版本的 Tacito，請先更新 App"
           }
         }
       }
@@ -18115,24 +18115,24 @@
         }
       }
     },
-    "选 **App** → **REC** → 勾选 **已打开**，选 **立即运行**，点 **下一步**。" : {
+    "选 **App** → **Tacito** → 勾选 **已打开**，选 **立即运行**，点 **下一步**。" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Choose **App** → **REC** → **Is Opened**, choose **Run Immediately** and tap **Next**."
+            "value" : "Choose **App** → **Tacito** → **Is Opened**, choose **Run Immediately** and tap **Next**."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "选 **App** → **REC** → 勾选 **已打开**，选 **立即运行**，点 **下一步**。"
+            "value" : "选 **App** → **Tacito** → 勾选 **已打开**，选 **立即运行**，点 **下一步**。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "選 **App** → **REC** → 勾選 **已打開**，選 **立即執行**，點 **下一步**。"
+            "value" : "選 **App** → **Tacito** → 勾選 **已打開**，選 **立即執行**，點 **下一步**。"
           }
         }
       }

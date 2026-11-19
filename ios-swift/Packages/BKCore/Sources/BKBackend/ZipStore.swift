@@ -1,7 +1,7 @@
 import Foundation
 
 /// 导出、导入用的 zip：只存不压缩（stored），文件名用 UTF-8。自己写、自己读，不用第三方库，系统「文件」App 也能直接解开。
-/// 只读得懂不压缩的条目：别的软件重新压缩过的 zip 读不了，要用 REC 导出的原文件。
+/// 只读得懂不压缩的条目：别的软件重新压缩过的 zip 读不了，要用 Tacito 导出的原文件。
 enum ZipStore {
     struct Entry: Hashable {
         var name: String
@@ -10,7 +10,7 @@ enum ZipStore {
 
     enum ReadError: Error, Equatable {
         case notZip
-        /// 条目被压缩过（不是 REC 导出的原文件）
+        /// 条目被压缩过（不是 Tacito 导出的原文件）
         case compressed(String)
         case damaged(String)
     }
