@@ -40,7 +40,7 @@ final class LedgerStore {
     private(set) var pendingCount = 0
     /// 待分类：已入账的支出、收入还没有分类（没确认对方的转账也在里面）
     private(set) var uncategorizedCount = 0
-    /// 全部分类（含隐藏的）
+    /// 全部分类
     private(set) var categories: [LedgerCategory] = []
     private(set) var categoryTree = CategoryTree([])
     private(set) var homeRows: [RecordRow] = []
@@ -371,11 +371,6 @@ final class LedgerStore {
 
     func updateCategory(id: String, name: String, symbol: String) async throws {
         try await backend?.updateCategory(id: id, name: name, symbol: symbol)
-        await refresh()
-    }
-
-    func setCategoryHidden(id: String, hidden: Bool) async throws {
-        try await backend?.setCategoryHidden(id: id, hidden: hidden)
         await refresh()
     }
 

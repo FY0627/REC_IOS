@@ -115,13 +115,9 @@ private struct ProfileList: View {
                         Label("外观", systemImage: "circle.lefthalf.filled")
                     }
                     .id("appearance-\(themeColor)-\(language)")
-                    Picker(selection: $appIcon) {
-                        ForEach(AppearanceMode.allCases) { Text($0.title).tag($0.rawValue) }
-                    } label: {
-                        Label("图标", systemImage: "app")
-                    }
-                    .id("icon-\(themeColor)-\(language)")
-                    .onChange(of: appIcon) { AppearanceMode.applyIcon() }
+                    // 图标直接排出来点选：只写「浅色」「深色」看不出是哪个图标
+                    AppIconPicker(selection: $appIcon)
+                        .onChange(of: appIcon) { AppearanceMode.applyIcon() }
                     Button { choosingTheme = true } label: {
                         LabeledContent {
                             Text(ThemeColor.title(stored: themeColor)).foregroundStyle(.tint)

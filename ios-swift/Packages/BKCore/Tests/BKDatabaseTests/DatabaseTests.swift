@@ -347,6 +347,21 @@ final class DatabaseTests: XCTestCase {
         XCTAssertFalse(try db.readSync { try RecordDAO.isMergedTransfer($0, id: "in") })
     }
 
+    func testMigrationFromVersion12ShowsHiddenCategories() throws {
+        let path = tempPath()
+        do {
+            let old = try SQLiteConnection(path: path)
+            for step in Migrations.steps where step.version <= 12 { try old.execute(step.sql) }
+            try old.setUserVersion(12)
+            try old.execute("UPDATE categories SET hidden = 1 WHERE id IN ('ex.other', 'in.salary')")
+        }
+        let db = try Database(path: path)
+        XCTAssertEqual(try db.readSync { $0.userVersion }, Migrations.latestVersion)
+        let categories = try db.readSync { try CategoryDAO.all($0) }
+        XCTAssertFalse(categories.isEmpty)
+        XCTAssertTrue(categories.allSatisfy { !$0.hidden }, "以前隐藏的分类都显示出来")
+    }
+
     func testAmountKeywordsMatchEachMinorUnit() {
         XCTAssertEqual(RecordDAO.amountMinors("38").map(\.minor), [38, 3800, 38000])
         XCTAssertEqual(RecordDAO.amountMinors("38.5").map(\.exponent), [2, 3])

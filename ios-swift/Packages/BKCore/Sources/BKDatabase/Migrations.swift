@@ -5,7 +5,7 @@
 /// - 每个迁移在一个事务里执行，失败整体回滚，版本号不变；
 /// - 每次修改表结构都要在 `DatabaseTests` 里补迁移测试。
 public enum Migrations {
-    public static let latestVersion = 12
+    public static let latestVersion = 13
 
     static let steps: [(version: Int, sql: String)] = [
         (1, """
@@ -247,6 +247,10 @@ public enum Migrations {
         ALTER TABLE records ADD COLUMN merged_party TEXT;
         ALTER TABLE records ADD COLUMN merged_category_id TEXT;
         ALTER TABLE records ADD COLUMN merged_category_auto INTEGER NOT NULL DEFAULT 0;
+        """),
+        // 「我的 › 分类」不再能隐藏分类（2026-11-19）：以前隐藏的都显示出来，免得找不回来。`hidden` 列留着不用
+        (13, """
+        UPDATE categories SET hidden = 0 WHERE hidden <> 0;
         """),
     ]
 

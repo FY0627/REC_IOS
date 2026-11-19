@@ -11031,6 +11031,28 @@
         }
       }
     },
+    "教程" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tutorial"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "教程"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "教學"
+          }
+        }
+      }
+    },
     "数据" : {
       "localizations" : {
         "en" : {

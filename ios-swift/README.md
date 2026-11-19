@@ -117,7 +117,7 @@ docker run --rm -v "<仓库>/ios-swift/Packages/BKCore:/pkg:ro" bk-swift bash -l
   标题按「备注 → 交易对方 → 分类名」，图标是分类图标（`UI/Common/{RecordRowView,RecordDisplay}.swift`）。
   首页按收到那天分组，每天的标题右边写当天支出（换算成主要币种，和本月支出一样算：减退款、不算转帐，`LedgerBackend.dailyExpenses`；搜索结果不写），每一笔只写时间（`Fmt.recordClock`）；通知写的交易日期不是那天时才写上日期。完整时间在流水详情里。
 - 分类在「我的 › 分类」里自己管（`UI/Profile/CategoryManagerView.swift`），选分类的格子在 `UI/Common/CategoryGrid.swift`；
-  分类页用同一个格子（`CategoryGrid` 的 `arrangement`），两行最后一格是「添加」；长按拖动排顺序、把小类拖到别的大类上，存进账本（`reorderCategories`、`moveCategory`）；和 iPhone 主屏幕一样，长按一浮起来就在旁边弹出隐藏、删除（`CategoryMenuOverlay`），手指挪开就收起变成拖动，不动就松手菜单留着，点一项或点别处收起；点开分类只改名称和图标
+  分类页用同一个格子（`CategoryGrid` 的 `arrangement`），两行最后一格是「添加」；长按弹出系统菜单（`contextMenu`：删除；系统分类不能删，没有菜单），接着拖动就是系统的拖放（`onDrag` / `onDrop`）：排顺序、把小类拖到别的大类上，存进账本（`reorderCategories`、`moveCategory`）。分类不能隐藏（迁移 13 把以前隐藏的都显示出来）；点开分类只改名称和图标
   （放在列表的分组里：点有小类的大类先选上它，小类在下一行展开，分组的框往下变大，大类那一行不动；只会有一个选中）。
   自动记账把手续费、扣息、工资、利息和退款归类；同一个商户连续 3 次选同一个分类后，下一笔自动归类，标题旁写「自动」
   （在本机学习，[ADR 0017](../docs/decisions/0017-ios-swift-learned-categories.md)）。
@@ -158,8 +158,7 @@ docker run --rm -v "<仓库>/ios-swift/Packages/BKCore:/pkg:ro" bk-swift bash -l
 - 「我的」的标题行也和资产页一样高，滚动时的磨砂背景和首页一样。推进二级页面时标签栏滑出、回来时滑入（`ProfileView` 外层管标签栏，列表和导航栈在 `ProfileList`）。系统导航栏在「我的」首屏也留着、里面是空的，首屏不让出它的位置（`ignoresSafeArea`），从屏幕顶端排：藏起来的话，从二级页面返回时系统要把导航栏收走，顶上的东西会往中间收再往上消失。列表和首页、统计是同一种（`.insetGrouped`），第一个白框和灰字自然一样；资产页不是系统列表，位置跟着首页排（`FirstBoxLayout`）。
 - 「我的」分组，常用的在前、设一次的在后：自动记账（快捷指令、识别模板、通知）、记账（分类、主要币种）、数据（导出、导入、原始通知保留天数）、显示（外观、图标、主题色、语言）、关于（版本、反馈、汇率数据源链接）、开发与调试（分类建议体检、模拟消费、演示数据（ADR 0025，换成只有账户的演示账本给官网录屏）、新手引导、灵动岛开关；平时藏着，连点 7 次版本号在最下面显示，再连点 7 次藏起来）。
 - **快捷指令**（`UI/Profile/ShortcutsView.swift`）：App 用到的三个快捷指令放在一页，一个一组——自动记账、截图记账、更新汇率。跳过新手引导、后来想加的都在这里找。
-  TestFlight / App Store 装的每组一个「添加快捷指令」，添加后要做的一句话写在组下面；要自己建自动化的（iOS 26 的自动记账）和自己侧载的点「设置步骤」进原来的分步页面（新手引导也用这几页的内容）。
-  自动记账收到过银行通知时写「已收到过银行通知」，更新汇率一组写汇率更新于什么时候。
+  最上面是分段选择（和记账页选支出、收入的一样）选看哪一个，下面只有两行：「添加快捷指令」（TestFlight / App Store 装的打开共享链接；自己侧载的用不了共享链接，是「打开快捷指令」）和「教程」（原来的分步页面，新手引导也用这几页的内容）。不写说明小字和状态。
 - **通知**（`UI/Profile/NotificationSettingsView.swift`）：记账结果（全部 / 仅失败 / 关闭）和导入汇率两种放在一页，打开的那种下面显示一条演示通知（和真的通知同一套写法，卡号、金额是假的），关了就收起；打开时要通知权限，被拒绝就关回去。「我的」那一行右边写开了哪几种。
 - **语言**：「显示 › 语言」是菜单，直接选跟随系统、简体中文、繁體中文、English（ADR 0022），每种语言用它自己的文字写。
   换语言时只有首页、资产、统计按新语言重建（`RootView`），「我的」不重建、原地换字，列表不动，选错了马上能改回来：`Text` 跟着根视图的 `locale` 换，自己算的文字（`L`）跟着列表重画，UIKit 画的标题和菜单行按语言换 `id`。
@@ -167,7 +166,7 @@ docker run --rm -v "<仓库>/ios-swift/Packages/BKCore:/pkg:ro" bk-swift bash -l
 - **导出数据、导入数据**（[ADR 0019](../docs/decisions/0019-ios-swift-export-and-import.md)；`UI/Profile/{DataExportView,DataImportView}.swift`，`BKBackend/{DataExport,BackupImport,ZipStore}.swift`）：
   导出先勾选要哪几样（默认全选）：账本（导入用的数据库副本，写着几笔流水、几个账户、多大）、表格（CSV）、卡面图片（几张、多大，没有就不列）、设置；点「导出」打成一个 zip，马上弹出分享菜单存到「文件」或发出去，分享菜单关了下面还有这个文件可以再分享，改了勾选就作废。表格是每种数据一个 CSV——流水、账户（含完整卡号、账号）、余额（每个币种的初始余额、推算余额、冻结、可用）、分类、学到的分类、识别模板、汇率、待处理、原始通知（含原文）、通知里的余额。CSV 金额按币种小数位、不加千位分隔，流水流入为正、流出为负；开头带 BOM 让 Excel 认出中文；几个文件之间用编号对上。
   导入选这个 zip，先看里面有几笔流水、几个账户（导出时没勾账本的只有卡面图片、设置可以导入），再选增量（现在的数据不动，只加没有的；同一张卡、同一条通知不重复）或覆盖（在按钮弹出的小菜单里再点一下）。导入前自动存一份现在的数据，可以撤销上次导入。
-- **主题色**（`ThemeColor`，`UI/Theme/AppTheme.swift`；弹窗 `UI/Profile/ThemeColorSheet.swift`）：点「显示 › 主题色」弹出和记一笔一样的弹窗，点现成的色块（每块是它自己的颜色），或者用系统色盘（`ColorPicker`）自己调，存成 `#RRGGBB`。选的时候只有弹窗里跟着变，右上角确定才换到整个 App，取消不变。根视图 `.tint`，UIKit 部分跟窗口的 `tintColor`；代码里用 `.tint`，不写 `Color.accentColor`。流水里进账的金额也用主题色。菜单样式的选择行（外观、图标等）右边的文字换了主题色不会马上重画，这几行按主题色重建（`.id`）；`themeColor` 在「我的」里比 App 那层的 `.tint` 先变，所以列表上自己也 `.tint` 一次，否则重建时拿到的是上一个颜色。
+- **主题色**（`ThemeColor`，`UI/Theme/AppTheme.swift`；弹窗 `UI/Profile/ThemeColorSheet.swift`）：点「显示 › 主题色」弹出和记一笔一样的弹窗，点现成的色块（每块是它自己的颜色），或者用系统色盘（`ColorPicker`）自己调，存成 `#RRGGBB`。选的时候只有弹窗里跟着变，右上角确定才换到整个 App，取消不变。根视图 `.tint`，UIKit 部分跟窗口的 `tintColor`；代码里用 `.tint`，不写 `Color.accentColor`。流水里进账的金额也用主题色。菜单样式的选择行（外观、语言等）右边的文字换了主题色不会马上重画，这几行按主题色重建（`.id`）；`themeColor` 在「我的」里比 App 那层的 `.tint` 先变，所以列表上自己也 `.tint` 一次，否则重建时拿到的是上一个颜色。
 - 选币种页面的搜索框在最下面（`UI/Common/GlassSearchBar.swift`）：点进去时关闭按钮像水滴一样从搜索框里分出来，退出时并回去（`GlassEffectContainer` + `glassEffectID`）。列表不跟着键盘变矮（收起键盘时搜索框后面不会露出一块）。
 
 ## 卡片信息与卡面
@@ -225,6 +224,8 @@ docker run --rm -v "<仓库>/ios-swift/Packages/BKCore:/pkg:ro" bk-swift bash -l
 | 深色 | `AppIconDark`：默认外观也用深色的颜色 |
 
 - 三个 `.icon` 的图层一样，只有 `icon.json` 里的颜色不同；改图形或颜色时三个一起改。着色外观三个都一样。
+- 「我的 › 图标」不写浅色、深色的文字菜单，三个图标直接排出来点选（`UI/Profile/AppIconPicker.swift`；跟随系统的左上半浅色、右下半深色）。
+  系统不给读备用图标的图，预览用资源目录 `Assets.xcassets/IconLayers` 里同一套 SVG 图层按 `icon.json` 的颜色画平面版；改图形或颜色时这里也一起改。
 - 构建设置 `ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = "AppIconLight AppIconDark"` 让 actool 把两个备用图标编进去，
   写进 Info.plist 的 `CFBundleAlternateIcons`（CI 第 6 步检查）。
 - 每次换图标系统都会弹一个「已更改图标」的提示，这是系统行为，去不掉；所以图标已经对了就不再调用。
