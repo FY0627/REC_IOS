@@ -111,7 +111,7 @@ extension View {
 private struct RecordSwipeActions: ViewModifier {
     let row: RecordRow
     @Binding var state: RecordSwipeState
-    @AppStorage(ThemeColor.key) private var themeColor = ThemeColor.blue.rawValue
+    @AppStorage(ThemeColor.key) private var themeColor = ThemeColor.defaultValue
 
     func body(content: Content) -> some View {
         content

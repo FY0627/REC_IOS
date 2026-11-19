@@ -154,22 +154,17 @@ enum IslandLayout {
 }
 
 extension CategoryActivityAttributes.ContentState {
-    /// App 的主题色（`ThemeColor`）；以前开的活动没写，用蓝色
+    /// App 的主题色（`ThemeColor`）：现成的存名字，自己调的存 `#RRGGBB`；以前开的活动没写，用默认的黄色
     var tintColor: Color {
-        switch tint {
-        case "indigo": .indigo
-        case "purple": .purple
-        case "pink": .pink
-        case "red": .red
-        case "orange": .orange
-        case "green": .green
-        case "mint": .mint
-        case "teal": .teal
-        case "cyan": .cyan
-        case "brown": .brown
-        case "graphite": .gray
-        default: .blue
+        if let tint, tint.hasPrefix("#"), let hex = UInt32(tint.dropFirst(), radix: 16) {
+            return Color(.sRGB, red: Double((hex >> 16) & 0xFF) / 255, green: Double((hex >> 8) & 0xFF) / 255, blue: Double(hex & 0xFF) / 255)
         }
+        let named: [String: Color] = [
+            "blue": .blue, "indigo": .indigo, "purple": .purple, "pink": .pink, "red": .red, "orange": .orange,
+            "green": .green, "mint": .mint, "teal": .teal, "cyan": .cyan, "brown": .brown, "graphite": .gray,
+        ]
+        // 黄色（默认）是固定的 #FCC700，和 App 里的 `ThemeColor.yellow` 一样
+        return tint.flatMap { named[$0] } ?? Color(.sRGB, red: 0xFC / 255.0, green: 0xC7 / 255.0, blue: 0)
     }
 }
 

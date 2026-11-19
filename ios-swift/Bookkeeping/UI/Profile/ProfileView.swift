@@ -34,7 +34,7 @@ private struct ProfileList: View {
     @Environment(LedgerStore.self) private var store
     @AppStorage("appearance") private var appearance = AppearanceMode.system.rawValue
     @AppStorage(AppearanceMode.iconKey) private var appIcon = AppearanceMode.system.rawValue
-    @AppStorage(ThemeColor.key) private var themeColor = ThemeColor.blue.rawValue
+    @AppStorage(ThemeColor.key) private var themeColor = ThemeColor.defaultValue
     @AppStorage(AppLanguage.key) private var language = AppLanguage.system.rawValue
     @AppStorage(ExchangeRateStore.primaryKey) private var primaryCurrency = CurrencyCode.cny.rawValue
     @AppStorage(IngestNotifier.modeKey) private var notifyMode = IngestNotifier.Mode.off.rawValue

@@ -10,7 +10,7 @@ struct NotificationSettingsView: View {
     @Environment(ExchangeRateStore.self) private var rates
     @AppStorage(IngestNotifier.modeKey) private var notifyMode = IngestNotifier.Mode.off.rawValue
     @AppStorage(ImportExchangeRatesIntent.notifyKey) private var notifyRates = true
-    @AppStorage(ThemeColor.key) private var themeColor = ThemeColor.blue.rawValue
+    @AppStorage(ThemeColor.key) private var themeColor = ThemeColor.defaultValue
     @State private var notifyDenied = false
     @Environment(\.openURL) private var openURL
 

@@ -167,7 +167,7 @@ docker run --rm -v "<仓库>/ios-swift/Packages/BKCore:/pkg:ro" bk-swift bash -l
 - **导出数据、导入数据**（[ADR 0019](../docs/decisions/0019-ios-swift-export-and-import.md)；`UI/Profile/{DataExportView,DataImportView}.swift`，`BKBackend/{DataExport,BackupImport,ZipStore}.swift`）：
   导出先勾选要哪几样（默认全选）：账本（导入用的数据库副本，写着几笔流水、几个账户、多大）、表格（CSV）、卡面图片（几张、多大，没有就不列）、设置；点「导出」打成一个 zip，马上弹出分享菜单存到「文件」或发出去，分享菜单关了下面还有这个文件可以再分享，改了勾选就作废。表格是每种数据一个 CSV——流水、账户（含完整卡号、账号）、余额（每个币种的初始余额、推算余额、冻结、可用）、分类、学到的分类、识别模板、汇率、待处理、原始通知（含原文）、通知里的余额。CSV 金额按币种小数位、不加千位分隔，流水流入为正、流出为负；开头带 BOM 让 Excel 认出中文；几个文件之间用编号对上。
   导入选这个 zip，先看里面有几笔流水、几个账户（导出时没勾账本的只有卡面图片、设置可以导入），再选增量（现在的数据不动，只加没有的；同一张卡、同一条通知不重复）或覆盖（在按钮弹出的小菜单里再点一下）。导入前自动存一份现在的数据，可以撤销上次导入。
-- **主题色**（`ThemeColor`，`UI/Theme/AppTheme.swift`；弹窗 `UI/Profile/ThemeColorSheet.swift`）：点「显示 › 主题色」弹出和记一笔一样的弹窗，点现成的色块（每块是它自己的颜色），或者用系统色盘（`ColorPicker`）自己调，存成 `#RRGGBB`。选的时候只有弹窗里跟着变，右上角确定才换到整个 App，取消不变。根视图 `.tint`，UIKit 部分跟窗口的 `tintColor`；代码里用 `.tint`，不写 `Color.accentColor`。流水里进账的金额也用主题色。菜单样式的选择行（外观、语言等）右边的文字换了主题色不会马上重画，这几行按主题色重建（`.id`）；`themeColor` 在「我的」里比 App 那层的 `.tint` 先变，所以列表上自己也 `.tint` 一次，否则重建时拿到的是上一个颜色。
+- **主题色**（`ThemeColor`，`UI/Theme/AppTheme.swift`；弹窗 `UI/Profile/ThemeColorSheet.swift`）：默认黄色（#FCC700，系统色盘「网格」里那一格，和卷饼图标搭；`ThemeColor.defaultValue`），没选过的都是它。点「显示 › 主题色」弹出和记一笔一样的弹窗，点现成的色块（每块是它自己的颜色，黄色排第一），或者用系统色盘（`ColorPicker`）自己调，存成 `#RRGGBB`。选的时候只有弹窗里跟着变，右上角确定才换到整个 App，取消不变。根视图 `.tint`，UIKit 部分跟窗口的 `tintColor`；代码里用 `.tint`，不写 `Color.accentColor`。流水里进账的金额也用主题色。菜单样式的选择行（外观、语言等）右边的文字换了主题色不会马上重画，这几行按主题色重建（`.id`）；`themeColor` 在「我的」里比 App 那层的 `.tint` 先变，所以列表上自己也 `.tint` 一次，否则重建时拿到的是上一个颜色。
 - 选币种页面的搜索框在最下面（`UI/Common/GlassSearchBar.swift`）：点进去时关闭按钮像水滴一样从搜索框里分出来，退出时并回去（`GlassEffectContainer` + `glassEffectID`）。列表不跟着键盘变矮（收起键盘时搜索框后面不会露出一块）。
 
 ## 卡片信息与卡面

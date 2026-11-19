@@ -68,7 +68,7 @@ struct BookkeepingApp: App {
     @State private var store = LedgerStore()
     @State private var rates = ExchangeRateStore()
     @AppStorage("appearance") private var appearance = AppearanceMode.system.rawValue
-    @AppStorage(ThemeColor.key) private var themeColor = ThemeColor.blue.rawValue
+    @AppStorage(ThemeColor.key) private var themeColor = ThemeColor.defaultValue
     @AppStorage(ExchangeRateStore.primaryKey) private var primaryCurrency = "CNY"
     /// 换了语言：根视图的 `locale` 跟着换（`Text` 按它查翻译），除「我的」以外的标签页按语言重建（`RootView`）
     @AppStorage(AppLanguage.key) private var language = AppLanguage.system.rawValue

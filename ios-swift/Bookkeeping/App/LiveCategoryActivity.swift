@@ -396,7 +396,7 @@ enum LiveCategoryActivity {
         State(
             recordID: record.recordID, merchant: record.merchant, account: record.account, amount: record.amount,
             screen: picker.screen(.quick), chosen: nil,
-            tint: UserDefaults.standard.string(forKey: ThemeColor.key) ?? ThemeColor.blue.rawValue
+            tint: UserDefaults.standard.string(forKey: ThemeColor.key) ?? ThemeColor.defaultValue
         )
     }
 

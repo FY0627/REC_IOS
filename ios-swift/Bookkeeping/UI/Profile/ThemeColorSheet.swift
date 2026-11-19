@@ -62,6 +62,10 @@ private struct ThemeColorGrid: View {
             ForEach(lines.indices, id: \.self) { index in
                 HStack(alignment: .top, spacing: 6) {
                     ForEach(lines[index]) { swatch($0) }
+                    // 最后一行不满时空着，色块和上面对齐
+                    ForEach(0..<(Self.columns - lines[index].count), id: \.self) { _ in
+                        Color.clear.frame(maxWidth: .infinity, maxHeight: 1)
+                    }
                 }
             }
         }

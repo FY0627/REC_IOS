@@ -5,15 +5,20 @@ import UIKit
 /// 现成的用系统颜色，深色外观下系统自动调亮；也可以自己调（`stored(custom:)`）。
 /// SwiftUI 部分在根视图上 `.tint`，UIKit 部分（卡包、首页顶部一行）跟着窗口的 `tintColor`。
 /// 代码里要用主题色时写 `.tint`（`TintShapeStyle`），不要写 `Color.accentColor`（那是固定的蓝色）。
+/// 默认是黄色（`defaultValue`）：和卷饼图标搭，是系统色盘「网格」里的 #FCC700，不是系统的 `.systemYellow`。
 enum ThemeColor: String, CaseIterable, Identifiable {
-    case blue, indigo, purple, pink, red, orange, green, mint, teal, cyan, brown, graphite
+    case yellow, blue, indigo, purple, pink, red, orange, green, mint, teal, cyan, brown, graphite
 
     static let key = "themeColor"
+    /// 没选过时用的
+    static let defaultValue = ThemeColor.yellow.rawValue
+    static let yellowHex: UInt32 = 0xFCC700
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
+        case .yellow: L("黄色")
         case .blue: L("蓝色")
         case .indigo: L("靛蓝")
         case .purple: L("紫色")
@@ -31,6 +36,7 @@ enum ThemeColor: String, CaseIterable, Identifiable {
 
     var uiColor: UIColor {
         switch self {
+        case .yellow: UIColor(Color(hex: Self.yellowHex))
         case .blue: .systemBlue
         case .indigo: .systemIndigo
         case .purple: .systemPurple
@@ -51,7 +57,7 @@ enum ThemeColor: String, CaseIterable, Identifiable {
     /// 存在 `key` 里的值：现成的颜色存名字，自己调的存 `#RRGGBB`
     static func uiColor(stored: String) -> UIColor {
         if let theme = ThemeColor(rawValue: stored) { return theme.uiColor }
-        guard stored.hasPrefix("#"), let hex = UInt32(stored.dropFirst(), radix: 16) else { return ThemeColor.blue.uiColor }
+        guard stored.hasPrefix("#"), let hex = UInt32(stored.dropFirst(), radix: 16) else { return ThemeColor.yellow.uiColor }
         return UIColor(Color(hex: hex))
     }
 
@@ -63,7 +69,7 @@ enum ThemeColor: String, CaseIterable, Identifiable {
 
     /// UIKit 做的部分跟着窗口的 tintColor 变
     @MainActor static func applyToWindows() {
-        let tint = uiColor(stored: UserDefaults.standard.string(forKey: key) ?? ThemeColor.blue.rawValue)
+        let tint = uiColor(stored: UserDefaults.standard.string(forKey: key) ?? ThemeColor.defaultValue)
         for case let scene as UIWindowScene in UIApplication.shared.connectedScenes {
             for window in scene.windows { window.tintColor = tint }
         }
