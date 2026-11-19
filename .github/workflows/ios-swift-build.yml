@@ -27,6 +27,8 @@ on:
 permissions:
   contents: read
 
+# 同一个分支有新的构建就取消没跑完的旧构建，不排队等它跑完。
+# 收尾的几步写 `!cancelled()` 不写 `always()`：取消时不再跑（`always()` 取消后也照跑，新构建要等它们）
 concurrency:
   group: ios-swift-${{ github.ref }}
   cancel-in-progress: true
@@ -81,7 +83,7 @@ jobs:
         run: bash ios-swift/ci/annotate-failure.sh "$OUT"
 
       - name: Job summary
-        if: always()
+        if: ${{ !cancelled() }}
         run: |
           {
             echo "## iOS Swift build"
@@ -117,7 +119,7 @@ jobs:
           retention-days: 30
 
       - name: Upload logs and test results
-        if: always()
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
         with:
           name: diagnostics-${{ github.run_number }}
