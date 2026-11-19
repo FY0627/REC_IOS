@@ -5,8 +5,6 @@ import BKDatabase
 public enum BackendError: Error, Equatable, Sendable {
     case notFound
     case invalidAccount(AccountValidationError)
-    /// 只有停用的账户才能删除
-    case accountNotArchived
     /// 待处理项不允许确认（例如无法识别的通知），只能忽略
     case confirmationNotAllowed
     /// 选择的账户不在系统给出的候选里
@@ -237,13 +235,11 @@ public final class LedgerBackend: Sendable {
         try await database.write { try AccountDAO.setArchived($0, id: accountID, archived: archived) }
     }
 
-    /// 删除停用的账户，不能恢复。它的流水留着（账户名称后面写「已删除」），不再出现在账户列表、净资产和自动记账里。
-    /// 使用中的账户要先停用（`accountNotArchived`）
+    /// 删除账户（使用中的、停用的都可以），不能恢复。它的流水留着（账户名称后面写「已删除」），不再出现在账户列表、净资产和自动记账里
     public func deleteAccount(id: String) async throws {
         let now = clock()
         try await database.write { db in
             guard let account = try AccountDAO.find(db, id: id), !account.deleted else { throw BackendError.notFound }
-            guard account.archived else { throw BackendError.accountNotArchived }
             try AccountDAO.markDeleted(db, id: id, at: now)
         }
     }

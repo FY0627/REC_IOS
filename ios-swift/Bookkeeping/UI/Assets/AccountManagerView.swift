@@ -1,16 +1,21 @@
 import SwiftUI
 import BKModel
 
-/// 管理银行卡：一个列表里切换每张卡启用 / 停用，按住一行上下拖动调整卡片的顺序（系统列表的拖动：
-/// 按住的行浮在上层，其他行自动让开、补位），资产页的卡包跟着这个顺序。
+/// 管理银行卡：停用、删除都在这一页。左滑一行露出两个按钮：最右边红色「删除」，旁边灰色「停用」
+/// （停用的卡是主题色的「启用」）。不能一划到底直接删，免得误删。
+/// 删除先弹一次确认；流水留着，账户名称后面写「已删除」，不能恢复。使用中的卡也能直接删，不用先停用。
+/// 按住一行上下拖动调整卡片的顺序（系统列表的拖动：按住的行浮在上层，其他行自动让开、补位），资产页的卡包跟着这个顺序。
 ///
-/// 停用的卡不再参与自动记账和净资产，已有流水保留，在资产页最下方以灰色卡包显示。
-/// 切换开关时行不移动。
+/// 停用的卡不再参与自动记账和净资产，已有流水保留，在资产页最下方以灰色卡包显示；这里的行变灰、写「已停用」。
 struct AccountManagerView: View {
     @Environment(LedgerStore.self) private var store
     @Environment(\.dismiss) private var dismiss
-    /// 开关切换后到数据库写入完成之前，先显示新状态
+    /// 点了停用 / 启用、数据库写入完成之前，先显示新状态
     @State private var pending: [String: Bool] = [:]
+    /// 等确认删除的账户
+    @State private var deleting: Account?
+    /// 「启用」用主题色（`Color.accentColor` 是固定的蓝色）
+    @AppStorage(ThemeColor.key) private var themeColor = ThemeColor.defaultValue
 
     var body: some View {
         NavigationStack {
@@ -20,7 +25,21 @@ struct AccountManagerView: View {
                 } else {
                     List {
                         ForEach(store.allAccounts) { account in
-                            Toggle(isOn: enabled(account)) { row(account) }
+                            let enabled = pending[account.id] ?? !account.archived
+                            AccountSummaryRow(account: account, enabled: enabled)
+                                // 第一个按钮在最右边
+                                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                    // 不用 .destructive：那样一点就先把这一行划走，确认前就不见了
+                                    Button("删除", systemImage: "trash") { deleting = account }
+                                        .tint(.red)
+                                    if enabled {
+                                        Button("停用", systemImage: "pause.circle") { setEnabled(account, false) }
+                                            .tint(.gray)
+                                    } else {
+                                        Button("启用", systemImage: "play.circle") { setEnabled(account, true) }
+                                            .tint(ThemeColor.color(stored: themeColor))
+                                    }
+                                }
                         }
                         .onMove { from, to in
                             var ids = store.allAccounts.map(\.id)
@@ -35,23 +54,32 @@ struct AccountManagerView: View {
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) { Button("完成", systemImage: "checkmark") { dismiss() } }
             }
-        }
-    }
-
-    private func enabled(_ account: Account) -> Binding<Bool> {
-        Binding {
-            pending[account.id] ?? !account.archived
-        } set: { on in
-            pending[account.id] = on
-            Task {
-                await store.setArchived(accountID: account.id, archived: !on)
-                pending[account.id] = nil
+            .confirmationDialog(
+                Text(L("删除「\(deleting?.localizedName ?? "")」？")),
+                isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }),
+                titleVisibility: .visible,
+                presenting: deleting
+            ) { account in
+                Button("删除", role: .destructive) { delete(account) }
+            } message: { _ in
+                Text("流水会保留，账户名称后面写「已删除」。删除后不能恢复。")
             }
         }
     }
 
-    private func row(_ account: Account) -> some View {
-        AccountSummaryRow(account: account, enabled: pending[account.id] ?? !account.archived)
+    private func setEnabled(_ account: Account, _ on: Bool) {
+        pending[account.id] = on
+        Task {
+            await store.setArchived(accountID: account.id, archived: !on)
+            pending[account.id] = nil
+        }
+    }
+
+    private func delete(_ account: Account) {
+        Task {
+            guard (try? await store.deleteAccount(id: account.id)) != nil else { return }
+            if let image = account.face.imageID { CardFaceImages.shared.discard([image]) }
+        }
     }
 }
 
@@ -70,6 +98,11 @@ struct AccountSummaryRow: View {
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
+            }
+            .opacity(enabled ? 1 : 0.5)
+            if !enabled {
+                Spacer(minLength: 8)
+                Text("已停用").font(.footnote).foregroundStyle(.secondary)
             }
         }
     }

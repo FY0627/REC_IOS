@@ -307,7 +307,7 @@ final class RecordEditTests: XCTestCase {
         } catch BackendError.invalidAccount(.invalidCardNumber) {}
     }
 
-    func testDeletingArchivedAccountKeepsItsRecords() async throws {
+    func testDeletingAccountKeepsItsRecords() async throws {
         let backend = try makeBackend()
         let card = try await addAccount(backend, last4: "0427", opening: 500_00)
         let other = try await addAccount(backend, last4: "1234")
@@ -316,12 +316,7 @@ final class RecordEditTests: XCTestCase {
         let before = try await backend.recordCount()
         XCTAssertEqual(before, 3)
 
-        do {
-            try await backend.deleteAccount(id: card.id)
-            XCTFail("使用中的账户要先停用")
-        } catch BackendError.accountNotArchived {}
-
-        try await backend.setArchived(accountID: card.id, archived: true)
+        // 使用中的账户也能直接删，不用先停用
         try await backend.deleteAccount(id: card.id)
         let accounts = try await backend.accounts(includeArchived: true)
         XCTAssertEqual(accounts.map(\.id), [other.id], "删除的账户不在账户列表里")

@@ -4249,6 +4249,28 @@
         }
       }
     },
+    "删除「%@」？" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete “%@”?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "删除「%@」？"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "刪除「%@」？"
+          }
+        }
+      }
+    },
     "删除后不能恢复" : {
       "localizations" : {
         "en" : {
@@ -13327,6 +13349,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "明細"
+          }
+        }
+      }
+    },
+    "流水会保留，账户名称后面写「已删除」。删除后不能恢复。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Its transactions stay, marked “Deleted”. This can’t be undone."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "流水会保留，账户名称后面写「已删除」。删除后不能恢复。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "流水會保留，帳戶名稱後面會標示「已刪除」。刪除後無法復原。"
           }
         }
       }
