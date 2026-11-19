@@ -230,11 +230,13 @@ private struct OverviewCard: View {
 }
 
 /// 净资产明细：合计（有汇率时为换算后的金额）、各币种的原币金额、汇率来源。
+/// 各币种默认只列有资产或有负债的；资产、负债都是 0 的收在最后一行「显示其余 N 个币种」里
 private struct NetWorthDetailView: View {
     @Environment(LedgerStore.self) private var store
     @Environment(ExchangeRateStore.self) private var rates
     @Environment(\.dismiss) private var dismiss
     @AppStorage(ExchangeRateStore.primaryKey) private var primaryCode = CurrencyCode.cny.rawValue
+    @State private var showsEmpty = false
 
     var body: some View {
         let summary = NetWorth(store: store, rates: rates.rates, primary: CurrencyCode(primaryCode))
@@ -244,8 +246,10 @@ private struct NetWorthDetailView: View {
                     totalsRows(summary.main)
                 }
                 if !summary.totals.isEmpty {
+                    let empty = summary.totals.filter { $0.assets == 0 && $0.liabilities == 0 }
+                    let shown = showsEmpty ? summary.totals : summary.totals.filter { $0.assets != 0 || $0.liabilities != 0 }
                     Section("各币种") {
-                        ForEach(summary.totals, id: \.currency) { t in
+                        ForEach(shown, id: \.currency) { t in
                             let skipped = summary.converted?.skipped.contains(t.currency) == true
                             VStack(alignment: .leading, spacing: 6) {
                                 LabeledContent(t.currency.localizedName) {
@@ -258,6 +262,11 @@ private struct NetWorthDetailView: View {
                                 }
                             }
                             .monospacedDigit()
+                        }
+                        if !empty.isEmpty, !showsEmpty {
+                            Button(L("显示其余 \(empty.count) 个币种")) {
+                                withAnimation { showsEmpty = true }
+                            }
                         }
                     }
                 }

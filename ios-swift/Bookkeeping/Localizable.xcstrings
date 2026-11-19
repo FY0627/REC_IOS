@@ -11669,6 +11669,40 @@
         }
       }
     },
+    "显示其余 %lld 个币种" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Show %lld More Currency"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Show %lld More Currencies"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "显示其余 %lld 个币种"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "顯示其餘 %lld 種幣別"
+          }
+        }
+      }
+    },
     "显示完整卡号" : {
       "localizations" : {
         "en" : {
