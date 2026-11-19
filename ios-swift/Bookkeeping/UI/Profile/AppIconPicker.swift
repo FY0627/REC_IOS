@@ -37,6 +37,8 @@ struct AppIconPicker: View {
 /// 每组图层下面一点阴影（系统画的 Liquid Glass 高光、半透明这里不画）。改图标的图形或颜色时这里一起改
 struct AppIconPreview: View {
     let mode: AppearanceMode
+    /// 60 点大的图标用 13.5；别的大小按比例给
+    var cornerRadius: CGFloat = 13.5
 
     var body: some View {
         switch mode {
@@ -57,10 +59,10 @@ struct AppIconPreview: View {
             group([("IconLayerFront", palette.front)])
         }
         .aspectRatio(1, contentMode: .fit)
-        .clipShape(RoundedRectangle(cornerRadius: 13.5, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
         // 浅色图标放在白色的列表上也看得出边
         .overlay {
-            RoundedRectangle(cornerRadius: 13.5, style: .continuous).strokeBorder(Color.primary.opacity(0.12), lineWidth: 0.5)
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous).strokeBorder(Color.primary.opacity(0.12), lineWidth: 0.5)
         }
     }
 

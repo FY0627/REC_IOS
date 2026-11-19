@@ -93,18 +93,25 @@ struct NotificationSettingsView: View {
     }
 }
 
-/// 演示用的通知横幅：样子照系统的通知（App 名、时间、标题、正文），放在设置项下面
+/// 演示用的通知横幅：样子照系统的通知（App 图标、App 名、时间、标题、正文），放在设置项下面。
+/// 图标和桌面上的一样：「我的 › 显示 › 图标」选了浅色、深色就画那一个，跟随系统按现在的外观画
 private struct NotificationPreview: View {
     let title: String?
     let message: String
 
+    @AppStorage(AppearanceMode.iconKey) private var appIcon = AppearanceMode.system.rawValue
+    @Environment(\.colorScheme) private var colorScheme
+
+    private var iconMode: AppearanceMode {
+        let chosen = AppearanceMode(rawValue: appIcon) ?? .system
+        guard chosen == .system else { return chosen }
+        return colorScheme == .dark ? .dark : .light
+    }
+
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
-            Image(systemName: "bell.fill")
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(.white)
+            AppIconPreview(mode: iconMode, cornerRadius: 8.5)
                 .frame(width: 38, height: 38)
-                .background(.tint, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
             VStack(alignment: .leading, spacing: 2) {
                 HStack(alignment: .firstTextBaseline) {
                     Text(verbatim: "Tacito").font(.subheadline.weight(.semibold))
