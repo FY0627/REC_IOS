@@ -107,9 +107,9 @@ struct StatsView: View {
                 .padding(.bottom, AppLayout.topBarBottom)
                 .background { TopBarBackdrop(visible: scrolledUnderBar) }
             }
-            // 分类明细、分类明细里的每一笔都和首页一样按值推进：页面和右上角按钮一次建好再推进来
-            // （用闭包写目的页时，流水详情右上角的合并、删除是推进来以后才放上去的，图标一个一个冒出来）。
-            // 两层都要按值：一层按值、一层用闭包混在一个导航栈里，点一笔会多推一次分类明细
+            // 分类明细、分类明细里的每一笔都和首页一样按值推进。
+            // 两层都要按值：一层按值、一层用闭包混在一个导航栈里，点一笔会多推一次分类明细。
+            // 流水详情右上角的按钮不再单独冒出来，靠的是分类明细也藏起系统导航栏（见 CategoryStatsView）
             .navigationDestination(for: CategoryStatsRoute.self) { route in CategoryStatsView(route: route) }
             .navigationDestination(for: RecordRow.self) { row in RecordPage(row: row) }
             .sheet(isPresented: $choosingCustom) {
@@ -331,8 +331,10 @@ private struct CategoryStatsView: View {
     private var to: Date? { route.to }
 
     @Environment(LedgerStore.self) private var store
+    @Environment(\.dismiss) private var dismiss
     @State private var rows: [RecordRow] = []
     @State private var swipe = RecordSwipeState()
+    @State private var scrolledUnderBar = false
 
     var body: some View {
         List {
@@ -364,8 +366,40 @@ private struct CategoryStatsView: View {
                 }
             }
         }
+        .trackingScrollUnderTopBar($scrolledUnderBar)
         .navigationTitle(item.name.loc)
         .navigationBarTitleDisplayMode(.inline)
+        // 系统导航栏藏起来，自己放返回和标题（和首页一样）：点进一笔时流水详情的导航栏整条跟着页面推进来，
+        // 右上角的合并、删除也跟着一起进来。系统导航栏留着的话，前后两页共用一条导航栏，
+        // 新页面的玻璃按钮会在导航栏里单独冒出来
+        .toolbarVisibility(.hidden, for: .navigationBar)
+        .safeAreaBar(edge: .top) {
+            ZStack {
+                Text(item.name.loc)
+                    .font(.headline)
+                    .lineLimit(1)
+                    .padding(.horizontal, GlassControls.size + 8)
+                    .accessibilityAddTraits(.isHeader)
+                HStack {
+                    Button { dismiss() } label: {
+                        Image(systemName: "chevron.left")
+                            .font(.body.weight(.semibold))
+                            .foregroundStyle(Color.primary)
+                            .frame(width: GlassControls.size, height: GlassControls.size)
+                            .contentShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .glassEffect(.regular.interactive(), in: .circle)
+                    .accessibilityLabel("返回")
+                    Spacer()
+                }
+            }
+            .frame(height: GlassControls.size)
+            .padding(.horizontal, AppLayout.cardInset)
+            .padding(.top, 2)
+            .padding(.bottom, AppLayout.topBarBottom)
+            .background { TopBarBackdrop(visible: scrolledUnderBar) }
+        }
         .recordSwipeHost($swipe)
         .task(id: store.revision) {
             let filter = RecordFilter(
