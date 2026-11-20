@@ -434,36 +434,28 @@ private struct SwipeBackEnabler: UIViewRepresentable {
     }
 }
 
-/// 返回手势的代理：套在系统原来的代理外面，只改「能不能开始」，和列表滚动、左滑删除怎么让来让去还是系统原来的做法（其余的方法转给原来的代理）。
-/// 系统原来放行的照样放行；没放行的（导航栏藏起来了），有上一页、而且没在推进或返回的过程中就放行（过程中放行会卡住页面）。
-/// 页面上随便一个地方的那个手势只在往右、横着滑时放行，往左滑留给流水的左滑删除，竖着滑留给列表滚动
+/// 返回手势的代理，替掉系统原来的（原来的在导航栏藏起来时什么都不放行，转给它的话屏幕边上也滑不回去）。
+/// 有上一页、而且没在推进或返回的过程中就放行（过程中放行会卡住页面）。
+/// 页面上随便一个地方的那个手势只在往右、横着滑时开始；页面上别的拖动（列表滚动、流水的左滑）先等它不成立再动：
+/// 往右滑时它先开始，把这次触摸从列表上取消，不会被当成点了这一笔；竖着滑、往左滑它不开始，列表照常滚、照常露出编辑删除
 @MainActor
 private final class SwipeBackDelegate: NSObject, UIGestureRecognizerDelegate {
     /// 代理是 weak 的，装上的放在这里留着
-    private static var installed: [ObjectIdentifier: SwipeBackDelegate] = [:]
+    private static let edgeDelegate = SwipeBackDelegate(anywhere: false)
+    private static let contentDelegate = SwipeBackDelegate(anywhere: true)
 
-    nonisolated(unsafe) private weak var original: (any UIGestureRecognizerDelegate)?
     private let anywhere: Bool
 
-    private init(original: (any UIGestureRecognizerDelegate)?, anywhere: Bool) {
-        self.original = original
+    private init(anywhere: Bool) {
         self.anywhere = anywhere
     }
 
     static func install(on navigation: UINavigationController) {
-        let gestures: [(UIGestureRecognizer?, Bool)] = [
-            (navigation.interactivePopGestureRecognizer, false),
-            (navigation.interactiveContentPopGestureRecognizer, true),
-        ]
-        for case let (gesture?, anywhere) in gestures where !(gesture.delegate is SwipeBackDelegate) {
-            let proxy = SwipeBackDelegate(original: gesture.delegate, anywhere: anywhere)
-            installed[ObjectIdentifier(gesture)] = proxy
-            gesture.delegate = proxy
-        }
+        navigation.interactivePopGestureRecognizer?.delegate = edgeDelegate
+        navigation.interactiveContentPopGestureRecognizer?.delegate = contentDelegate
     }
 
     func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
-        if original?.gestureRecognizerShouldBegin?(gestureRecognizer) == true { return true }
         guard let navigation = Self.navigationController(from: gestureRecognizer.view),
               navigation.viewControllers.count > 1, navigation.transitionCoordinator == nil else { return false }
         guard anywhere else { return true }
@@ -472,12 +464,13 @@ private final class SwipeBackDelegate: NSObject, UIGestureRecognizerDelegate {
         return velocity.x > 0 && velocity.x > abs(velocity.y)
     }
 
-    nonisolated override func responds(to aSelector: Selector!) -> Bool {
-        super.responds(to: aSelector) || (original?.responds(to: aSelector) ?? false)
-    }
-
-    nonisolated override func forwardingTarget(for aSelector: Selector!) -> Any? {
-        original?.responds(to: aSelector) == true ? original : nil
+    /// 页面里的拖动等这个手势先定下来；屏幕边上那个和导航栈自己的手势不管
+    func gestureRecognizer(
+        _ gestureRecognizer: UIGestureRecognizer, shouldBeRequiredToFailBy otherGestureRecognizer: UIGestureRecognizer
+    ) -> Bool {
+        guard anywhere, otherGestureRecognizer is UIPanGestureRecognizer,
+              let view = gestureRecognizer.view, let other = otherGestureRecognizer.view, other !== view else { return false }
+        return other.isDescendant(of: view)
     }
 
     static func navigationController(from responder: UIResponder?) -> UINavigationController? {
