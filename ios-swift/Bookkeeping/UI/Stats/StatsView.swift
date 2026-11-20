@@ -107,6 +107,9 @@ struct StatsView: View {
                 .padding(.bottom, AppLayout.topBarBottom)
                 .background { TopBarBackdrop(visible: scrolledUnderBar) }
             }
+            // 分类明细里点一笔，和首页一样按值推进流水详情：页面和右上角按钮一次建好再推进来。
+            // 用闭包写目的页时，右上角的合并、删除是推进来以后才放上去的，图标一个一个冒出来
+            .navigationDestination(for: RecordRow.self) { row in RecordPage(row: row) }
             .sheet(isPresented: $choosingCustom) {
                 CustomPeriodSheet(initial: period.customDates) { period = $0 }
             }
@@ -343,12 +346,8 @@ private struct CategoryStatsView: View {
             ForEach(RecordDay.group(rows), id: \.day) { day in
                 Section(day.title) {
                     ForEach(day.rows) { row in
-                        NavigationLink {
-                            RecordPage(row: row)
-                        } label: {
-                            RecordRowView(row: row, timeOnly: true)
-                        }
-                        .recordSwipe(row, state: $swipe)
+                        NavigationLink(value: row) { RecordRowView(row: row, timeOnly: true) }
+                            .recordSwipe(row, state: $swipe)
                     }
                 }
             }
