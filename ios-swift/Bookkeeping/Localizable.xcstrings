@@ -5703,28 +5703,6 @@
         }
       }
     },
-    "只删除这一边，另一边的账户还留着这笔。删除后不能恢复" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Only this side is deleted; the other account keeps its side. This can’t be undone."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "只删除这一边，另一边的账户还留着这笔。删除后不能恢复"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "只刪除這一邊，另一邊的帳戶仍保留這筆。刪除後無法復原"
-          }
-        }
-      }
-    },
     "只记%@" : {
       "localizations" : {
         "en" : {

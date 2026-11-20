@@ -339,7 +339,6 @@ t("添加", "新增", "Add")
 t("%@的小类", "%@的子分類", "Subcategories of %@")
 t("不细分", "不細分", "General")
 t("展开小类", "展開子分類", "Shows subcategories")
-t("只删除这一边，另一边的账户还留着这笔。删除后不能恢复", "只刪除這一邊，另一邊的帳戶仍保留這筆。刪除後無法復原", "Only this side is deleted; the other account keeps its side. This can’t be undone.")
 t("删除失败", "刪除失敗", "Couldn’t Delete")
 
 # MARK: 识别模板

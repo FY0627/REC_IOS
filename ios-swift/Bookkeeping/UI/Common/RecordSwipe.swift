@@ -14,13 +14,6 @@ struct RecordSwipeState {
     var confirmedDelete: RecordRow?
 }
 
-extension RecordRow {
-    /// 删除确认菜单上的说明
-    var deleteWarning: String {
-        record.transferGroupID == nil ? L("删除后不能恢复") : L("只删除这一边，另一边的账户还留着这笔。删除后不能恢复")
-    }
-}
-
 /// 删除确认：系统的下拉菜单，和流水详情最下面的「删除」一样，出现、收起都是系统动画，点菜单外面就是取消。
 /// 系统的滑动按钮不能挂菜单，用代码打开菜单的公开办法只有 `performPrimaryAction`：
 /// 在要弹出的位置放一个看不见的按钮，让它打开菜单，收起后拿掉。
@@ -35,7 +28,7 @@ final class RecordDeleteMenuButton: UIButton {
         onDelete: @escaping () -> Void,
         onEnd: @escaping () -> Void
     ) {
-        show(warning: row.deleteWarning, action: L("删除这笔流水"), at: rect, in: view, onDelete: onDelete, onEnd: onEnd)
+        show(warning: L("删除后不能恢复"), action: L("删除这笔流水"), at: rect, in: view, onDelete: onDelete, onEnd: onEnd)
     }
 
     /// 通用的删除确认：`warning` 是菜单上的说明（`nil` 不写），`action` 是红色的那一项（管理账户删账户也用）
@@ -132,7 +125,7 @@ private struct RecordSwipeActions: ViewModifier {
             // 放在这一行上：确认菜单从这一行右端、也就是「删除」按钮那里弹出
             .background(alignment: .trailing) {
                 if state.deleting?.id == row.id {
-                    DeleteMenuAnchor(warning: row.deleteWarning, action: L("删除这笔流水")) {
+                    DeleteMenuAnchor(warning: L("删除后不能恢复"), action: L("删除这笔流水")) {
                         state.confirmedDelete = row
                     } onEnd: {
                         state.deleting = nil
