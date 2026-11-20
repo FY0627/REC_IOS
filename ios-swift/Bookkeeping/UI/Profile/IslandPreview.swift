@@ -6,7 +6,7 @@ import BKModel
 ///
 /// 和真的岛一样走一遍，动起来也照真的岛（`IslandMotion`）：
 /// 1. 只有摄像头 → 岛弹开成提醒：左边收据图标，中间「刚刚记了一笔 / 待分类」，右边圆环里是还有几笔没分类；
-/// 2. 3 秒后（真的岛也是 3 秒，`openingTime`）收成小岛：两边一样宽，左边一个标签图标、右边空着。长按展开成按钮，不长按就一直收着；
+/// 2. 3 秒后（真的岛也是 3 秒，`openingTime`）收成小岛：照真机截图，左边一个标签图标，右半边是摄像头。长按展开成按钮，不长按就一直收着；
 /// 3. 按钮三页：第 1 页 4 个推荐和「全部」，「全部」是全部大类，点有小类的大类进小类，左上角返回。
 ///    换页整页上下滚：往里点旧的往上走、新的从下面上来，返回反过来。
 ///    分类是账本里自己的支出分类，页怎么分、按钮点了去哪用的就是岛上那一套（`LiveCategoryPicker`）；
@@ -376,8 +376,8 @@ private struct IslandBody: View {
         .accessibilityAddTraits(.isButton)
     }
 
-    /// 收起的小岛：和真的一样以摄像头为中心、两边一样宽，中间是面容 ID 和摄像头那一段；
-    /// 左边标签图标（还没选分类），右边空着（真的岛上不放金额）。长按展开，和真的岛一样，不长按就一直收着
+    /// 收起的小岛：照真机截图画，在屏幕正中，比摄像头那一段两边各宽一点；标签图标（还没选分类）贴着左边的圆头，
+    /// 右半边是面容 ID 和摄像头（镜头偏右，不在最右边），不放别的（真的岛上不放金额）。长按展开，和真的岛一样，不长按就一直收着
     private var compact: some View {
         HStack {
             Image(systemName: LiveCategoryPicker.unpickedSymbol)
@@ -737,10 +737,9 @@ private enum IslandShape {
     static let cameraWidth: CGFloat = camera.width
     static let lens: CGFloat = 12
     static let lensOffset: CGFloat = 40
-    /// 收起的小岛：面容 ID 和摄像头那一段两边各多出一样宽的一块，左边放图标、右边空着
-    static let compactSide: CGFloat = 43
-    static let compact = CGSize(width: camera.width + compactSide * 2, height: 37)
-    static let compactInset: CGFloat = 14
+    /// 收起的小岛：真机截图量的（岛高按 37 算）宽约 178、在屏幕正中，图标中心离左边约 16
+    static let compact = CGSize(width: 178, height: 37)
+    static let compactInset: CGFloat = 8
 
     /// 提醒：图标和圆环 56，圆心离岛边约 44（左右各缩 16），上沿离岛顶 10 + 10；岛的圆角 44
     static let badge: CGFloat = 56
