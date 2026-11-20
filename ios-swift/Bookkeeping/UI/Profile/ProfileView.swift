@@ -38,7 +38,6 @@ private struct ProfileList: View {
     @AppStorage(AppLanguage.key) private var language = AppLanguage.system.rawValue
     @AppStorage(ExchangeRateStore.primaryKey) private var primaryCurrency = CurrencyCode.cny.rawValue
     @AppStorage(IngestNotifier.modeKey) private var notifyMode = IngestNotifier.Mode.off.rawValue
-    @AppStorage(IngestNotifier.islandKey) private var islandOn = true
     @AppStorage(ImportExchangeRatesIntent.notifyKey) private var notifyRates = true
     /// 「开发与调试」平时藏着：连点 7 次版本号显示，再连点 7 次藏起来
     @AppStorage("showDevTools") private var showDevTools = false
@@ -182,19 +181,6 @@ private struct ProfileList: View {
                         LabeledContent("灵动岛", value: liveActivityResult.isEmpty ? "—" : liveActivityResult)
                         // 上次点岛上的按钮 App 这边花了多久：剩下的等待是系统叫起 App、重画岛
                         LabeledContent("灵动岛按钮", value: liveActivityTap.isEmpty ? "—" : liveActivityTap)
-                        // 灵动岛的开关（ADR 0024）只放这里：关了在通知上选。没有灵动岛的手机是待分类的提醒横幅，开关一样
-                        Toggle(isOn: $islandOn) {
-                            if hasIsland {
-                                Label("灵动岛选分类", systemImage: "iphone.gen3")
-                            } else {
-                                Label("实时活动提醒", systemImage: "iphone.gen3")
-                            }
-                        }
-                        .onChange(of: islandOn) { _, on in
-                            // 岛上正在选的也收起，留在待分类
-                            guard !on else { return }
-                            Task { await LiveCategoryActivity.endAll() }
-                        }
                         // 岛上选好以后画圆圈、画对勾各用多久：在真机上调好再写死
                         if hasIsland {
                             drawTimeStepper("画圈", systemImage: "circle.dashed", value: $ringSeconds)

@@ -34,7 +34,7 @@ enum IngestNotifier {
     }
 
     static let modeKey = "notify.ingestResult"
-    /// 有灵动岛的手机在岛上选分类（ADR 0024），默认开；开关在「开发与调试」里，关了在通知上选
+    /// 有灵动岛的手机在岛上选分类（ADR 0024），默认开；开关在「我的 › 通知」里，记账结果选「全部」时才有，关了在通知上选
     static let islandKey = "notify.island"
 
     static var islandOn: Bool { UserDefaults.standard.object(forKey: islandKey) as? Bool ?? true }
@@ -69,7 +69,7 @@ enum IngestNotifier {
             let suggestions = await categorySuggestions(for: item, backend: backend, screenshot: screenshot)
             let id = "ingest-\(result.ingestID ?? UUID().uuidString)-\(index)"
             // 有灵动岛时在岛上选分类（ADR 0024），这一笔不再发记账成功通知；没开成照常发
-            if islandOn, let recordID = item.recordID, LiveCategoryActivity.eligible(item, suggestions: suggestions),
+            if mode == .all, islandOn, let recordID = item.recordID, LiveCategoryActivity.eligible(item, suggestions: suggestions),
                await LiveCategoryActivity.show(recordID: recordID, suggestions: suggestions, header: header(item)) {
                 continue
             }

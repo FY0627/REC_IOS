@@ -3069,6 +3069,28 @@
         }
       }
     },
+    "便利店" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Convenience Store"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "便利店"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "便利商店"
+          }
+        }
+      }
+    },
     "保存" : {
       "localizations" : {
         "en" : {
