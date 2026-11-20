@@ -158,10 +158,12 @@ struct RecordDetailSheet: View {
     }
 }
 
-/// 单笔流水详情：类型、分类（点一下就能改）、账户、时间、备注（直接写）；
+/// 单笔流水详情：类型、分类、账户、时间、备注（直接写）；
 /// 退款、手续费、同一单的其他几笔；方向、交易性质、状态、来源、原始通知收在「更多信息」里。
-/// 右上角「编辑」可以改类型、金额、币种、分类、账户、交易对方、时间、备注和实际扣款；最下面可以删除。
-/// 操作按钮文字在左、图标在右（和系统菜单一样）；删除点了先在按钮旁边弹出一个小菜单确认，不弹对话框。
+/// 不写「流水详情」标题：点进来就知道是哪一笔。
+/// 点上面那一组里的金额、类型、分类、账户、时间这些，弹出编辑（`RecordEditor`），可以改类型、金额、币种、分类、账户、交易对方、时间、备注和实际扣款。
+/// 右上角是「合并」（能合并时）和「删除」：删除点了先在按钮下面弹出一个小菜单确认，不弹对话框。
+/// 详情里的操作按钮文字靠左（和系统菜单一样）。
 struct RecordDetailView: View {
     let recordID: String
     @Environment(LedgerStore.self) private var store
@@ -186,12 +188,23 @@ struct RecordDetailView: View {
                 ProgressView()
             }
         }
-        .navigationTitle("流水详情")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .confirmationAction) {
-                Button("编辑") { editing = true }
-                    .disabled(detail == nil)
+            if let detail, canMerge(detail) {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("合并", systemImage: "arrow.triangle.merge") { merging = true }
+                }
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                // 确认的小菜单就在这个按钮下面弹出
+                Menu {
+                    Section("删除后不能恢复") {
+                        Button("删除这笔流水", systemImage: "trash", role: .destructive) { Task { await delete() } }
+                    }
+                } label: {
+                    Label("删除", systemImage: "trash")
+                }
+                .disabled(detail == nil)
             }
         }
         .sheet(isPresented: $editing) {
@@ -220,28 +233,35 @@ struct RecordDetailView: View {
         let r = row.record
         return Form {
             Section {
-                HStack(spacing: 12) {
-                    CategoryIcon(symbol: row.symbol)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(row.title).font(.headline).lineLimit(2)
-                        Text(row.categoryText).font(.subheadline).foregroundStyle(.secondary)
+                editable {
+                    HStack(spacing: 12) {
+                        CategoryIcon(symbol: row.symbol)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(row.title).font(.headline).lineLimit(2)
+                            Text(row.categoryText).font(.subheadline).foregroundStyle(.secondary)
+                        }
                     }
+                    .padding(.vertical, 4)
                 }
-                .padding(.vertical, 4)
-                Text(row.amountText(inAccount: true))
-                    .font(.largeTitle.weight(.bold))
-                    .monospacedDigit()
-                    .foregroundStyle(row.amountColor(inAccount: true))
-                    .strikethrough(r.status == .failed)
+                editable {
+                    Text(row.amountText(inAccount: true))
+                        .font(.largeTitle.weight(.bold))
+                        .monospacedDigit()
+                        .foregroundStyle(row.amountColor(inAccount: true))
+                        .strikethrough(r.status == .failed)
+                }
                 if let charge = row.charge {
-                    chargeRow(charge, record: r)
+                    editable { chargeRow(charge, record: r) }
                 }
-                LabeledContent("类型", value: r.isRefund ? L("支出（退款，从支出里减掉）") : row.entryType.displayName.loc)
-                // 只显示；改分类在右上角「编辑」里
+                editable {
+                    LabeledContent("类型", value: r.isRefund ? L("支出（退款，从支出里减掉）") : row.entryType.displayName.loc)
+                }
                 if row.entryType != .transfer {
-                    LabeledContent("分类") {
-                        Text(r.categoryAuto ? L("\(row.categoryText)（自动归类）") : row.categoryText)
-                            .foregroundStyle(row.isUncategorized ? AppTheme.debt : Color.secondary)
+                    editable {
+                        LabeledContent("分类") {
+                            Text(r.categoryAuto ? L("\(row.categoryText)（自动归类）") : row.categoryText)
+                                .foregroundStyle(row.isUncategorized ? AppTheme.debt : Color.secondary)
+                        }
                     }
                 }
                 if (r.kind == .transferIn || r.kind == .transferOut), r.transferGroupID == nil, r.status == .posted {
@@ -254,21 +274,29 @@ struct RecordDetailView: View {
                         Text("别人").tag(TransferParty?.some(.other))
                     }
                 }
-                if let route = row.transferRoute {
-                    LabeledContent("转帐", value: route)
-                } else {
-                    LabeledContent("账户", value: row.account.localizedText)
+                editable {
+                    if let route = row.transferRoute {
+                        LabeledContent("转帐", value: route)
+                    } else {
+                        LabeledContent("账户", value: row.account.localizedText)
+                    }
                 }
                 // 到账和转出不一样（手续费、换汇）时写出另一边
                 if let other = row.peerMoney, other != r.money {
-                    LabeledContent(r.direction == .outflow ? "到账" : "转出", value: Fmt.money(other.minorUnits, other.currency))
+                    editable {
+                        LabeledContent(r.direction == .outflow ? "到账" : "转出", value: Fmt.money(other.minorUnits, other.currency))
+                    }
                 }
                 if let fee = row.transferFeeMinor {
                     LabeledContent("手续费", value: Fmt.money(fee, r.currency))
                 }
-                LabeledContent("时间", value: Fmt.dateTime(r.effectiveAt))
+                editable {
+                    LabeledContent("时间", value: Fmt.dateTime(r.effectiveAt))
+                }
                 if let counterparty = r.counterparty {
-                    LabeledContent("交易对方", value: counterparty)
+                    editable {
+                        LabeledContent("交易对方", value: counterparty)
+                    }
                 }
                 if let fee = detail.fee {
                     LabeledContent("手续费", value: Fmt.money(fee.record.amountMinor, fee.record.currency))
@@ -325,10 +353,6 @@ struct RecordDetailView: View {
                 Section {
                     Button { Task { await splitTransfer() } } label: { ActionLabel(title: "拆开") }
                 }
-            } else if row.entryType != .transfer, r.status == .posted {
-                Section {
-                    Button { merging = true } label: { ActionLabel(title: "合并") }
-                }
             }
 
             if let saveError {
@@ -357,25 +381,33 @@ struct RecordDetailView: View {
                     }
                 }
             }
-            Section {
-                // 通知记上的、原文还在：「不记」删掉这笔并记住这种写法（朝朝宝这类余额的进出），以后同样的通知不记
-                if detail.evidence.contains(where: { $0.source != .manual && $0.source != .screenshot && $0.rawText != nil }) {
+            // 通知记上的、原文还在：「不记」删掉这笔并记住这种写法（朝朝宝这类余额的进出），以后同样的通知不记
+            if detail.evidence.contains(where: { $0.source != .manual && $0.source != .screenshot && $0.rawText != nil }) {
+                Section {
                     Menu {
                         Button("以后这种通知都不记", systemImage: "nosign", role: .destructive) { Task { await skip() } }
                     } label: {
                         ActionLabel(title: "不记").foregroundStyle(Color.red)
                     }
                 }
-                // 确认的小菜单就在这个按钮旁边弹出
-                Menu {
-                    Section("删除后不能恢复") {
-                        Button("删除这笔流水", systemImage: "trash", role: .destructive) { Task { await delete() } }
-                    }
-                } label: {
-                    ActionLabel(title: "删除").foregroundStyle(Color.red)
-                }
             }
         }
+    }
+
+    /// 能合并（右上角「合并」）：不在合成的一单里、不是手动合成的转帐、已入账的支出或收入
+    private func canMerge(_ detail: RecordDetail) -> Bool {
+        detail.orderMembers.isEmpty && !detail.mergedTransfer && detail.row.entryType != .transfer && detail.row.record.status == .posted
+    }
+
+    /// 上面那一组能改的一行：点一下弹出编辑。文字照原来的颜色，不变成主题色
+    private func editable<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        Button { editing = true } label: {
+            content()
+                .foregroundStyle(Color.primary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+        }
+        .accessibilityHint(Text("编辑"))
     }
 
     private func link(_ row: RecordRow) -> some View {

@@ -21,10 +21,21 @@ struct ShortcutsView: View {
 
     var body: some View {
         List {
+            // 分段选择固定放在这一组的标题位置，只换组里的行：
+            // 放进各自的 `*SetupSections` 里时每换一次就是新的一个，系统的玻璃滑块就不弹了
+            Section {
+                switch kind {
+                case .bank: AutoSetupSections(part: .firstRows)
+                case .screenshot: ScreenshotSetupSections(part: .firstRows)
+                case .rates: ExchangeRateSetupSections(part: .firstRows)
+                }
+            } header: {
+                picker
+            }
             switch kind {
-            case .bank: AutoSetupSections(header: picker)
-            case .screenshot: ScreenshotSetupSections(header: picker)
-            case .rates: ExchangeRateSetupSections(header: picker)
+            case .bank: AutoSetupSections(part: .rest)
+            case .screenshot: ScreenshotSetupSections(part: .rest)
+            case .rates: ExchangeRateSetupSections(part: .rest)
             }
         }
         .navigationTitle("快捷指令")
@@ -33,15 +44,23 @@ struct ShortcutsView: View {
 
     /// 放在第一组的标题位置（和「我的 › 分类」一样）：上面贴着导航栏，下面和设置隔开固定的一段。
     /// 单独占一行或一个空分组时，上面或下面会多出一大段
-    private var picker: AnyView {
-        AnyView(
-            Picker("快捷指令", selection: $kind) {
-                ForEach(Kind.allCases, id: \.self) { Text($0.title).tag($0) }
-            }
-            .pickerStyle(.segmented)
-            .textCase(nil)
-            .listRowInsets(EdgeInsets())
-            .padding(.bottom, 16)
-        )
+    private var picker: some View {
+        Picker("快捷指令", selection: $kind) {
+            ForEach(Kind.allCases, id: \.self) { Text($0.title).tag($0) }
+        }
+        .pickerStyle(.segmented)
+        .textCase(nil)
+        .listRowInsets(EdgeInsets())
+        .padding(.bottom, 16)
     }
+}
+
+/// 快捷指令设置（`*SetupSections`）显示哪一部分。
+/// 新手引导和单独的设置页要全部；「我的 › 快捷指令」把第一组的行和后面分开要，第一组自己包一层带分段选择的分组
+enum SetupPart {
+    case all
+    /// 第一组里的行（「添加快捷指令」或「打开快捷指令」），不带分组
+    case firstRows
+    /// 第一组后面的分组
+    case rest
 }

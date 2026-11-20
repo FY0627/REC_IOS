@@ -27,8 +27,8 @@ struct AutoSetupGuideView: View {
 
 /// 「设置自动记账」的内容：「我的」里的设置页和新手引导共用，两边一样
 struct AutoSetupSections: View {
-    /// 放在第一组标题位置的东西：「我的 › 快捷指令」放分段选择
-    var header: AnyView?
+    /// 「我的 › 快捷指令」把第一组拆出来，自己包一层带分段选择的分组（`SetupPart`）
+    var part: SetupPart = .all
     @Environment(\.openURL) private var openURL
 
     private var useShared: Bool { SharedShortcuts.available }
@@ -38,13 +38,28 @@ struct AutoSetupSections: View {
     }
 
     var body: some View {
+        switch part {
+        case .all:
+            Section { firstRows }
+            rest
+        case .firstRows: firstRows
+        case .rest: rest
+        }
+    }
+
+    @ViewBuilder private var firstRows: some View {
         if useShared {
-            Section {
-                // 点「添加快捷指令」已经进了快捷指令 App，不再放「打开快捷指令」
-                Button("添加快捷指令", systemImage: "plus.square.on.square") { openURL(SharedShortcuts.bankMessage) }
-            } header: {
-                header
+            // 点「添加快捷指令」已经进了快捷指令 App，不再放「打开快捷指令」
+            Button("添加快捷指令", systemImage: "plus.square.on.square") { openURL(SharedShortcuts.bankMessage) }
+        } else {
+            Button("打开快捷指令", systemImage: "arrow.up.forward.app") {
+                if let url = URL(string: "shortcuts://") { openURL(url) }
             }
+        }
+    }
+
+    @ViewBuilder private var rest: some View {
+        if useShared {
             if choosesApps {
                 Section {
                     Text(Self.sharedLine)
@@ -53,14 +68,6 @@ struct AutoSetupSections: View {
                 steps(Self.shared26Steps)
             }
         } else {
-            Section {
-                Button("打开快捷指令", systemImage: "arrow.up.forward.app") {
-                    if let url = URL(string: "shortcuts://") { openURL(url) }
-                }
-            } header: {
-                header
-            }
-
             steps(choosesApps ? Self.smsSteps : Self.sms26Steps)
         }
     }

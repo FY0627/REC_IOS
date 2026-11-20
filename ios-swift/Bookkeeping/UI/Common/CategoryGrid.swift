@@ -287,13 +287,15 @@ struct CategoryGrid: View {
     private func drop() {
         guard let arrangement, let lift = arrangement.lift, arrangement.settling == nil else { return }
         if arrangement.overDelete {
-            arrangement.feedback(.drop)
+            arrangement.prepareShatter()
             withAnimation(.snappy(duration: 0.2)) {
                 arrangement.overDelete = false
                 arrangement.settle(at: CGPoint(x: arrangement.deleteFrame.midX, y: arrangement.deleteFrame.midY), into: true)
             }
             Task {
                 try? await Task.sleep(for: .milliseconds(200))
+                // 缩进删除图标、消失的那一下：碎掉的震动
+                arrangement.feedback(.shatter)
                 withAnimation(.snappy(duration: 0.3)) {
                     arrangement.leaving = lift.id
                     arrangement.finish()
@@ -354,7 +356,9 @@ struct CategoryGrid: View {
     /// 记录不删，回到待分类；大类连小类一起删
     private func delete(_ id: String) {
         guard let arrangement else { return }
-        Task { await arrangement.run { try await store.deleteCategory(id: id, moveRecordsTo: nil) } }
+        Task {
+            if await arrangement.run({ try await store.deleteCategory(id: id, moveRecordsTo: nil) }) { arrangement.feedback(.shatter) }
+        }
     }
 
     /// 「我的 › 分类」量两块格子在屏幕上的位置（手指在第几格按它算）；选分类时不量
@@ -516,14 +520,18 @@ final class CategoryArrangement {
     @ObservationIgnored var topFrame: CGRect = .zero
     @ObservationIgnored var childFrame: CGRect = .zero
 
-    /// 震动：浮起来、让位、悬到能放的大类上、放下
+    /// 震动：浮起来、让位、悬到能放的大类上、放下、拖进删除图标删掉（碎掉）
     enum Feedback {
-        case lift, move, target, drop
+        case lift, move, target, drop, shatter
     }
 
     @ObservationIgnored private var liftHaptic = UIImpactFeedbackGenerator(style: .medium)
     @ObservationIgnored private var tickHaptic = UISelectionFeedbackGenerator()
     @ObservationIgnored private var lightHaptic = UIImpactFeedbackGenerator(style: .light)
+    @ObservationIgnored private let shatterHaptic = ShatterHaptic()
+
+    /// 松手在删除图标上：先把震动引擎开起来，缩进去的那一下马上能震
+    func prepareShatter() { shatterHaptic.prepare() }
 
     func feedback(_ kind: Feedback) {
         switch kind {
@@ -539,6 +547,8 @@ final class CategoryArrangement {
             lightHaptic.prepare()
         case .drop:
             lightHaptic.impactOccurred()
+        case .shatter:
+            shatterHaptic.play()
         }
     }
 
@@ -596,7 +606,8 @@ final class CategoryArrangement {
     }
 }
 
-/// 拖动能删的分类时屏幕下方出现的删除图标（只有垃圾桶，不写字）：拖到上面变红变大，松手就删（记录回到待分类，大类连小类一起删）。
+/// 拖动能删的分类时屏幕下方出现的删除图标（虚线圆圈里一个垃圾桶，不写字）：拖到上面变红变大，松手就删（记录回到待分类，大类连小类一起删）。
+/// 删掉时震一下碎掉的感觉（`ShatterHaptic`）。
 /// 系统分类和转帐的分类（自动记账要用）不能删，拖它们时不出现。盖在整个分类页上，不挡触摸
 struct CategoryDeleteZone: View {
     let arrangement: CategoryArrangement
@@ -611,6 +622,10 @@ struct CategoryDeleteZone: View {
                     .foregroundStyle(over ? AnyShapeStyle(Color.white) : AnyShapeStyle(Color.red))
                     .frame(width: 64, height: 64)
                     .background(over ? AnyShapeStyle(Color.red) : AnyShapeStyle(Color.clear), in: Circle())
+                    // 虚线圆圈：表示「拖到这里」；拖到上面后整个变红，虚线也是红的
+                    .overlay {
+                        Circle().strokeBorder(Color.red, style: StrokeStyle(lineWidth: 2, dash: [6, 5]))
+                    }
                     .glassEffect(.regular, in: Circle())
                     .scaleEffect(over ? 1.2 : 1)
                     // 能拖进去的范围比图标大一圈

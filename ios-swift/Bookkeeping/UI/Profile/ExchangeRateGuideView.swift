@@ -17,8 +17,8 @@ struct ExchangeRateGuideView: View {
 
 /// 「用快捷指令更新汇率」的内容：「我的 › 快捷指令」和新手引导共用
 struct ExchangeRateSetupSections: View {
-    /// 放在第一组标题位置的东西：「我的 › 快捷指令」放分段选择
-    var header: AnyView?
+    /// 「我的 › 快捷指令」把第一组拆出来，自己包一层带分段选择的分组（`SetupPart`）
+    var part: SetupPart = .all
     @Environment(\.openURL) private var openURL
     @State private var copied = false
 
@@ -26,24 +26,32 @@ struct ExchangeRateSetupSections: View {
     private var sharedShortcutWorks: Bool { SharedShortcuts.available }
 
     var body: some View {
-        // 和系统设置一样的普通行，不用大按钮
-        // 点「添加快捷指令」已经进了快捷指令 App，不再放「打开快捷指令」；自己搭的要先复制地址再打开
-        Section {
-            if sharedShortcutWorks {
-                Button("添加快捷指令", systemImage: "plus.square.on.square") { leave(to: SharedShortcuts.exchangeRates) }
-            } else {
-                Button(copied ? "已复制汇率地址" : "复制汇率地址", systemImage: copied ? "checkmark" : "doc.on.doc") {
-                    UIPasteboard.general.string = ExchangeRateFeed.url.absoluteString
-                    copied = true
-                }
-                Button("打开快捷指令", systemImage: "arrow.up.forward.app") {
-                    if let url = URL(string: "shortcuts://") { leave(to: url) }
-                }
-            }
-        } header: {
-            header
+        switch part {
+        case .all:
+            Section { firstRows }
+            rest
+        case .firstRows: firstRows
+        case .rest: rest
         }
+    }
 
+    // 和系统设置一样的普通行，不用大按钮
+    // 点「添加快捷指令」已经进了快捷指令 App，不再放「打开快捷指令」；自己搭的要先复制地址再打开
+    @ViewBuilder private var firstRows: some View {
+        if sharedShortcutWorks {
+            Button("添加快捷指令", systemImage: "plus.square.on.square") { leave(to: SharedShortcuts.exchangeRates) }
+        } else {
+            Button(copied ? "已复制汇率地址" : "复制汇率地址", systemImage: copied ? "checkmark" : "doc.on.doc") {
+                UIPasteboard.general.string = ExchangeRateFeed.url.absoluteString
+                copied = true
+            }
+            Button("打开快捷指令", systemImage: "arrow.up.forward.app") {
+                if let url = URL(string: "shortcuts://") { leave(to: url) }
+            }
+        }
+    }
+
+    @ViewBuilder private var rest: some View {
         if sharedShortcutWorks {
             // 链接带过去的定时触发，添加后不一定是打开的
             Section {
