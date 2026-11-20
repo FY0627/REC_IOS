@@ -144,11 +144,12 @@ struct RecordDayHeader: View {
 /// 以面板方式打开流水详情（没有导航栈的页面使用）。
 struct RecordDetailSheet: View {
     let recordID: String
+    var initialRow: RecordRow?
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         NavigationStack {
-            RecordDetailView(recordID: recordID)
+            RecordDetailView(recordID: recordID, initialRow: initialRow)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
                         Button("关闭", systemImage: "xmark") { dismiss() }
@@ -166,6 +167,8 @@ struct RecordDetailSheet: View {
 /// 详情里的操作按钮文字靠左（和系统菜单一样）。
 struct RecordDetailView: View {
     let recordID: String
+    /// 从列表点进来时已有的这一笔：详情从账本读出来之前，右上角的按钮就按它摆好，和页面一起出来，不慢一拍
+    var initialRow: RecordRow?
     @Environment(LedgerStore.self) private var store
     @Environment(\.dismiss) private var dismiss
     @State private var detail: RecordDetail?
@@ -192,7 +195,7 @@ struct RecordDetailView: View {
         .toolbar {
             // 和系统的一样：两个按钮在同一块胶囊玻璃里；图标用文字颜色（浅色外观黑色），不跟主题色
             ToolbarItemGroup(placement: .topBarTrailing) {
-                if let detail, canMerge(detail) {
+                if let record = detail?.row.record ?? initialRow?.record, canMerge(record) {
                     Button { merging = true } label: {
                         // 系统的合并图标箭头朝上，转成朝右：几笔并到右边一笔
                         Image(systemName: "arrow.triangle.merge").rotationEffect(.degrees(90))
@@ -209,7 +212,6 @@ struct RecordDetailView: View {
                     Label("删除", systemImage: "trash")
                 }
                 .tint(Color.primary)
-                .disabled(detail == nil)
             }
         }
         .sheet(isPresented: $editing) {
@@ -399,9 +401,10 @@ struct RecordDetailView: View {
         }
     }
 
-    /// 能合并（右上角「合并」）：不在合成的一单里、不是手动合成的转帐、已入账的支出或收入
-    private func canMerge(_ detail: RecordDetail) -> Bool {
-        detail.orderMembers.isEmpty && !detail.mergedTransfer && detail.row.entryType != .transfer && detail.row.record.status == .posted
+    /// 能合并（右上角「合并」）：不在合成的一单里、已入账的支出或收入（手动合成的转帐也是转帐）。
+    /// 只看这一笔自己，列表里点进来的那一笔就能算，不用等详情读出来
+    private func canMerge(_ record: LedgerRecord) -> Bool {
+        record.orderGroupID == nil && record.entryType != .transfer && record.status == .posted
     }
 
     /// 上面那一组能改的一行：点一下弹出编辑。文字照原来的颜色，不变成主题色
@@ -417,7 +420,7 @@ struct RecordDetailView: View {
 
     private func link(_ row: RecordRow) -> some View {
         NavigationLink {
-            RecordDetailView(recordID: row.id)
+            RecordDetailView(recordID: row.id, initialRow: row)
         } label: {
             RecordRowView(row: row)
         }

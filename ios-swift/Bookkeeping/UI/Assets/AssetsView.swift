@@ -82,7 +82,7 @@ struct AssetsView: View {
         case .manage:
             AccountManagerView()
         case .record(let row):
-            RecordDetailSheet(recordID: row.id)
+            RecordDetailSheet(recordID: row.id, initialRow: row)
         case .info:
             if let selectedID { CardInfoView(accountID: selectedID) }
         case .face:

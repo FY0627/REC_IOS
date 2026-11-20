@@ -179,7 +179,7 @@ struct RecordPage: View {
         if row.needsCategory {
             CategorizePage(row: row)
         } else {
-            RecordDetailView(recordID: row.id)
+            RecordDetailView(recordID: row.id, initialRow: row)
         }
     }
 }
