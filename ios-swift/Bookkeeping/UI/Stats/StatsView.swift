@@ -373,6 +373,8 @@ private struct CategoryStatsView: View {
         // 右上角的合并、删除也跟着一起进来。系统导航栏留着的话，前后两页共用一条导航栏，
         // 新页面的玻璃按钮会在导航栏里单独冒出来
         .toolbarVisibility(.hidden, for: .navigationBar)
+        // 导航栏藏起来以后系统不让侧滑返回，找回来
+        .background(SwipeBackEnabler())
         .safeAreaBar(edge: .top) {
             ZStack {
                 Text(item.name.loc)
@@ -408,5 +410,42 @@ private struct CategoryStatsView: View {
             )
             rows = await store.records(filter, after: nil, limit: 200).filter { !onlyCurrency || $0.record.currency == currency }
         }
+    }
+}
+
+/// 藏起系统导航栏的页面，系统不让侧滑返回（返回手势原来的代理只在导航栏显示时放行）。
+/// 放在这种页面的背景里：把所在导航栈的侧滑返回交给 `SwipeBackDelegate`
+private struct SwipeBackEnabler: UIViewRepresentable {
+    func makeUIView(context: Context) -> Probe {
+        let view = Probe()
+        view.isUserInteractionEnabled = false
+        return view
+    }
+
+    func updateUIView(_ uiView: Probe, context: Context) {}
+
+    final class Probe: UIView {
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            guard window != nil, let navigation = SwipeBackDelegate.navigationController(from: self) else { return }
+            navigation.interactivePopGestureRecognizer?.delegate = SwipeBackDelegate.shared
+        }
+    }
+}
+
+/// 有上一页、而且没在推进或返回的过程中，就能侧滑返回（过程中放行会卡住页面）
+@MainActor
+private final class SwipeBackDelegate: NSObject, UIGestureRecognizerDelegate {
+    static let shared = SwipeBackDelegate()
+
+    func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        guard let navigation = Self.navigationController(from: gestureRecognizer.view) else { return false }
+        return navigation.viewControllers.count > 1 && navigation.transitionCoordinator == nil
+    }
+
+    static func navigationController(from responder: UIResponder?) -> UINavigationController? {
+        var current = responder
+        while let next = current, !(next is UINavigationController) { current = next.next }
+        return current as? UINavigationController
     }
 }
