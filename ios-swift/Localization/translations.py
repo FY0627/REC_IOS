@@ -772,6 +772,7 @@ t("刚刚记了一笔", "剛剛記了一筆", "Just Recorded")
 t("已分类", "已分類", "Categorized")
 t("实时活动提醒", "即時動態提醒", "Live Activity Reminder")
 t("便利店", "便利商店", "Convenience Store")
+t("咖啡店", "咖啡店", "Coffee Shop")
 t("画圈", "畫圈", "Ring")
 t("打勾", "打勾", "Checkmark")
 

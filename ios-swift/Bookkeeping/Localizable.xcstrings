@@ -6551,6 +6551,28 @@
         }
       }
     },
+    "咖啡店" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Coffee Shop"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "咖啡店"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "咖啡店"
+          }
+        }
+      }
+    },
     "哈尔滨银行" : {
       "localizations" : {
         "en" : {

@@ -373,7 +373,7 @@ private struct CategoryStatsView: View {
         // 右上角的合并、删除也跟着一起进来。系统导航栏留着的话，前后两页共用一条导航栏，
         // 新页面的玻璃按钮会在导航栏里单独冒出来
         .toolbarVisibility(.hidden, for: .navigationBar)
-        // 导航栏藏起来以后系统不让侧滑返回，找回来
+        // 导航栏藏起来以后系统不让侧滑返回（屏幕边上的、页面上随便一个地方的都不让），找回来
         .background(SwipeBackEnabler())
         .safeAreaBar(edge: .top) {
             ZStack {
@@ -414,7 +414,8 @@ private struct CategoryStatsView: View {
 }
 
 /// 藏起系统导航栏的页面，系统不让侧滑返回（返回手势原来的代理只在导航栏显示时放行）。
-/// 放在这种页面的背景里：把所在导航栈的侧滑返回交给 `SwipeBackDelegate`
+/// 放在这种页面的背景里：把所在导航栈的两个返回手势——屏幕边上的、和 iOS 26 起页面上随便一个地方右滑的
+/// （`interactiveContentPopGestureRecognizer`）——都交给 `SwipeBackDelegate`，和别的页面一样随便一个地方右滑都能返回
 private struct SwipeBackEnabler: UIViewRepresentable {
     func makeUIView(context: Context) -> Probe {
         let view = Probe()
@@ -428,19 +429,55 @@ private struct SwipeBackEnabler: UIViewRepresentable {
         override func didMoveToWindow() {
             super.didMoveToWindow()
             guard window != nil, let navigation = SwipeBackDelegate.navigationController(from: self) else { return }
-            navigation.interactivePopGestureRecognizer?.delegate = SwipeBackDelegate.shared
+            SwipeBackDelegate.install(on: navigation)
         }
     }
 }
 
-/// 有上一页、而且没在推进或返回的过程中，就能侧滑返回（过程中放行会卡住页面）
+/// 返回手势的代理：套在系统原来的代理外面，只改「能不能开始」，和列表滚动、左滑删除怎么让来让去还是系统原来的做法（其余的方法转给原来的代理）。
+/// 系统原来放行的照样放行；没放行的（导航栏藏起来了），有上一页、而且没在推进或返回的过程中就放行（过程中放行会卡住页面）。
+/// 页面上随便一个地方的那个手势只在往右、横着滑时放行，往左滑留给流水的左滑删除，竖着滑留给列表滚动
 @MainActor
 private final class SwipeBackDelegate: NSObject, UIGestureRecognizerDelegate {
-    static let shared = SwipeBackDelegate()
+    /// 代理是 weak 的，装上的放在这里留着
+    private static var installed: [ObjectIdentifier: SwipeBackDelegate] = [:]
+
+    nonisolated(unsafe) private weak var original: (any UIGestureRecognizerDelegate)?
+    private let anywhere: Bool
+
+    private init(original: (any UIGestureRecognizerDelegate)?, anywhere: Bool) {
+        self.original = original
+        self.anywhere = anywhere
+    }
+
+    static func install(on navigation: UINavigationController) {
+        let gestures: [(UIGestureRecognizer?, Bool)] = [
+            (navigation.interactivePopGestureRecognizer, false),
+            (navigation.interactiveContentPopGestureRecognizer, true),
+        ]
+        for case let (gesture?, anywhere) in gestures where !(gesture.delegate is SwipeBackDelegate) {
+            let proxy = SwipeBackDelegate(original: gesture.delegate, anywhere: anywhere)
+            installed[ObjectIdentifier(gesture)] = proxy
+            gesture.delegate = proxy
+        }
+    }
 
     func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
-        guard let navigation = Self.navigationController(from: gestureRecognizer.view) else { return false }
-        return navigation.viewControllers.count > 1 && navigation.transitionCoordinator == nil
+        if original?.gestureRecognizerShouldBegin?(gestureRecognizer) == true { return true }
+        guard let navigation = Self.navigationController(from: gestureRecognizer.view),
+              navigation.viewControllers.count > 1, navigation.transitionCoordinator == nil else { return false }
+        guard anywhere else { return true }
+        guard let pan = gestureRecognizer as? UIPanGestureRecognizer else { return false }
+        let velocity = pan.velocity(in: pan.view)
+        return velocity.x > 0 && velocity.x > abs(velocity.y)
+    }
+
+    nonisolated override func responds(to aSelector: Selector!) -> Bool {
+        super.responds(to: aSelector) || (original?.responds(to: aSelector) ?? false)
+    }
+
+    nonisolated override func forwardingTarget(for aSelector: Selector!) -> Any? {
+        original?.responds(to: aSelector) == true ? original : nil
     }
 
     static func navigationController(from responder: UIResponder?) -> UINavigationController? {
