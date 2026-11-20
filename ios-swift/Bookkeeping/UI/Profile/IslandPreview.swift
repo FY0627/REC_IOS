@@ -6,7 +6,7 @@ import BKModel
 ///
 /// 和真的岛一样走一遍，动起来也照真的岛（`IslandMotion`）：
 /// 1. 只有摄像头 → 岛弹开成提醒：左边收据图标，中间「刚刚记了一笔 / 待分类」，右边圆环里是还有几笔没分类；
-/// 2. 3 秒后（真的岛也是 3 秒，`openingTime`）收成小岛，摄像头左边一个标签图标、右边没有东西。长按展开成按钮，不长按就一直收着；
+/// 2. 3 秒后（真的岛也是 3 秒，`openingTime`）收成小岛：两边一样宽，左边一个标签图标、右边空着。长按展开成按钮，不长按就一直收着；
 /// 3. 按钮三页：第 1 页 4 个推荐和「全部」，「全部」是全部大类，点有小类的大类进小类，左上角返回。
 ///    换页整页上下滚：往里点旧的往上走、新的从下面上来，返回反过来。
 ///    分类是账本里自己的支出分类，页怎么分、按钮点了去哪用的就是岛上那一套（`LiveCategoryPicker`）；
@@ -354,9 +354,6 @@ private struct IslandBody: View {
         .frame(width: size.width, height: size.height, alignment: .top)
         .clipShape(RoundedRectangle(cornerRadius: corner, style: .continuous))
         .background(IslandShape.fill, in: RoundedRectangle(cornerRadius: corner, style: .continuous))
-        // 收起的小岛只往左边多出一块放图标，右边到摄像头为止
-        .offset(x: look == .compact ? -IslandShape.compactLead / 2 : 0)
-        // 摄像头不跟着小岛挪：放在挪之前的位置上（offset 不改排版的位置）
         .overlay(alignment: .top) { IslandCamera(centerY: lensCenter) }
         .dynamicTypeSize(.large)
     }
@@ -379,7 +376,8 @@ private struct IslandBody: View {
         .accessibilityAddTraits(.isButton)
     }
 
-    /// 收起的小岛：左边标签图标（还没选分类），右边到摄像头为止。长按展开，和真的岛一样，不长按就一直收着
+    /// 收起的小岛：和真的一样以摄像头为中心、两边一样宽，中间是面容 ID 和摄像头那一段；
+    /// 左边标签图标（还没选分类），右边空着（真的岛上不放金额）。长按展开，和真的岛一样，不长按就一直收着
     private var compact: some View {
         HStack {
             Image(systemName: LiveCategoryPicker.unpickedSymbol)
@@ -739,9 +737,9 @@ private enum IslandShape {
     static let cameraWidth: CGFloat = camera.width
     static let lens: CGFloat = 12
     static let lensOffset: CGFloat = 40
-    /// 收起的小岛：摄像头左边多出一块放图标，右边没有东西就不多出来
-    static let compactLead: CGFloat = 44
-    static let compact = CGSize(width: camera.width + compactLead, height: 37)
+    /// 收起的小岛：面容 ID 和摄像头那一段两边各多出一样宽的一块，左边放图标、右边空着
+    static let compactSide: CGFloat = 43
+    static let compact = CGSize(width: camera.width + compactSide * 2, height: 37)
     static let compactInset: CGFloat = 14
 
     /// 提醒：图标和圆环 56，圆心离岛边约 44（左右各缩 16），上沿离岛顶 10 + 10；岛的圆角 44
