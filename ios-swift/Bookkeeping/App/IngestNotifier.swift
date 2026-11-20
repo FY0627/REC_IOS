@@ -98,8 +98,8 @@ enum IngestNotifier {
 
     // MARK: 通知上选分类
 
-    /// 按钮上固定的字，按选的语言
-    private static var pickerLabels: NotificationPicker.Labels {
+    /// 按钮上固定的字，按选的语言。「我的 › 通知」的长按演示也用
+    static var pickerLabels: NotificationPicker.Labels {
         // 「只记%@」：插进去的就是「%@」，留给 `NotificationPicker` 换成大类名称
         NotificationPicker.Labels(only: L("只记\("%@")"), moreParents: L("更多大类"), back: L("返回"), more: L("更多"), openApp: L("打开 App"))
     }

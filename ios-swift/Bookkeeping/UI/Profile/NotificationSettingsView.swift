@@ -5,7 +5,7 @@ import BKModel
 /// 「我的 › 通知」：App 发的两种通知放在一页——导入汇率和记账结果（全部 / 仅失败 / 关闭），
 /// 记账结果选「全部」时下面多一个灵动岛（ADR 0024：没分类的在岛上选，没有灵动岛的手机是待分类的提醒横幅）。
 /// 灵动岛跟着记账结果出现、收起，放在最下面，出来时不把别的挤开。
-/// 打开的那一种下面显示一条演示，看得出会收到什么样的；关了演示就收起来。
+/// 打开的那一种下面显示一条演示，看得出会收到什么样的；关了演示就收起来。记账结果选「全部」时演示的通知可以长按，走一遍真的长按选分类。
 /// 演示的文字和真的通知是同一套写法（`IngestNotifier.message`、导入汇率的标题和正文），卡号、金额是假的。
 /// 打开通知时要通知权限，被拒绝就关回去，提示去系统设置。
 struct NotificationSettingsView: View {
@@ -15,6 +15,8 @@ struct NotificationSettingsView: View {
     @AppStorage(IngestNotifier.islandKey) private var islandOn = true
     @AppStorage(ThemeColor.key) private var themeColor = ThemeColor.defaultValue
     @State private var notifyDenied = false
+    @State private var longPressing = false
+    @Environment(LedgerStore.self) private var store
     @Environment(\.openURL) private var openURL
     private let hasIsland = DynamicIsland.isPresent(model: LiveCategoryActivity.modelIdentifier)
 
@@ -42,7 +44,9 @@ struct NotificationSettingsView: View {
             }
             // 演示单独一组、没有底色：浮在设置项下面，像一条真的通知
             if mode != .off {
-                Section { NotificationPreview(title: nil, message: ingestExample) }
+                Section {
+                    NotificationPreview(title: nil, message: ingestExample, onLongPress: mode == .all ? showLongPress : nil)
+                }
             }
 
             // 只有「全部」才在岛上选分类（`IngestNotifier.post`），别的时候不显示
@@ -79,6 +83,16 @@ struct NotificationSettingsView: View {
             guard on else { return }
             askPermission { notifyRates = false }
         }
+        .fullScreenCover(isPresented: $longPressing) {
+            NotificationLongPressDemo(message: ingestExample, picker: demoPicker) {
+                // 自己做了淡出，关的时候系统不再从下面滑走
+                var transaction = Transaction()
+                transaction.disablesAnimations = true
+                withTransaction(transaction) { longPressing = false }
+            }
+            .presentationBackground(.clear)
+        }
+        .sensoryFeedback(.impact(weight: .medium), trigger: longPressing) { _, shown in shown }
         .alert("没有通知权限", isPresented: $notifyDenied) {
             Button("去设置") {
                 if let url = URL(string: UIApplication.openNotificationSettingsURLString) { openURL(url) }
@@ -102,6 +116,27 @@ struct NotificationSettingsView: View {
         return (IngestNotifier.message(item, failuresOnly: false) ?? "") + L("，长按选分类")
     }
 
+    /// 长按演示：系统不从下面滑上来，模糊和按钮自己淡入（`NotificationLongPressDemo`）
+    private func showLongPress() {
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) { longPressing = true }
+    }
+
+    /// 长按演示的按钮：用账本里自己的支出分类，按分类页的顺序（还没选过分类时真的通知也是这样），
+    /// 换语言和真的通知一样（`IngestNotifier.pickerLabels`）。翻页、点大类换小类照通知扩展的逻辑（`NotificationPicker`）
+    private var demoPicker: NotificationPicker {
+        let shown = store.categories.filter { $0.type == .expense && !$0.hidden && !$0.locked }
+        let ordered = { (list: [LedgerCategory]) in list.sorted { ($0.sortOrder, $0.id) < ($1.sortOrder, $1.id) } }
+        let groups = ordered(shown.filter { $0.parentID == nil }).map { parent in
+            NotificationPicker.Group(
+                option: NotificationPicker.Option(parent),
+                children: ordered(shown.filter { $0.parentID == parent.id }).map(NotificationPicker.Option.init)
+            )
+        }
+        return NotificationPicker(first: nil, groups: groups).localized(name: \.loc, labels: IngestNotifier.pickerLabels)
+    }
+
     /// 导入过汇率的用真的币种数和时间
     private var ratesExample: String {
         let count = rates.rates?.rates.count ?? 160
@@ -119,47 +154,29 @@ struct NotificationSettingsView: View {
     }
 }
 
-/// 演示用的通知横幅：样子照系统的通知（App 图标、App 名、时间、标题、正文），放在设置项下面。
-/// 图标和桌面上的一样：「我的 › 显示 › 图标」选了浅色、深色就画那一个，跟随系统按现在的外观画
+/// 演示用的通知横幅，放在设置项下面（样子见 `NotificationCard`）。
+/// 记账结果选「全部」时可以长按（`onLongPress`）：和真的通知一样弹出选分类的按钮（`NotificationLongPressDemo`）
 private struct NotificationPreview: View {
     let title: String?
     let message: String
+    var onLongPress: (() -> Void)?
 
-    @AppStorage(AppearanceMode.iconKey) private var appIcon = AppearanceMode.system.rawValue
-    @Environment(\.colorScheme) private var colorScheme
-
-    private var iconMode: AppearanceMode {
-        let chosen = AppearanceMode(rawValue: appIcon) ?? .system
-        guard chosen == .system else { return chosen }
-        return colorScheme == .dark ? .dark : .light
-    }
+    @State private var pressing = false
 
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            AppIconPreview(mode: iconMode, cornerRadius: 8.5)
-                .frame(width: 38, height: 38)
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text(verbatim: "Tacito").font(.subheadline.weight(.semibold))
-                    Spacer()
-                    Text("现在").font(.footnote).foregroundStyle(.secondary)
-                }
-                if let title {
-                    Text(title).font(.subheadline.weight(.semibold))
-                }
-                Text(message).font(.subheadline).fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .padding(12)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(.separator, lineWidth: 0.5)
-        }
-        .listRowBackground(Color.clear)
-        .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(Text("效果演示"))
-        .accessibilityValue(Text([title, message].compactMap { $0 }.joined(separator: " ")))
-        .transition(.opacity.combined(with: .move(edge: .top)))
+        NotificationCard(title: title, message: message)
+            // 按住时像系统的通知那样缩一点，到时间弹出按钮
+            .scaleEffect(pressing ? 0.96 : 1)
+            .animation(.smooth(duration: 0.25), value: pressing)
+            .onLongPressGesture(minimumDuration: 0.4) {
+                onLongPress?()
+            } onPressingChanged: { pressing = onLongPress != nil && $0 }
+            .listRowBackground(Color.clear)
+            .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(Text("效果演示"))
+            .accessibilityValue(Text([title, message].compactMap { $0 }.joined(separator: " ")))
+            .accessibilityAction(named: Text("选分类")) { onLongPress?() }
+            .transition(.opacity.combined(with: .move(edge: .top)))
     }
 }
