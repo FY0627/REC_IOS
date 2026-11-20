@@ -19,7 +19,7 @@ struct CurrencySection: Identifiable, Sendable {
     var id: String { letter }
 }
 
-/// 汇率数据源支持的全部币种。第一次用到时生成（要查系统的名称），添加银行卡等页面出现时先在后台准备好。
+/// 汇率数据源支持的全部币种。第一次用到时生成（要查系统的名称），添加账户等页面出现时先在后台准备好。
 /// 按选的语言（`AppLanguage`）各生成一份：简体按拼音排、分组，英文按英文名称，台湾按币种代码（台湾不用拼音）
 enum CurrencyCatalog {
     static var all: [CurrencyEntry] { built.all }

@@ -24,7 +24,7 @@ public enum CardType: String, Sendable, Codable, CaseIterable {
     /// 银行卡（有尾号，参与自动记账匹配）；现金和电子钱包不是
     public var isCard: Bool { self != .cash && self != .wallet }
 
-    /// 添加银行卡、改卡类型时可选的类型
+    /// 添加账户、改卡类型时可选的类型
     public static let cardCases: [CardType] = [.debit, .credit, .prepaid, .other]
 }
 

@@ -16,7 +16,7 @@ import BKModel
 /// iOS 26 的不带触发条件，一个自动化只有一个触发，「信息」条件也不能空（用户在 iOS 26 上试过）：
 /// 「信息包含」空格、「。」、「，」、「】」各建一个，「电子邮件」主题包含空格、「你」、「您」各建一个，都运行「自动记账」。
 /// 自己侧载的（用不了共享链接）列手动步骤，iOS 26、iOS 27 分开写。
-/// 添加银行卡后不再弹出这一页：第一次打开时在新手引导里设置（`OnboardingView`）。
+/// 添加账户后不再弹出这一页：第一次打开时在新手引导里设置（`OnboardingView`）。
 struct AutoSetupGuideView: View {
     var body: some View {
         List { AutoSetupSections() }

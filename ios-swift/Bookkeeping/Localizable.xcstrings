@@ -4249,28 +4249,6 @@
         }
       }
     },
-    "删除「%@」？" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Delete “%@”?"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "删除「%@」？"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "刪除「%@」？"
-          }
-        }
-      }
-    },
     "删除后不能恢复" : {
       "localizations" : {
         "en" : {
@@ -13811,28 +13789,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "新增帳戶"
-          }
-        }
-      }
-    },
-    "添加银行卡" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Add Card"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "添加银行卡"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "新增銀行卡"
           }
         }
       }

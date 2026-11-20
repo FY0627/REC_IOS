@@ -1,6 +1,6 @@
 import Foundation
 
-/// 添加银行卡时按名称找银行：中文全称、简称、繁体、英文缩写和当地语言都能搜到，选中后保存中文全称。
+/// 添加账户时按名称找银行：中文全称、简称、繁体、英文缩写和当地语言都能搜到，选中后保存中文全称。
 /// 主要用来填写银行；识别通知来自哪家银行的线索在 `BankDirectory`（同一家银行的标识相同），名录里没有的银行按【署名】在这里找。
 public struct BankEntry: Hashable, Sendable, Identifiable {
     public var id: String

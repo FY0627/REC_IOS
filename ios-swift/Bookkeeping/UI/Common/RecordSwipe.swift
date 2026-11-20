@@ -35,6 +35,18 @@ final class RecordDeleteMenuButton: UIButton {
         onDelete: @escaping () -> Void,
         onEnd: @escaping () -> Void
     ) {
+        show(warning: row.deleteWarning, action: L("删除这笔流水"), at: rect, in: view, onDelete: onDelete, onEnd: onEnd)
+    }
+
+    /// 通用的删除确认：`warning` 是菜单上的说明，`action` 是红色的那一项（管理账户删账户也用）
+    static func show(
+        warning: String,
+        action: String,
+        at rect: CGRect,
+        in view: UIView,
+        onDelete: @escaping () -> Void,
+        onEnd: @escaping () -> Void
+    ) {
         let button = RecordDeleteMenuButton(frame: rect)
         button.onEnd = onEnd
         button.isHidden = true
@@ -42,8 +54,8 @@ final class RecordDeleteMenuButton: UIButton {
         button.isContextMenuInteractionEnabled = true
         button.showsMenuAsPrimaryAction = true
         button.menu = UIMenu(children: [
-            UIMenu(title: row.deleteWarning, options: .displayInline, children: [
-                UIAction(title: L("删除这笔流水"), image: UIImage(systemName: "trash"), attributes: .destructive) { _ in onDelete() }
+            UIMenu(title: warning, options: .displayInline, children: [
+                UIAction(title: action, image: UIImage(systemName: "trash"), attributes: .destructive) { _ in onDelete() }
             ])
         ])
         view.addSubview(button)
@@ -66,9 +78,11 @@ final class RecordDeleteMenuButton: UIButton {
     }
 }
 
-/// 首页、统计：系统列表的滑动按钮拿不到视图，菜单从这一行右端的这块空白弹出
-private struct RecordDeleteAnchor: UIViewRepresentable {
-    let row: RecordRow
+/// 首页、统计、管理账户：系统列表的滑动按钮拿不到视图，菜单从这一行右端的这块空白弹出。
+/// 放在行的 `.background(alignment: .trailing)` 里，宽度和「删除」按钮差不多（76）
+struct DeleteMenuAnchor: UIViewRepresentable {
+    let warning: String
+    let action: String
     let onDelete: () -> Void
     let onEnd: () -> Void
 
@@ -76,7 +90,7 @@ private struct RecordDeleteAnchor: UIViewRepresentable {
         let view = AnchorView()
         view.isUserInteractionEnabled = false
         view.open = { anchor in
-            RecordDeleteMenuButton.show(row, at: anchor.bounds, in: anchor, onDelete: onDelete, onEnd: onEnd)
+            RecordDeleteMenuButton.show(warning: warning, action: action, at: anchor.bounds, in: anchor, onDelete: onDelete, onEnd: onEnd)
         }
         return view
     }
@@ -118,7 +132,7 @@ private struct RecordSwipeActions: ViewModifier {
             // 放在这一行上：确认菜单从这一行右端、也就是「删除」按钮那里弹出
             .background(alignment: .trailing) {
                 if state.deleting?.id == row.id {
-                    RecordDeleteAnchor(row: row) {
+                    DeleteMenuAnchor(warning: row.deleteWarning, action: L("删除这笔流水")) {
                         state.confirmedDelete = row
                     } onEnd: {
                         state.deleting = nil

@@ -29,7 +29,7 @@ final class WalletTopBar: UIView {
     /// 详情里的「更多」；卡包里静止时没有玻璃效果（见 `setSplit`）
     private let moreGlass = GlassControls.capsule(nil)
     private let backButton = GlassControls.iconButton("chevron.left", label: L("返回卡包"))
-    private let addButton = GlassControls.iconButton("plus", label: L("添加银行卡"))
+    private let addButton = GlassControls.iconButton("plus", label: L("添加账户"))
     /// 卡包里胶囊右半边的「更多」：管理账户
     private let stackMoreButton = GlassControls.iconButton("ellipsis", label: L("管理账户"))
     private let moreButton = GlassControls.iconButton("ellipsis", label: L("管理账户"))

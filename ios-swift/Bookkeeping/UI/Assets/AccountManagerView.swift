@@ -3,7 +3,7 @@ import BKModel
 
 /// 管理账户：停用、删除都在这一页。左滑一行露出两个按钮：最右边红色「删除」，旁边灰色「停用」
 /// （停用的卡是主题色的「启用」）。不能一划到底直接删，免得误删。
-/// 删除先弹一次确认；流水留着，账户名称后面写「已删除」，不能恢复。使用中的卡也能直接删，不用先停用。
+/// 删除先确认（和首页的流水一样，从「删除」按钮那里弹出系统菜单，点外面就是取消）；流水留着，账户名称后面写「已删除」，不能恢复。使用中的卡也能直接删，不用先停用。
 /// 按住一行上下拖动调整卡片的顺序（系统列表的拖动：按住的行浮在上层，其他行自动让开、补位），资产页的卡包跟着这个顺序。
 ///
 /// 停用的卡不再参与自动记账和净资产，已有流水保留，在资产页最下方以灰色卡包显示；这里的行变灰、写「已停用」。
@@ -12,7 +12,7 @@ struct AccountManagerView: View {
     @Environment(\.dismiss) private var dismiss
     /// 点了停用 / 启用、数据库写入完成之前，先显示新状态
     @State private var pending: [String: Bool] = [:]
-    /// 等确认删除的账户
+    /// 正在确认要不要删的账户（菜单收起时清掉）
     @State private var deleting: Account?
     /// 「启用」用主题色（`Color.accentColor` 是固定的蓝色）
     @AppStorage(ThemeColor.key) private var themeColor = ThemeColor.defaultValue
@@ -27,6 +27,20 @@ struct AccountManagerView: View {
                         ForEach(store.allAccounts) { account in
                             let enabled = pending[account.id] ?? !account.archived
                             AccountSummaryRow(account: account, enabled: enabled)
+                                // 和首页的流水一样：确认菜单从这一行右端、也就是「删除」按钮那里弹出
+                                .background(alignment: .trailing) {
+                                    if deleting?.id == account.id {
+                                        DeleteMenuAnchor(
+                                            warning: L("流水会保留，账户名称后面写「已删除」。删除后不能恢复。"),
+                                            action: L("删除这个账户")
+                                        ) {
+                                            delete(account)
+                                        } onEnd: {
+                                            deleting = nil
+                                        }
+                                        .frame(width: 76)
+                                    }
+                                }
                                 // 第一个按钮在最右边
                                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                                     // 不用 .destructive：那样一点就先把这一行划走，确认前就不见了
@@ -56,16 +70,6 @@ struct AccountManagerView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) { Button("完成", systemImage: "checkmark") { dismiss() } }
-            }
-            .confirmationDialog(
-                Text(L("删除「\(deleting?.localizedName ?? "")」？")),
-                isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }),
-                titleVisibility: .visible,
-                presenting: deleting
-            ) { account in
-                Button("删除", role: .destructive) { delete(account) }
-            } message: { _ in
-                Text("流水会保留，账户名称后面写「已删除」。删除后不能恢复。")
             }
         }
     }

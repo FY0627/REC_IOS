@@ -2,7 +2,7 @@ import SwiftUI
 
 /// 页面最下面的搜索框（液态玻璃）。点进去时右边像水滴一样分出一个圆形的关闭按钮，退出时并回搜索框里。
 /// 用系统的玻璃融合（`GlassEffectContainer` + `glassEffectID`），在动画里出现 / 消失的玻璃会从相邻的玻璃里分出来、并回去。
-/// 选币种页面用它：添加银行卡（弹出页里推进来）和「我的 › 主要币种」（标签页里推进来）一个样子。
+/// 选币种页面用它：添加账户（弹出页里推进来）和「我的 › 主要币种」（标签页里推进来）一个样子。
 struct GlassSearchBar: View {
     @Binding var text: String
     let prompt: String

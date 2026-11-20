@@ -16,7 +16,7 @@
 | 记账结果通知、通知扩展选分类 | [自动记账/notifications](features/ios-swift-auto-bookkeeping/notifications.md)、[0020](decisions/0020-ios-swift-notification-category-picker.md) | `App/IngestNotifier.swift`、`ios-swift/NotificationContent/` |
 | 灵动岛选分类（实时活动） | [0024](decisions/0024-ios-swift-dynamic-island-category-picker.md) | `ios-swift/CategoryActivity/`、`ios-swift/Shared/`、`BKModel/LiveCategoryPicker.swift`、`App/LiveCategoryActivity.swift` |
 | 支出 / 收入 / 转帐、分类管理、合成转帐、统计、首页、校准余额 | [0014](decisions/0014-ios-swift-entry-types-and-categories.md) | `BKModel/{Categories,Records}.swift`、`UI/{Common,Home,Stats}/`、`UI/Profile/CategoryManagerView.swift` |
-| 修改 / 删除 / 搜索流水、外币扣款、按天存汇率、添加银行卡 | [0013](decisions/0013-ios-swift-record-editing-and-foreign-charges.md) | `UI/Common/{RecordRowView,RecordEditor,RecordSwipe}.swift`、`BKBackend/ChargeCalculator.swift` |
+| 修改 / 删除 / 搜索流水、外币扣款、按天存汇率、添加账户 | [0013](decisions/0013-ios-swift-record-editing-and-foreign-charges.md) | `UI/Common/{RecordRowView,RecordEditor,RecordSwipe}.swift`、`BKBackend/ChargeCalculator.swift` |
 | 多币种账户、主要币种、汇率导入 | [0011](decisions/0011-ios-swift-multi-currency-and-rates.md) | `App/ExchangeRateStore.swift`、`Intents/ImportExchangeRatesIntent.swift` |
 | 扣款币种、卡包换算成主要币种 | [0018](decisions/0018-ios-swift-charge-currency-and-converted-cards.md) | `BKModel/Records.swift`、`UI/Assets/` |
 | 卡包、卡号、卡面、管理账户 | [0010](decisions/0010-ios-swift-card-number-and-face.md) | `UI/{Assets,Shell}/`、`BKModel/BankCatalog.swift` |

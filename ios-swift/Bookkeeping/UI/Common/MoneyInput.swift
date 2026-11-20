@@ -54,7 +54,7 @@ struct BalanceInput: Hashable {
 }
 
 /// 一个币种的初始余额（选填）：左边下拉选「余额 / 欠款」，右边填金额。
-/// 放在选好的币种下面，添加银行卡和卡片信息共用。添加时不填从 0 开始。
+/// 放在选好的币种下面，添加账户和卡片信息共用。添加时不填从 0 开始。
 struct OpeningBalanceRow: View {
     let currency: CurrencyCode
     /// 多币种的卡在最左边写币种
