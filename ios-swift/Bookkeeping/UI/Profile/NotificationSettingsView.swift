@@ -17,6 +17,8 @@ struct NotificationSettingsView: View {
     @AppStorage(ThemeColor.key) private var themeColor = ThemeColor.defaultValue
     @State private var notifyDenied = false
     @State private var longPressing = false
+    /// 长按的那条演示通知在屏幕上的位置：选项在它那里弹出来
+    @State private var longPressAnchor = CGRect.zero
     @Environment(LedgerStore.self) private var store
     @Environment(\.openURL) private var openURL
     private let hasIsland = DynamicIsland.isPresent(model: LiveCategoryActivity.modelIdentifier)
@@ -87,7 +89,7 @@ struct NotificationSettingsView: View {
         // 演示单独一组、没有底色：浮在设置项下面，像一条真的通知。只有「全部」的通知能长按选分类
         if mode != .off {
             Section {
-                NotificationPreview(title: nil, message: ingestExample, canLongPress: mode == .all, onLongPress: showLongPress)
+                NotificationPreview(title: nil, message: ingestExample, canLongPress: mode == .all, onLongPress: showLongPress(at:))
             }
         }
     }
@@ -132,7 +134,7 @@ struct NotificationSettingsView: View {
     }
 
     private var longPressDemo: some View {
-        NotificationLongPressDemo(message: ingestExample, picker: demoPicker, dismiss: hideLongPress)
+        NotificationLongPressDemo(message: ingestExample, picker: demoPicker, anchor: longPressAnchor, dismiss: hideLongPress)
             .presentationBackground(.clear)
     }
 
@@ -150,7 +152,8 @@ struct NotificationSettingsView: View {
     }
 
     /// 长按演示：系统不从下面滑上来，模糊和按钮自己淡入（`NotificationLongPressDemo`）
-    private func showLongPress() {
+    private func showLongPress(at anchor: CGRect) {
+        longPressAnchor = anchor
         var transaction = Transaction()
         transaction.disablesAnimations = true
         withTransaction(transaction) { longPressing = true }
@@ -200,17 +203,21 @@ private struct NotificationPreview: View {
     let title: String?
     let message: String
     var canLongPress = false
-    var onLongPress: () -> Void = {}
+    /// 长按到时间：给出这条通知在屏幕上的位置
+    var onLongPress: (CGRect) -> Void = { _ in }
 
     @State private var pressing = false
     /// 长按到时间的次数：每次震一下
     @State private var longPresses = 0
+    /// 在屏幕上的位置（不算按住时的缩小）
+    @State private var frame = CGRect.zero
 
     var body: some View {
         NotificationCard(title: title, message: message)
             // 按住时像系统的通知那样缩一点，到时间弹出按钮
             .scaleEffect(pressing ? 0.96 : 1)
             .animation(.smooth(duration: 0.25), value: pressing)
+            .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame = $0 }
             .onLongPressGesture(minimumDuration: 0.4, perform: longPressed, onPressingChanged: pressingChanged)
             .sensoryFeedback(.impact(weight: .medium), trigger: longPresses)
             .listRowBackground(Color.clear)
@@ -225,7 +232,7 @@ private struct NotificationPreview: View {
     private func longPressed() {
         guard canLongPress else { return }
         longPresses += 1
-        onLongPress()
+        onLongPress(frame)
     }
 
     private func pressingChanged(_ down: Bool) {

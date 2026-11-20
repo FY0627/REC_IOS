@@ -37,8 +37,6 @@ private struct ProfileList: View {
     @AppStorage(ThemeColor.key) private var themeColor = ThemeColor.defaultValue
     @AppStorage(AppLanguage.key) private var language = AppLanguage.system.rawValue
     @AppStorage(ExchangeRateStore.primaryKey) private var primaryCurrency = CurrencyCode.cny.rawValue
-    @AppStorage(IngestNotifier.modeKey) private var notifyMode = IngestNotifier.Mode.off.rawValue
-    @AppStorage(ImportExchangeRatesIntent.notifyKey) private var notifyRates = true
     /// 「开发与调试」平时藏着：连点 7 次版本号显示，再连点 7 次藏起来
     @AppStorage("showDevTools") private var showDevTools = false
     @AppStorage(LiveCategoryActivity.lastResultKey) private var liveActivityResult = ""
@@ -67,13 +65,9 @@ private struct ProfileList: View {
                     NavigationLink(value: ProfileRoute.templates) {
                         Label("识别模板", systemImage: "text.viewfinder")
                     }
-                    // 记账结果、导入汇率两种通知，打开的下面有演示
+                    // 记账结果、导入汇率、灵动岛，打开的下面有演示。右边不写开了哪几种：点进去就看得到
                     NavigationLink(value: ProfileRoute.notifications) {
-                        LabeledContent {
-                            Text(notificationStatus)
-                        } label: {
-                            Label("通知", systemImage: "bell.badge")
-                        }
+                        Label("通知", systemImage: "bell.badge")
                     }
                 }
 
@@ -267,17 +261,6 @@ private struct ProfileList: View {
         guard versionTaps >= 7 else { return }
         versionTaps = 0
         withAnimation { showDevTools.toggle() }
-    }
-
-    /// 「通知」右边写开了哪几种
-    private var notificationStatus: String {
-        let results = (IngestNotifier.Mode(rawValue: notifyMode) ?? .off) != .off
-        switch (results, notifyRates) {
-        case (true, true): return L("记账结果、汇率")
-        case (true, false): return L("记账结果")
-        case (false, true): return L("汇率")
-        case (false, false): return L("关闭（通知）")
-        }
     }
 
     /// 选币种页面用的单选列表
