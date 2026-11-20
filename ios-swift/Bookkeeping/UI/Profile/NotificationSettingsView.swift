@@ -16,9 +16,9 @@ struct NotificationSettingsView: View {
     @AppStorage(IngestNotifier.islandModeKey) private var islandMode = IngestNotifier.islandMode.rawValue
     @AppStorage(ThemeColor.key) private var themeColor = ThemeColor.defaultValue
     @State private var notifyDenied = false
-    @State private var longPressing = false
-    /// 长按的那条演示通知在屏幕上的位置：选项在它那里弹出来
-    @State private var longPressAnchor = CGRect.zero
+    /// 长按的那条演示通知在屏幕上的位置：有值就弹出长按演示，选项在它那里弹出来。
+    /// 跟着弹出一起传进去（`fullScreenCover(item:)`）：分开存一个位置、一个开关时，弹出来拿到的是旧的位置（.zero），通知挤在左上角
+    @State private var longPressAnchor: LongPressAnchor?
     @Environment(LedgerStore.self) private var store
     @Environment(\.openURL) private var openURL
     private let hasIsland = DynamicIsland.isPresent(model: LiveCategoryActivity.modelIdentifier)
@@ -52,7 +52,7 @@ struct NotificationSettingsView: View {
             guard on else { return }
             askPermission { notifyRates = false }
         }
-        .fullScreenCover(isPresented: $longPressing) { longPressDemo }
+        .fullScreenCover(item: $longPressAnchor) { longPressDemo(at: $0.rect) }
         .alert("没有通知权限", isPresented: $notifyDenied) {
             Button("去设置") {
                 if let url = URL(string: UIApplication.openNotificationSettingsURLString) { openURL(url) }
@@ -133,8 +133,8 @@ struct NotificationSettingsView: View {
         }
     }
 
-    private var longPressDemo: some View {
-        NotificationLongPressDemo(message: ingestExample, picker: demoPicker, anchor: longPressAnchor, dismiss: hideLongPress)
+    private func longPressDemo(at anchor: CGRect) -> some View {
+        NotificationLongPressDemo(message: ingestExample, picker: demoPicker, anchor: anchor, dismiss: hideLongPress)
             .presentationBackground(.clear)
     }
 
@@ -153,17 +153,18 @@ struct NotificationSettingsView: View {
 
     /// 长按演示：系统不从下面滑上来，模糊和按钮自己淡入（`NotificationLongPressDemo`）
     private func showLongPress(at anchor: CGRect) {
-        longPressAnchor = anchor
+        // 还没量到位置就不弹，免得挤在左上角
+        guard anchor.width > 0 else { return }
         var transaction = Transaction()
         transaction.disablesAnimations = true
-        withTransaction(transaction) { longPressing = true }
+        withTransaction(transaction) { longPressAnchor = LongPressAnchor(rect: anchor) }
     }
 
     /// 演示自己做了淡出，关的时候系统不再从下面滑走
     private func hideLongPress() {
         var transaction = Transaction()
         transaction.disablesAnimations = true
-        withTransaction(transaction) { longPressing = false }
+        withTransaction(transaction) { longPressAnchor = nil }
     }
 
     /// 长按演示的按钮：用账本里自己的支出分类，按分类页的顺序（还没选过分类时真的通知也是这样），
@@ -195,6 +196,12 @@ struct NotificationSettingsView: View {
             }
         }
     }
+}
+
+/// 长按演示弹在哪：每次长按一个新的，弹出时一起带进去
+private struct LongPressAnchor: Identifiable {
+    let id = UUID()
+    let rect: CGRect
 }
 
 /// 演示用的通知横幅，放在设置项下面（样子见 `NotificationCard`）。
