@@ -694,7 +694,7 @@ private struct NoticeRing: View {
     }
 }
 
-/// 摄像头：岛正中顶上那一块，镜头在它右半边。上下跟着岛里的字（`IslandBody.lensCenter`）
+/// 摄像头：只画镜头（面容 ID 在它左边，真机上也是黑的，看不出来）。左右不动，上下跟着岛里的字（`IslandBody.lensCenter`）
 private struct IslandCamera: View {
     let centerY: CGFloat
 
@@ -732,13 +732,14 @@ private enum IslandShape {
     static let island = CGSize(width: 371, height: topMargin + header + systemGap + grid + bottomMargin)
     /// 岛的圆角（真机截图量的黑边圆角）
     static let islandCorner: CGFloat = 48
-    /// 只有摄像头时的岛（收起来没有实时活动）；镜头在它右半边
+    /// 只有摄像头时的岛（收起来没有实时活动）：左边一点是面容 ID，右边是镜头
     static let camera = CGSize(width: 126, height: 37)
     static let cameraWidth: CGFloat = camera.width
     static let lens: CGFloat = 12
-    static let lensOffset: CGFloat = 40
-    /// 收起的小岛：真机截图量的（岛高按 37 算）宽约 178、在屏幕正中，图标中心离左边约 16
-    static let compact = CGSize(width: 178, height: 37)
+    /// 镜头中心在岛中心右边多远：用户在真机截图上标的（岛高按 37 算约 52）。摄像头不动，岛怎么变都是这个位置
+    static let lensOffset: CGFloat = 52
+    /// 收起的小岛：真机截图量的（岛高按 37 算）宽约 180、在屏幕正中，图标中心离左边约 16
+    static let compact = CGSize(width: 180, height: 37)
     static let compactInset: CGFloat = 8
 
     /// 提醒：图标和圆环 56，圆心离岛边约 44（左右各缩 16），上沿离岛顶 10 + 10；岛的圆角 44
