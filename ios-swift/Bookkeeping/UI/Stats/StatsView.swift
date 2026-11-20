@@ -107,8 +107,10 @@ struct StatsView: View {
                 .padding(.bottom, AppLayout.topBarBottom)
                 .background { TopBarBackdrop(visible: scrolledUnderBar) }
             }
-            // 分类明细里点一笔，和首页一样按值推进流水详情：页面和右上角按钮一次建好再推进来。
-            // 用闭包写目的页时，右上角的合并、删除是推进来以后才放上去的，图标一个一个冒出来
+            // 分类明细、分类明细里的每一笔都和首页一样按值推进：页面和右上角按钮一次建好再推进来
+            // （用闭包写目的页时，流水详情右上角的合并、删除是推进来以后才放上去的，图标一个一个冒出来）。
+            // 两层都要按值：一层按值、一层用闭包混在一个导航栈里，点一笔会多推一次分类明细
+            .navigationDestination(for: CategoryStatsRoute.self) { route in CategoryStatsView(route: route) }
             .navigationDestination(for: RecordRow.self) { row in RecordPage(row: row) }
             .sheet(isPresented: $choosingCustom) {
                 CustomPeriodSheet(initial: period.customDates) { period = $0 }
@@ -263,12 +265,10 @@ struct StatsView: View {
         let maxAmount = max(1, totals.map(\.amountMinor).max() ?? 1)
         let percents = Dictionary(zip(totals.map(\.id), MonthStats.CategoryTotal.percentages(totals)), uniquingKeysWith: { first, _ in first })
         return ForEach(totals) { item in
-            NavigationLink {
-                CategoryStatsView(
-                    item: item, type: type, currency: b.currency, onlyCurrency: b.onlyCurrency, accountID: b.accountID,
-                    from: range.from, to: range.to
-                )
-            } label: {
+            NavigationLink(value: CategoryStatsRoute(
+                item: item, type: type, currency: b.currency, onlyCurrency: b.onlyCurrency, accountID: b.accountID,
+                from: range.from, to: range.to
+            )) {
                 CategoryTotalRow(item: item, currency: b.currency, maxAmount: maxAmount, percent: percents[item.id] ?? nil)
             }
         }
@@ -307,9 +307,8 @@ private struct CategoryTotalRow: View {
     }
 }
 
-/// 一个分类这段时间的明细：大类下面的小类，和这段时间记在这个分类上的每一笔。
-/// 金额是 `currency`；每一笔只看这个币种（`onlyCurrency`，全部账户的换算金额不限）、这个账户（`accountID`）
-private struct CategoryStatsView: View {
+/// 推进分类明细（`CategoryStatsView`）时带的值：统计页按值推进，和首页推进流水详情一样
+private struct CategoryStatsRoute: Hashable {
     let item: MonthStats.CategoryTotal
     let type: EntryType
     let currency: CurrencyCode
@@ -317,6 +316,19 @@ private struct CategoryStatsView: View {
     let accountID: String?
     let from: Date?
     let to: Date?
+}
+
+/// 一个分类这段时间的明细：大类下面的小类，和这段时间记在这个分类上的每一笔。
+/// 金额是 `currency`；每一笔只看这个币种（`onlyCurrency`，全部账户的换算金额不限）、这个账户（`accountID`）
+private struct CategoryStatsView: View {
+    let route: CategoryStatsRoute
+    private var item: MonthStats.CategoryTotal { route.item }
+    private var type: EntryType { route.type }
+    private var currency: CurrencyCode { route.currency }
+    private var onlyCurrency: Bool { route.onlyCurrency }
+    private var accountID: String? { route.accountID }
+    private var from: Date? { route.from }
+    private var to: Date? { route.to }
 
     @Environment(LedgerStore.self) private var store
     @State private var rows: [RecordRow] = []
