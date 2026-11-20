@@ -606,7 +606,7 @@ final class CategoryArrangement {
     }
 }
 
-/// 拖动能删的分类时屏幕下方出现的删除图标（虚线圆圈里一个垃圾桶，不写字）：拖到上面变红变大，松手就删（记录回到待分类，大类连小类一起删）。
+/// 拖动能删的分类时屏幕下方出现的删除图标（一个圆形玻璃按钮，里面是垃圾桶，不写字、不描边）：拖到上面变红变大，松手就删（记录回到待分类，大类连小类一起删）。
 /// 删掉时震一下碎掉的感觉（`ShatterHaptic`）。
 /// 系统分类和转帐的分类（自动记账要用）不能删，拖它们时不出现。盖在整个分类页上，不挡触摸
 struct CategoryDeleteZone: View {
@@ -622,10 +622,6 @@ struct CategoryDeleteZone: View {
                     .foregroundStyle(over ? AnyShapeStyle(Color.white) : AnyShapeStyle(Color.red))
                     .frame(width: 64, height: 64)
                     .background(over ? AnyShapeStyle(Color.red) : AnyShapeStyle(Color.clear), in: Circle())
-                    // 虚线圆圈：表示「拖到这里」；拖到上面后整个变红，虚线也是红的
-                    .overlay {
-                        Circle().strokeBorder(Color.red, style: StrokeStyle(lineWidth: 2, dash: [6, 5]))
-                    }
                     .glassEffect(.regular, in: Circle())
                     .scaleEffect(over ? 1.2 : 1)
                     // 能拖进去的范围比图标大一圈
