@@ -585,6 +585,39 @@ final class LedgerTypeTests: XCTestCase {
         try await backend.updateCategory(id: fee.id, name: "银行手续费", symbol: "doc.text")
     }
 
+    func testReAddingDeletedCategoryRevivesIt() async throws {
+        let backend = try makeBackend()
+        try await addAccount(backend, last4: "0427")
+        try await ingest(backend, "【招商银行】您尾号0427的储蓄卡于10月24日14:30在宠物店消费人民币88.00元。")
+        let pets = try await backend.addCategory(CategoryDraft(type: .expense, parentID: nil, name: "宠物", symbol: "pawprint"))
+        let food = try await backend.addCategory(CategoryDraft(type: .expense, parentID: pets.id, name: "猫粮", symbol: "pawprint"))
+        let waiting = try await backend.uncategorized()
+        let record = try XCTUnwrap(waiting.first)
+        try await backend.setCategory(recordID: record.id, categoryID: pets.id)
+        try await backend.deleteCategory(id: pets.id, moveRecordsTo: nil)
+
+        // 名字一样、图标不一样：新建
+        let other = try await backend.addCategory(CategoryDraft(type: .expense, parentID: nil, name: "宠物", symbol: "cart"))
+        XCTAssertNotEqual(other.id, pets.id)
+        // 收入里同名同图标：不是同一个地方，新建
+        let income = try await backend.addCategory(CategoryDraft(type: .income, parentID: nil, name: "宠物", symbol: "pawprint"))
+        XCTAssertNotEqual(income.id, pets.id)
+
+        // 名字、图标都一样：找回原来那个，原来的流水又记在它下面
+        let again = try await backend.addCategory(CategoryDraft(type: .expense, parentID: nil, name: " 宠物 ", symbol: "pawprint"))
+        XCTAssertEqual(again.id, pets.id)
+        XCTAssertFalse(again.hidden)
+        let tree = CategoryTree(try await backend.categories())
+        XCTAssertTrue(tree.nodes(.expense).contains { $0.id == pets.id }, "找回来的分类又能选")
+        XCTAssertTrue(tree.category(food.id)?.hidden == true, "删掉的小类不跟着回来")
+        let row = try await backend.records().first
+        XCTAssertEqual(row?.category?.id, pets.id)
+
+        // 小类也一样
+        let foodAgain = try await backend.addCategory(CategoryDraft(type: .expense, parentID: pets.id, name: "猫粮", symbol: "pawprint"))
+        XCTAssertEqual(foodAgain.id, food.id)
+    }
+
     func testMergeCategoryMovesRecords() async throws {
         let backend = try makeBackend()
         try await addAccount(backend, last4: "0427")

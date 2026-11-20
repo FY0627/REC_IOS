@@ -604,7 +604,9 @@ public final class LedgerBackend: Sendable {
         try await database.read { try RecordDAO.uncategorizedCount($0) }
     }
 
-    /// 新增分类：大类，或加在某个大类下面的小类（最多两层）。转帐的分类不能新增
+    /// 新增分类：大类，或加在某个大类下面的小类（最多两层）。转帐的分类不能新增。
+    /// 删掉的分类只是标成删除（`hidden`）：在同一个地方（同一种类型、同一个大类下面）再加一个名字、图标都一样的，
+    /// 就把原来那个找回来接着用，原来记在上面的流水又归到它下面，不新建。找回来的排在最后，和新加的一样；它删掉的小类不跟着回来
     public func addCategory(_ draft: CategoryDraft) async throws -> LedgerCategory {
         let name = draft.name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty, draft.type != .transfer else { throw BackendError.invalidCategory }
@@ -616,10 +618,20 @@ public final class LedgerBackend: Sendable {
                     throw BackendError.invalidCategory
                 }
             }
+            let name = String(name.prefix(20))
+            let symbol = draft.symbol.isEmpty ? "tag" : draft.symbol
+            let sortOrder = try CategoryDAO.nextSortOrder(db, type: draft.type, parentID: draft.parentID)
+            if var deleted = try CategoryDAO.all(db).first(where: {
+                $0.hidden && !$0.locked && $0.type == draft.type && $0.parentID == draft.parentID && $0.name == name && $0.symbol == symbol
+            }) {
+                try CategoryDAO.setHidden(db, id: deleted.id, hidden: false)
+                try CategoryDAO.setSortOrder(db, id: deleted.id, sortOrder: sortOrder)
+                deleted.hidden = false
+                deleted.sortOrder = sortOrder
+                return deleted
+            }
             let category = LedgerCategory(
-                id: id, type: draft.type, parentID: draft.parentID, name: String(name.prefix(20)),
-                symbol: draft.symbol.isEmpty ? "tag" : draft.symbol,
-                sortOrder: try CategoryDAO.nextSortOrder(db, type: draft.type, parentID: draft.parentID)
+                id: id, type: draft.type, parentID: draft.parentID, name: name, symbol: symbol, sortOrder: sortOrder
             )
             try CategoryDAO.insert(db, category, now: now)
             return category
