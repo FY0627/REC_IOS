@@ -179,6 +179,12 @@ struct RecordDetailView: View {
     @State private var closingHold = false
     @State private var note = ""
     @FocusState private var noteFocused: Bool
+    /// 右上角的按钮（`RecordDetailActions`）：页面在屏幕上（转场开始就算）、详情读出来以后才出现
+    @State private var onScreen = false
+    @State private var showsDelete = false
+    @State private var showsMerge = false
+    /// 按钮先后出现、消失时排的下一步；换了方向就作废
+    @State private var actionsStep = 0
 
     var body: some View {
         Group {
@@ -190,22 +196,27 @@ struct RecordDetailView: View {
         }
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            if let detail, canMerge(detail) {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("合并", systemImage: "arrow.triangle.merge") { merging = true }
-                }
-            }
             ToolbarItem(placement: .topBarTrailing) {
-                // 确认的小菜单就在这个按钮下面弹出
-                Menu {
-                    Section("删除后不能恢复") {
-                        Button("删除这笔流水", systemImage: "trash", role: .destructive) { Task { await delete() } }
-                    }
-                } label: {
-                    Label("删除", systemImage: "trash")
+                RecordDetailActions(showsDelete: showsDelete, showsMerge: showsMerge) {
+                    merging = true
+                } delete: {
+                    Task { await delete() }
                 }
-                .disabled(detail == nil)
             }
+            .sharedBackgroundVisibility(.hidden)
+        }
+        .background {
+            AppearanceProbe { visible in
+                onScreen = visible
+                updateActions()
+            }
+            .frame(width: 0, height: 0)
+        }
+        // 保险：万一没收到将要出现（`AppearanceProbe`），转场结束时也要有按钮
+        .onAppear {
+            guard !onScreen else { return }
+            onScreen = true
+            updateActions()
         }
         .sheet(isPresented: $editing) {
             if let detail {
@@ -399,6 +410,39 @@ struct RecordDetailView: View {
         detail.orderMembers.isEmpty && !detail.mergedTransfer && detail.row.entryType != .transfer && detail.row.record.status == .posted
     }
 
+    /// 右上角按钮像水滴一样分合：出现时删除先凝结出来，合并再从它里面分出来（带回弹）；消失时合并先并回去，删除再化掉
+    private func updateActions() {
+        let wantDelete = onScreen && detail != nil
+        let wantMerge = wantDelete && detail.map(canMerge) == true
+        actionsStep += 1
+        let step = actionsStep
+        if wantDelete {
+            let condensing = !showsDelete
+            if condensing {
+                withAnimation(.smooth(duration: 0.3)) { showsDelete = true }
+            }
+            guard showsMerge != wantMerge else { return }
+            Task {
+                // 删除刚凝结出来：等它成形再分出合并；已经在的话马上分（或并回去）
+                if condensing { try? await Task.sleep(for: .milliseconds(120)) }
+                guard step == actionsStep else { return }
+                withAnimation(.bouncy(duration: 0.55, extraBounce: 0.1)) { showsMerge = wantMerge }
+            }
+        } else {
+            guard showsDelete || showsMerge else { return }
+            let folding = showsMerge
+            if folding {
+                withAnimation(.smooth(duration: 0.25)) { showsMerge = false }
+            }
+            Task {
+                // 合并并回删除以后，删除再化掉
+                if folding { try? await Task.sleep(for: .milliseconds(140)) }
+                guard step == actionsStep else { return }
+                withAnimation(.smooth(duration: 0.25)) { showsDelete = false }
+            }
+        }
+    }
+
     /// 上面那一组能改的一行：点一下弹出编辑。文字照原来的颜色，不变成主题色
     private func editable<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
         Button { editing = true } label: {
@@ -438,6 +482,7 @@ struct RecordDetailView: View {
     private func reload() async {
         detail = await store.detail(recordID: recordID)
         if !noteFocused, let detail { note = detail.row.record.note }
+        updateActions()
     }
 
     /// 备注写完（离开输入框或离开页面）就保存
