@@ -30,8 +30,8 @@ struct AccountManagerView: View {
                                 // 和首页的流水一样：确认菜单从这一行右端、也就是「删除」按钮那里弹出
                                 .background(alignment: .trailing) {
                                     if deleting?.id == account.id {
-                                        // 菜单上只有红色的「删除这个账户」，不写说明小字
-                                        DeleteMenuAnchor(action: L("删除这个账户")) {
+                                        // 说明只写一句「删除后不能恢复」，不多写
+                                        DeleteMenuAnchor(warning: L("删除后不能恢复"), action: L("删除这个账户")) {
                                             delete(account)
                                         } onEnd: {
                                             deleting = nil
