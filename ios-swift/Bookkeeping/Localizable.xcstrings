@@ -15157,24 +15157,24 @@
         }
       }
     },
-    "管理银行卡" : {
+    "管理账户" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Manage Cards"
+            "value" : "Manage Accounts"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "管理银行卡"
+            "value" : "管理账户"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "管理銀行卡"
+            "value" : "管理帳戶"
           }
         }
       }
@@ -18171,24 +18171,24 @@
         }
       }
     },
-    "还没有银行卡" : {
+    "还没有账户" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "No Cards Yet"
+            "value" : "No Accounts Yet"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "还没有银行卡"
+            "value" : "还没有账户"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "還沒有銀行卡"
+            "value" : "還沒有帳戶"
           }
         }
       }

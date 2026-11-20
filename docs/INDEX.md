@@ -19,7 +19,7 @@
 | 修改 / 删除 / 搜索流水、外币扣款、按天存汇率、添加银行卡 | [0013](decisions/0013-ios-swift-record-editing-and-foreign-charges.md) | `UI/Common/{RecordRowView,RecordEditor,RecordSwipe}.swift`、`BKBackend/ChargeCalculator.swift` |
 | 多币种账户、主要币种、汇率导入 | [0011](decisions/0011-ios-swift-multi-currency-and-rates.md) | `App/ExchangeRateStore.swift`、`Intents/ImportExchangeRatesIntent.swift` |
 | 扣款币种、卡包换算成主要币种 | [0018](decisions/0018-ios-swift-charge-currency-and-converted-cards.md) | `BKModel/Records.swift`、`UI/Assets/` |
-| 卡包、卡号、卡面、管理银行卡 | [0010](decisions/0010-ios-swift-card-number-and-face.md) | `UI/{Assets,Shell}/`、`BKModel/BankCatalog.swift` |
+| 卡包、卡号、卡面、管理账户 | [0010](decisions/0010-ios-swift-card-number-and-face.md) | `UI/{Assets,Shell}/`、`BKModel/BankCatalog.swift` |
 | 卡包转场卡顿、玻璃按钮（UIKit + Core Animation） | [0012](decisions/0012-ios-swift-wallet-core-animation.md) | `UI/Assets/{WalletController,CardMotion}.swift`、`UI/Common/GlassControls.swift` |
 | 表结构、迁移、事务、并发 | [0007](decisions/0007-ios-swift-sqlite.md) | `BKDatabase/` |
 | 导出（勾选导出哪几样）、导入 | [0019](decisions/0019-ios-swift-export-and-import.md) | `BKBackend/{DataExport,BackupImport,BackupExtras,ZipStore}.swift`、`UI/Profile/Data*View.swift` |

@@ -397,7 +397,7 @@ t("已停用，打开账户详情", "已停用，開啟帳戶詳情", "Disabled.
 t("打开账户详情", "開啟帳戶詳情", "Opens the account.")
 t("返回卡包", "返回卡包", "Back to Wallet")
 t("添加银行卡", "新增銀行卡", "Add Card")
-t("管理银行卡", "管理銀行卡", "Manage Cards")
+t("管理账户", "管理帳戶", "Manage Accounts")
 t("更多", "更多", "More")
 t("交易记录", "交易紀錄", "Transactions")
 t("%lld 条账单待处理", "%lld 筆帳單待處理", P("%lld to review", "%lld to review"))
@@ -410,7 +410,7 @@ t("今年", "今年", "This Year")
 t("开始", "開始", "Start")
 t("结束", "結束", "End")
 t("自定义时间", "自訂時間", "Custom Range")
-t("还没有银行卡", "還沒有銀行卡", "No Cards Yet")
+t("还没有账户", "還沒有帳戶", "No Accounts Yet")
 
 # MARK: 统计
 

@@ -31,7 +31,7 @@ final class LedgerStore {
     }
     /// 已停用的卡：不参与自动记账和净资产，在资产页最下方以灰色卡包显示
     private(set) var archivedAccounts: [Account] = []
-    /// 全部卡片（不含删除的），按管理银行卡里排的顺序，新卡在最后
+    /// 全部卡片（不含删除的），按管理账户里排的顺序，新卡在最后
     private(set) var allAccounts: [Account] = []
     /// 删除的账户：不在任何列表里，只用来显示它留下的流水（编辑流水、统计）
     private var deletedAccounts: [Account] = []

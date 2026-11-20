@@ -12,7 +12,7 @@ import UIKit
 final class WalletTopBar: UIView {
     var onBack: () -> Void = {}
     var onAdd: () -> Void = {}
-    /// 卡包状态点「更多」：管理银行卡
+    /// 卡包状态点「更多」：管理账户
     var onManage: () -> Void = {}
     /// 详情状态「更多」的菜单项，每次打开菜单时生成
     var moreMenu: () -> [UIMenuElement] = { [] }
@@ -30,9 +30,9 @@ final class WalletTopBar: UIView {
     private let moreGlass = GlassControls.capsule(nil)
     private let backButton = GlassControls.iconButton("chevron.left", label: L("返回卡包"))
     private let addButton = GlassControls.iconButton("plus", label: L("添加银行卡"))
-    /// 卡包里胶囊右半边的「更多」：管理银行卡
-    private let stackMoreButton = GlassControls.iconButton("ellipsis", label: L("管理银行卡"))
-    private let moreButton = GlassControls.iconButton("ellipsis", label: L("管理银行卡"))
+    /// 卡包里胶囊右半边的「更多」：管理账户
+    private let stackMoreButton = GlassControls.iconButton("ellipsis", label: L("管理账户"))
+    private let moreButton = GlassControls.iconButton("ellipsis", label: L("管理账户"))
     private let periodButton = UIButton(configuration: GlassControls.pillConfiguration(""))
 
     private(set) var isDetail = false
@@ -202,7 +202,7 @@ final class WalletTopBar: UIView {
         backGlass.isUserInteractionEnabled = isDetail
         addButton.isUserInteractionEnabled = !isDetail
         periodButton.isUserInteractionEnabled = isDetail
-        moreButton.accessibilityLabel = isDetail ? L("更多") : L("管理银行卡")
+        moreButton.accessibilityLabel = isDetail ? L("更多") : L("管理账户")
         moreButton.showsMenuAsPrimaryAction = isDetail
         moreButton.menu = isDetail ? GlassControls.deferredMenu { [weak self] in self?.moreMenu() ?? [] } : nil
         accessibilityElements = isDetail ? [backButton, periodButton, moreButton] : [addButton, stackMoreButton]

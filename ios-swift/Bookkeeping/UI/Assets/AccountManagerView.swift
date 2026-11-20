@@ -1,7 +1,7 @@
 import SwiftUI
 import BKModel
 
-/// 管理银行卡：停用、删除都在这一页。左滑一行露出两个按钮：最右边红色「删除」，旁边灰色「停用」
+/// 管理账户：停用、删除都在这一页。左滑一行露出两个按钮：最右边红色「删除」，旁边灰色「停用」
 /// （停用的卡是主题色的「启用」）。不能一划到底直接删，免得误删。
 /// 删除先弹一次确认；流水留着，账户名称后面写「已删除」，不能恢复。使用中的卡也能直接删，不用先停用。
 /// 按住一行上下拖动调整卡片的顺序（系统列表的拖动：按住的行浮在上层，其他行自动让开、补位），资产页的卡包跟着这个顺序。
@@ -21,7 +21,7 @@ struct AccountManagerView: View {
         NavigationStack {
             Group {
                 if store.allAccounts.isEmpty {
-                    ContentUnavailableView("还没有银行卡", systemImage: "creditcard")
+                    ContentUnavailableView("还没有账户", systemImage: "creditcard")
                 } else {
                     List {
                         ForEach(store.allAccounts) { account in
@@ -40,6 +40,9 @@ struct AccountManagerView: View {
                                             .tint(ThemeColor.color(stored: themeColor))
                                     }
                                 }
+                                // 和首页的流水一样：系统默认的行背景滑动时会变灰、四个角变圆；
+                                // 换成同样颜色的背景，滑动时这一行的颜色和形状都不变
+                                .listRowBackground(Color(.secondarySystemGroupedBackground))
                         }
                         .onMove { from, to in
                             var ids = store.allAccounts.map(\.id)
@@ -49,7 +52,7 @@ struct AccountManagerView: View {
                     }
                 }
             }
-            .navigationTitle("管理银行卡")
+            .navigationTitle("管理账户")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) { Button("完成", systemImage: "checkmark") { dismiss() } }
@@ -83,7 +86,7 @@ struct AccountManagerView: View {
     }
 }
 
-/// 一行账户：小卡面、名称，下面银行 · 卡类型 · 尾号。管理银行卡和新手引导共用
+/// 一行账户：小卡面、名称，下面银行 · 卡类型 · 尾号。管理账户和新手引导共用
 struct AccountSummaryRow: View {
     let account: Account
     var enabled = true

@@ -135,7 +135,7 @@ public final class LedgerBackend: Sendable {
         if !updated { throw BackendError.notFound }
     }
 
-    /// 卡片的新顺序（管理银行卡里拖动）
+    /// 卡片的新顺序（管理账户里拖动）
     public func reorderAccounts(_ ids: [String]) async throws {
         try await database.write { db in
             for (index, id) in ids.enumerated() { try AccountDAO.setSortOrder(db, id: id, sortOrder: index) }
