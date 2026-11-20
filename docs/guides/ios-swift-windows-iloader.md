@@ -8,7 +8,7 @@
 
 ## 1. 下载 IPA
 
-1. 打开仓库的 Actions 页面：`https://github.com/FY0627/REC_IOS/actions/workflows/ios-swift-build.yml`，进入最新一次绿色（成功）的运行。
+1. 打开仓库的 Actions 页面：`https://github.com/FY0627/Tacito-iOS/actions/workflows/ios-swift-build.yml`，进入最新一次绿色（成功）的运行。
 2. 页面底部 **Artifacts** 里下载名为 `Bookkeeping-<版本>-b<构建号>-<提交前8位>` 的产物（需要登录 GitHub）。
 3. 解压得到 `.ipa`、`.ipa.sha256`、`build-info.txt`、`ipa-verification.txt`。
 4. 在 PowerShell 中校验：

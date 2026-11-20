@@ -22,47 +22,14 @@ struct NotificationSettingsView: View {
 
     private var mode: IngestNotifier.Mode { IngestNotifier.Mode(rawValue: notifyMode) ?? .off }
 
+    // 分成几块写：整个 Form 写在一起时编译器推不出类型（CI 上 Xcode 27 报 failed to produce diagnostic）
     var body: some View {
         Form {
-            Section {
-                Toggle(isOn: $notifyRates) {
-                    Label("导入汇率", systemImage: "arrow.left.arrow.right.circle")
-                }
-            }
-            if notifyRates {
-                Section { NotificationPreview(title: L("汇率已更新"), message: ratesExample) }
-            }
-
-            Section {
-                // 菜单按钮右边的文字（选中的项）换了主题色不会马上重画，按主题色重建这一行
-                Picker(selection: $notifyMode) {
-                    ForEach(IngestNotifier.Mode.allCases) { Text($0.title).tag($0.rawValue) }
-                } label: {
-                    Label("记账结果", systemImage: "bell.badge")
-                }
-                .id("notify-\(themeColor)")
-            }
-            // 演示单独一组、没有底色：浮在设置项下面，像一条真的通知
-            if mode != .off {
-                Section {
-                    NotificationPreview(title: nil, message: ingestExample, onLongPress: mode == .all ? showLongPress : nil)
-                }
-            }
-
+            ratesSections
+            ingestSections
             // 只有「全部」才在岛上选分类（`IngestNotifier.post`），别的时候不显示
             if mode == .all {
-                Section {
-                    Toggle(isOn: $islandOn) {
-                        if hasIsland {
-                            Label("灵动岛", systemImage: "iphone.gen3")
-                        } else {
-                            Label("实时活动提醒", systemImage: "iphone.gen3")
-                        }
-                    }
-                }
-                if islandOn {
-                    Section { IslandPreview(hasIsland: hasIsland) }
-                }
+                islandSections
             }
         }
         .animation(.smooth(duration: 0.3), value: notifyMode)
@@ -83,16 +50,7 @@ struct NotificationSettingsView: View {
             guard on else { return }
             askPermission { notifyRates = false }
         }
-        .fullScreenCover(isPresented: $longPressing) {
-            NotificationLongPressDemo(message: ingestExample, picker: demoPicker) {
-                // 自己做了淡出，关的时候系统不再从下面滑走
-                var transaction = Transaction()
-                transaction.disablesAnimations = true
-                withTransaction(transaction) { longPressing = false }
-            }
-            .presentationBackground(.clear)
-        }
-        .sensoryFeedback(.impact(weight: .medium), trigger: longPressing) { _, shown in shown }
+        .fullScreenCover(isPresented: $longPressing) { longPressDemo }
         .alert("没有通知权限", isPresented: $notifyDenied) {
             Button("去设置") {
                 if let url = URL(string: UIApplication.openNotificationSettingsURLString) { openURL(url) }
@@ -101,6 +59,54 @@ struct NotificationSettingsView: View {
         } message: {
             Text("在系统设置里允许 Tacito 发送通知。")
         }
+    }
+
+    @ViewBuilder
+    private var ratesSections: some View {
+        Section {
+            Toggle(isOn: $notifyRates) {
+                Label("导入汇率", systemImage: "arrow.left.arrow.right.circle")
+            }
+        }
+        if notifyRates {
+            Section { NotificationPreview(title: L("汇率已更新"), message: ratesExample) }
+        }
+    }
+
+    @ViewBuilder
+    private var ingestSections: some View {
+        Section {
+            // 菜单按钮右边的文字（选中的项）换了主题色不会马上重画，按主题色重建这一行
+            Picker(selection: $notifyMode) {
+                ForEach(IngestNotifier.Mode.allCases) { Text($0.title).tag($0.rawValue) }
+            } label: {
+                Label("记账结果", systemImage: "bell.badge")
+            }
+            .id("notify-\(themeColor)")
+        }
+        // 演示单独一组、没有底色：浮在设置项下面，像一条真的通知。只有「全部」的通知能长按选分类
+        if mode != .off {
+            Section {
+                NotificationPreview(title: nil, message: ingestExample, canLongPress: mode == .all, onLongPress: showLongPress)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var islandSections: some View {
+        Section {
+            Toggle(isOn: $islandOn) {
+                Label(hasIsland ? LocalizedStringKey("灵动岛") : LocalizedStringKey("实时活动提醒"), systemImage: "iphone.gen3")
+            }
+        }
+        if islandOn {
+            Section { IslandPreview(hasIsland: hasIsland) }
+        }
+    }
+
+    private var longPressDemo: some View {
+        NotificationLongPressDemo(message: ingestExample, picker: demoPicker, dismiss: hideLongPress)
+            .presentationBackground(.clear)
     }
 
     /// 和真的记账结果通知一样的写法：「全部」是记账成功（可以长按选分类），「仅失败」是没对上卡的一笔
@@ -121,6 +127,13 @@ struct NotificationSettingsView: View {
         var transaction = Transaction()
         transaction.disablesAnimations = true
         withTransaction(transaction) { longPressing = true }
+    }
+
+    /// 演示自己做了淡出，关的时候系统不再从下面滑走
+    private func hideLongPress() {
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) { longPressing = false }
     }
 
     /// 长按演示的按钮：用账本里自己的支出分类，按分类页的顺序（还没选过分类时真的通知也是这样），
@@ -159,24 +172,36 @@ struct NotificationSettingsView: View {
 private struct NotificationPreview: View {
     let title: String?
     let message: String
-    var onLongPress: (() -> Void)?
+    var canLongPress = false
+    var onLongPress: () -> Void = {}
 
     @State private var pressing = false
+    /// 长按到时间的次数：每次震一下
+    @State private var longPresses = 0
 
     var body: some View {
         NotificationCard(title: title, message: message)
             // 按住时像系统的通知那样缩一点，到时间弹出按钮
             .scaleEffect(pressing ? 0.96 : 1)
             .animation(.smooth(duration: 0.25), value: pressing)
-            .onLongPressGesture(minimumDuration: 0.4) {
-                onLongPress?()
-            } onPressingChanged: { pressing = onLongPress != nil && $0 }
+            .onLongPressGesture(minimumDuration: 0.4, perform: longPressed, onPressingChanged: pressingChanged)
+            .sensoryFeedback(.impact(weight: .medium), trigger: longPresses)
             .listRowBackground(Color.clear)
             .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
             .accessibilityElement(children: .combine)
             .accessibilityLabel(Text("效果演示"))
             .accessibilityValue(Text([title, message].compactMap { $0 }.joined(separator: " ")))
-            .accessibilityAction(named: Text("选分类")) { onLongPress?() }
+            .accessibilityAction(named: Text("选分类"), longPressed)
             .transition(.opacity.combined(with: .move(edge: .top)))
+    }
+
+    private func longPressed() {
+        guard canLongPress else { return }
+        longPresses += 1
+        onLongPress()
+    }
+
+    private func pressingChanged(_ down: Bool) {
+        pressing = canLongPress && down
     }
 }
