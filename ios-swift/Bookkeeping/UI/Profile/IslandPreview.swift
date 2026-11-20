@@ -13,7 +13,8 @@ import BKModel
 /// 4. 点到分类：按钮淡出，选好的一行从下面上来（分类图标、「已分类」和分类名），右边的圆圈从 12 点画一圈、再画出对勾；
 ///    停一下，还有下一笔就整页滚到下一笔的按钮，没有了岛收回只剩摄像头；
 /// 5. 一轮选完从头再来。一轮 1 笔、下一轮 2 笔，这样交替，一笔和连着几笔的样子都看得到。不记账。
-/// 选「仅提醒」时没有按钮：小岛长按展开的还是提醒（真的岛上单点打开 App 选），看一会儿收回，下一轮。
+/// 选「仅提醒」时没有按钮：小岛长按展开的还是提醒（真的岛上单点打开 App 选），看一会儿收回，下一轮；一直是 1 笔。
+/// 整个岛压成一层交给 Metal（`drawingGroup`）画，动画在 GPU 上合成。
 ///
 /// 尺寸照 `CategoryActivity` 里的 `IslandLayout`：按钮的岛宽 371、高 10 + 32 + 8 + 92 + 16 = 158，提醒的岛约 95，小岛 37 高。
 /// 按真的尺寸画好再整体缩到这一行的宽度，元素之间的比例和真机一样；这一行一直留着 158 高，岛变大变小时下面的东西不跳。
@@ -50,6 +51,9 @@ struct IslandPreview: View {
                 GeometryReader { geo in
                     shape
                         .frame(width: size.width, height: size.height, alignment: .top)
+                        // 整个岛压成一层交给 Metal（GPU）画：岛变大变小、淡入淡出、缩放每一帧都在 GPU 上合成，
+                        // 不用 Core Animation 一层一层叠、也不用 CPU 画圆角裁切。按整块的固定大小画，变形时不重新开画布
+                        .drawingGroup()
                         .scaleEffect(geo.size.width / size.width, anchor: .topLeading)
                 }
             }
@@ -124,10 +128,10 @@ struct IslandPreview: View {
     private func act(_ action: IslandDemo.Action) {
         switch action {
         case .skipNotice:
-            withAnimation(morph) { demo.advance() }
+            animateNext(morph) { demo.advance() }
         case .expand:
             presses += 1
-            withAnimation(morph) { demo.advance() }
+            animateNext(morph) { demo.advance() }
         case .show(let page, let back):
             show(page, back: back)
         case .pick(let option, let page):
@@ -135,6 +139,13 @@ struct IslandPreview: View {
             backward = false
             step = .tapped
             demo.phase = .chosen(option, from: page)
+        }
+    }
+
+    /// 手势回调里改的状态：长按到时间时手指还按着，这次更新系统不放动画（岛直接跳成展开的），放到下一轮再改
+    private func animateNext(_ animation: Animation?, _ change: @escaping @MainActor () -> Void) {
+        Task { @MainActor in
+            withAnimation(animation) { change() }
         }
     }
 
@@ -243,7 +254,8 @@ struct IslandDemo: Hashable {
     var index = 0
     var phase = Phase.idle
 
-    var count: Int { round % 2 == 0 ? 1 : 2 }
+    /// 「仅提醒」一直是 1 笔：点进 App 一般会把待分类的都分完，平时看不到比 1 大的数
+    var count: Int { reminderOnly || round % 2 == 0 ? 1 : 2 }
     /// 还没分类的笔数，提醒的圆环里写这个
     var remaining: Int { count - index }
     /// 这一笔选好以后还有下一笔
