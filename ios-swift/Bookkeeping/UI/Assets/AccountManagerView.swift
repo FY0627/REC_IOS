@@ -27,6 +27,8 @@ struct AccountManagerView: View {
                         ForEach(store.allAccounts) { account in
                             let enabled = pending[account.id] ?? !account.archived
                             AccountSummaryRow(account: account, enabled: enabled)
+                                // 撑满一行：这一行原来只有字那么宽，菜单会从字的末尾弹出，每行位置还不一样
+                                .frame(maxWidth: .infinity, alignment: .leading)
                                 // 和首页的流水一样：确认菜单从这一行右端、也就是「删除」按钮那里弹出
                                 .background(alignment: .trailing) {
                                     if deleting?.id == account.id {
