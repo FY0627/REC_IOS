@@ -38,9 +38,9 @@ final class RecordDeleteMenuButton: UIButton {
         show(warning: row.deleteWarning, action: L("删除这笔流水"), at: rect, in: view, onDelete: onDelete, onEnd: onEnd)
     }
 
-    /// 通用的删除确认：`warning` 是菜单上的说明，`action` 是红色的那一项（管理账户删账户也用）
+    /// 通用的删除确认：`warning` 是菜单上的说明（`nil` 不写），`action` 是红色的那一项（管理账户删账户也用）
     static func show(
-        warning: String,
+        warning: String?,
         action: String,
         at rect: CGRect,
         in view: UIView,
@@ -54,7 +54,7 @@ final class RecordDeleteMenuButton: UIButton {
         button.isContextMenuInteractionEnabled = true
         button.showsMenuAsPrimaryAction = true
         button.menu = UIMenu(children: [
-            UIMenu(title: warning, options: .displayInline, children: [
+            UIMenu(title: warning ?? "", options: .displayInline, children: [
                 UIAction(title: action, image: UIImage(systemName: "trash"), attributes: .destructive) { _ in onDelete() }
             ])
         ])
@@ -81,7 +81,7 @@ final class RecordDeleteMenuButton: UIButton {
 /// 首页、统计、管理账户：系统列表的滑动按钮拿不到视图，菜单从这一行右端的这块空白弹出。
 /// 放在行的 `.background(alignment: .trailing)` 里，宽度和「删除」按钮差不多（76）
 struct DeleteMenuAnchor: UIViewRepresentable {
-    let warning: String
+    var warning: String?
     let action: String
     let onDelete: () -> Void
     let onEnd: () -> Void
