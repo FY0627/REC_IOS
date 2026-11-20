@@ -6,7 +6,7 @@ import BKModel
 ///
 /// 和真的岛一样走一遍，动起来也照真的岛（`IslandMotion`）：
 /// 1. 只有摄像头 → 岛弹开成提醒：左边收据图标，中间「刚刚记了一笔 / 待分类」，右边圆环里是还有几笔没分类；
-/// 2. 3 秒后（真的岛也是 3 秒，`openingTime`）收成小岛，左边一个标签图标。长按（或点一下）展开成按钮，不动的话过一会儿自己展开；
+/// 2. 3 秒后（真的岛也是 3 秒，`openingTime`）收成小岛，摄像头左边一个标签图标、右边没有东西。长按展开成按钮，不长按就一直收着；
 /// 3. 按钮三页：第 1 页 4 个推荐和「全部」，「全部」是全部大类，点有小类的大类进小类，左上角返回。
 ///    换页整页上下滚：往里点旧的往上走、新的从下面上来，返回反过来。
 ///    分类是账本里自己的支出分类，页怎么分、按钮点了去哪用的就是岛上那一套（`LiveCategoryPicker`）；
@@ -91,10 +91,8 @@ struct IslandPreview: View {
         case .notice:
             guard await pause(IslandDemo.noticeTime) else { return }
             withAnimation(morph) { demo.advance() }
-        case .compact:
-            guard await pause(IslandDemo.compactTime) else { return }
-            withAnimation(morph) { demo.advance() }
-        case .picking:
+        case .compact, .picking:
+            // 收起的小岛等用户长按，和真的岛一样，不自己展开
             return
         case .chosen:
             await playChosen()
@@ -234,7 +232,6 @@ struct IslandDemo: Hashable {
 
     static let idleTime: Duration = .milliseconds(900)
     static let noticeTime: Duration = .seconds(3)
-    static let compactTime: Duration = .milliseconds(2200)
 
     /// 「仅提醒」：小岛展开的是提醒，看一会儿就收回，下一轮
     var reminderOnly = false
@@ -324,6 +321,14 @@ private struct IslandBody: View {
         }
     }
 
+    /// 镜头的中心离岛顶多远：展开时和顶上一行的字对齐，别的时候在小岛正中
+    private var lensCenter: CGFloat {
+        switch look {
+        case .expanded: IslandShape.topMargin + IslandShape.header - IslandShape.headerLine / 2
+        case .idle, .notice, .compact: IslandShape.camera.height / 2
+        }
+    }
+
     private var corner: CGFloat {
         switch look {
         case .idle, .compact: IslandShape.camera.height / 2
@@ -349,7 +354,10 @@ private struct IslandBody: View {
         .frame(width: size.width, height: size.height, alignment: .top)
         .clipShape(RoundedRectangle(cornerRadius: corner, style: .continuous))
         .background(IslandShape.fill, in: RoundedRectangle(cornerRadius: corner, style: .continuous))
-        .overlay(alignment: .top) { IslandCamera() }
+        // 收起的小岛只往左边多出一块放图标，右边到摄像头为止
+        .offset(x: look == .compact ? -IslandShape.compactLead / 2 : 0)
+        // 摄像头不跟着小岛挪：放在挪之前的位置上（offset 不改排版的位置）
+        .overlay(alignment: .top) { IslandCamera(centerY: lensCenter) }
         .dynamicTypeSize(.large)
     }
 
@@ -371,7 +379,7 @@ private struct IslandBody: View {
         .accessibilityAddTraits(.isButton)
     }
 
-    /// 收起的小岛：左边标签图标（还没选分类），右边空着。长按展开，和真的岛一样；点一下也展开
+    /// 收起的小岛：左边标签图标（还没选分类），右边到摄像头为止。长按展开，和真的岛一样，不长按就一直收着
     private var compact: some View {
         HStack {
             Image(systemName: LiveCategoryPicker.unpickedSymbol)
@@ -383,10 +391,10 @@ private struct IslandBody: View {
         .frame(width: IslandShape.compact.width, height: IslandShape.compact.height)
         .contentShape(Rectangle())
         .onLongPressGesture(minimumDuration: 0.3) { act(.expand) }
-        .onTapGesture { act(.expand) }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text("选分类"))
         .accessibilityAddTraits(.isButton)
+        .accessibilityAction { act(.expand) }
     }
 }
 
@@ -688,14 +696,16 @@ private struct NoticeRing: View {
     }
 }
 
-/// 摄像头：岛正中顶上那一块，镜头在它右半边。岛怎么变它都不动
+/// 摄像头：岛正中顶上那一块，镜头在它右半边。上下跟着岛里的字（`IslandBody.lensCenter`）
 private struct IslandCamera: View {
+    let centerY: CGFloat
+
     var body: some View {
         Circle()
             .fill(Color(white: 0.09))
             .overlay { Circle().strokeBorder(Color(white: 0.2), lineWidth: 1) }
             .frame(width: IslandShape.lens, height: IslandShape.lens)
-            .offset(x: IslandShape.lensOffset, y: (IslandShape.camera.height - IslandShape.lens) / 2)
+            .offset(x: IslandShape.lensOffset, y: centerY - IslandShape.lens / 2)
             .accessibilityHidden(true)
     }
 }
@@ -729,8 +739,9 @@ private enum IslandShape {
     static let cameraWidth: CGFloat = camera.width
     static let lens: CGFloat = 12
     static let lensOffset: CGFloat = 40
-    /// 收起的小岛：摄像头两边各多出一块，左边放图标
-    static let compact = CGSize(width: 212, height: 37)
+    /// 收起的小岛：摄像头左边多出一块放图标，右边没有东西就不多出来
+    static let compactLead: CGFloat = 44
+    static let compact = CGSize(width: camera.width + compactLead, height: 37)
     static let compactInset: CGFloat = 14
 
     /// 提醒：图标和圆环 56，圆心离岛边约 44（左右各缩 16），上沿离岛顶 10 + 10；岛的圆角 44
