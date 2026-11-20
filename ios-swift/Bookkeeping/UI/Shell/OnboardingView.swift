@@ -3,7 +3,7 @@ import BKModel
 
 /// 新手引导：第一次打开 App 时全屏出现，样子照 iOS 新机设置：每页上面大图标和大标题，中间内容，
 /// 下面「继续」和一个文字按钮，左上角返回。
-/// 五页：添加银行卡 → 自动记账 → 记账结果（灵动岛或通知上选分类）→ 截图记账 → 汇率。
+/// 五页：添加账户 → 自动记账 → 记账结果（灵动岛或通知上选分类）→ 截图记账 → 汇率。
 /// 自动记账、截图记账、汇率三页和「我的」里的设置页是同一份内容。
 ///
 /// 只给新用户：账本里没有账户、没有流水、自动化也没收到过东西。升级上来的老用户直接记成看过（`RootView`）。
@@ -53,7 +53,7 @@ struct OnboardingView: View {
     }
 }
 
-/// 第 1 页：还没有账户时只有「添加银行卡」和「跳过」；添加了以后列出来，可以再加，按钮换成「继续」
+/// 第 1 页：还没有账户时只有「添加账户」和「跳过」；添加了以后列出来，可以再加，按钮换成「继续」
 private struct AccountsPage: View {
     let next: () -> Void
     @Environment(LedgerStore.self) private var store
@@ -63,8 +63,8 @@ private struct AccountsPage: View {
         let added = !store.accounts.isEmpty
         SetupPage(
             symbol: "creditcard",
-            title: "添加银行卡",
-            primary: added ? "继续" : "添加银行卡",
+            title: "添加账户",
+            primary: added ? "继续" : "添加账户",
             primaryAction: { if added { next() } else { adding = true } },
             secondary: added ? nil : "跳过",
             secondaryAction: next
@@ -72,7 +72,7 @@ private struct AccountsPage: View {
             if added {
                 Section {
                     ForEach(store.accounts) { AccountSummaryRow(account: $0) }
-                    Button("添加银行卡", systemImage: "plus") { adding = true }
+                    Button("添加账户", systemImage: "plus") { adding = true }
                 }
             }
         }
