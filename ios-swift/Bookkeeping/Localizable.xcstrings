@@ -2651,6 +2651,28 @@
         }
       }
     },
+    "仅提醒" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reminder Only"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "仅提醒"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "僅提醒"
+          }
+        }
+      }
+    },
     "今天" : {
       "localizations" : {
         "en" : {

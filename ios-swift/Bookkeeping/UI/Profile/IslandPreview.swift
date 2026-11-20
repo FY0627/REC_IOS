@@ -13,6 +13,7 @@ import BKModel
 /// 4. 点到分类：按钮淡出，选好的一行从下面上来（分类图标、「已分类」和分类名），右边的圆圈从 12 点画一圈、再画出对勾；
 ///    停一下，还有下一笔就整页滚到下一笔的按钮，没有了岛收回只剩摄像头；
 /// 5. 一轮选完从头再来。一轮 1 笔、下一轮 2 笔，这样交替，一笔和连着几笔的样子都看得到。不记账。
+/// 选「仅提醒」时没有按钮：小岛长按展开的还是提醒（真的岛上单点打开 App 选），看一会儿收回，下一轮。
 ///
 /// 尺寸照 `CategoryActivity` 里的 `IslandLayout`：按钮的岛宽 371、高 10 + 32 + 8 + 92 + 16 = 158，提醒的岛约 95，小岛 37 高。
 /// 按真的尺寸画好再整体缩到这一行的宽度，元素之间的比例和真机一样；这一行一直留着 158 高，岛变大变小时下面的东西不跳。
@@ -20,11 +21,13 @@ import BKModel
 /// 岛是黑色的；深色模式下页面也是黑的，岛换成深灰，跟着外观实时换
 struct IslandPreview: View {
     let hasIsland: Bool
+    /// 「仅提醒」：小岛长按展开的还是提醒，没有按钮
+    let reminderOnly: Bool
 
     @Environment(LedgerStore.self) private var store
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage(ThemeColor.key) private var themeColor = ThemeColor.defaultValue
-    @State private var demo = IslandDemo()
+    @State private var demo: IslandDemo
     @State private var step = IslandDemo.Step.tapped
     /// 换页往回走（返回）：整页从上面下来
     @State private var backward = false
@@ -33,6 +36,12 @@ struct IslandPreview: View {
 
     private var tint: Color { ThemeColor.color(stored: themeColor) }
     private var size: CGSize { hasIsland ? IslandShape.island : IslandShape.reminder }
+
+    init(hasIsland: Bool, reminderOnly: Bool) {
+        self.hasIsland = hasIsland
+        self.reminderOnly = reminderOnly
+        _demo = State(initialValue: IslandDemo(reminderOnly: reminderOnly))
+    }
 
     var body: some View {
         Color.clear
@@ -117,10 +126,10 @@ struct IslandPreview: View {
     private func act(_ action: IslandDemo.Action) {
         switch action {
         case .skipNotice:
-            withAnimation(morph) { demo.phase = .compact }
+            withAnimation(morph) { demo.advance() }
         case .expand:
             presses += 1
-            withAnimation(morph) { demo.phase = .picking(.quick) }
+            withAnimation(morph) { demo.advance() }
         case .show(let page, let back):
             show(page, back: back)
         case .pick(let option, let page):
@@ -227,6 +236,10 @@ struct IslandDemo: Hashable {
     static let noticeTime: Duration = .seconds(3)
     static let compactTime: Duration = .milliseconds(2200)
 
+    /// 「仅提醒」：小岛展开的是提醒，看一会儿就收回，下一轮
+    var reminderOnly = false
+    /// 「仅提醒」时提醒是不是长按小岛展开的（第二次出来）
+    var reopened = false
     /// 第几轮：双数这一轮 1 笔，单数 2 笔
     var round = 0
     /// 这一轮的第几笔
@@ -243,27 +256,42 @@ struct IslandDemo: Hashable {
     var merchant: String { index == 0 ? L("便利店") : L("咖啡店") }
     var amount: String { Fmt.money(index == 0 ? 3200 : 1800, .cny) }
 
-    /// 摄像头 → 提醒 → 小岛 → 按钮；选好 → 下一笔的按钮，这一轮完了收回只剩摄像头，下一轮
+    /// 摄像头 → 提醒 → 小岛 → 按钮；选好 → 下一笔的按钮，这一轮完了收回只剩摄像头，下一轮。
+    /// 「仅提醒」：摄像头 → 提醒 → 小岛 → 长按展开还是提醒 → 收回，下一轮
     mutating func advance() {
         switch phase {
         case .idle:
             phase = .notice
         case .notice:
-            phase = .compact
+            if reopened {
+                nextRound()
+            } else {
+                phase = .compact
+            }
         case .compact:
-            phase = .picking(.quick)
+            if reminderOnly {
+                reopened = true
+                phase = .notice
+            } else {
+                phase = .picking(.quick)
+            }
         case .chosen:
             if hasNext {
                 index += 1
                 phase = .picking(.quick)
             } else {
-                round += 1
-                index = 0
-                phase = .idle
+                nextRound()
             }
         case .picking:
             break
         }
+    }
+
+    private mutating func nextRound() {
+        round += 1
+        index = 0
+        reopened = false
+        phase = .idle
     }
 }
 
@@ -325,7 +353,8 @@ private struct IslandBody: View {
         .dynamicTypeSize(.large)
     }
 
-    /// 照 AirPods 连上时的样子：图标和圆环做满摄像头两边，上沿离岛顶约 20，两行字的下沿和它们对齐。点一下收成小岛
+    /// 照 AirPods 连上时的样子：图标和圆环做满摄像头两边，上沿离岛顶约 20，两行字的下沿和它们对齐。
+    /// 点一下往下走（收成小岛；「仅提醒」长按展开的那次是收回）
     private var notice: some View {
         HStack(alignment: .bottom, spacing: 0) {
             NoticeBadge(tint: tint)

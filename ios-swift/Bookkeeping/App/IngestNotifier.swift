@@ -16,7 +16,7 @@ import BKModel
 /// 点「打开 App」或点通知本身，打开 App 里这一笔的选分类面板（`CategorizeRequest`）。
 ///
 /// 实时活动（ADR 0024）：选「全部」时，没分类的支出、收入不发这条通知。有灵动岛的手机在岛上选（`LiveCategoryActivity`）；
-/// 没有灵动岛的手机弹一张待分类的提醒横幅（锁屏卡片），单点打开 App 这一笔。关了实时活动、开启失败时照常发这条通知。
+/// 灵动岛选「仅提醒」、没有灵动岛的手机弹一张待分类的提醒（锁屏卡片），单点打开 App 这一笔。灵动岛选「关闭」、开启失败时照常发这条通知。
 enum IngestNotifier {
     enum Mode: String, CaseIterable, Identifiable {
         case all
@@ -33,11 +33,34 @@ enum IngestNotifier {
         }
     }
 
-    static let modeKey = "notify.ingestResult"
-    /// 有灵动岛的手机在岛上选分类（ADR 0024），默认开；开关在「我的 › 通知」里，记账结果选「全部」时才有，关了在通知上选
-    static let islandKey = "notify.island"
+    /// 灵动岛（ADR 0024）：「我的 › 通知 › 灵动岛」，记账结果选「全部」时才有。
+    /// 全部：先提醒、再在岛上选分类；仅提醒：岛上只有「刚刚记了一笔 / 待分类」和笔数，单点打开 App 选（和没有灵动岛的手机一样）；
+    /// 关闭：不开实时活动，在通知上长按选
+    enum IslandMode: String, CaseIterable, Identifiable {
+        case all
+        case reminder
+        case off
 
-    static var islandOn: Bool { UserDefaults.standard.object(forKey: islandKey) as? Bool ?? true }
+        var id: String { rawValue }
+        var title: String {
+            switch self {
+            case .all: L("全部")
+            case .reminder: L("仅提醒")
+            case .off: L("关闭（通知）")
+            }
+        }
+    }
+
+    static let modeKey = "notify.ingestResult"
+    static let islandModeKey = "notify.islandMode"
+    /// 以前只有开和关（默认开）：没选过新的时候照它算，关了的是「关闭」
+    private static let oldIslandKey = "notify.island"
+
+    static var islandMode: IslandMode {
+        let defaults = UserDefaults.standard
+        if let stored = defaults.string(forKey: islandModeKey).flatMap(IslandMode.init) { return stored }
+        return defaults.object(forKey: oldIslandKey) as? Bool == false ? .off : .all
+    }
 
     static var mode: Mode {
         UserDefaults.standard.string(forKey: modeKey).flatMap(Mode.init) ?? .off
@@ -69,7 +92,7 @@ enum IngestNotifier {
             let suggestions = await categorySuggestions(for: item, backend: backend, screenshot: screenshot)
             let id = "ingest-\(result.ingestID ?? UUID().uuidString)-\(index)"
             // 有灵动岛时在岛上选分类（ADR 0024），这一笔不再发记账成功通知；没开成照常发
-            if mode == .all, islandOn, let recordID = item.recordID, LiveCategoryActivity.eligible(item, suggestions: suggestions),
+            if mode == .all, islandMode != .off, let recordID = item.recordID, LiveCategoryActivity.eligible(item, suggestions: suggestions),
                await LiveCategoryActivity.show(recordID: recordID, suggestions: suggestions, header: header(item)) {
                 continue
             }

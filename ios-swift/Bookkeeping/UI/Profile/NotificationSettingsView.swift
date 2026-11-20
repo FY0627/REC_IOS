@@ -12,7 +12,8 @@ struct NotificationSettingsView: View {
     @Environment(ExchangeRateStore.self) private var rates
     @AppStorage(IngestNotifier.modeKey) private var notifyMode = IngestNotifier.Mode.off.rawValue
     @AppStorage(ImportExchangeRatesIntent.notifyKey) private var notifyRates = true
-    @AppStorage(IngestNotifier.islandKey) private var islandOn = true
+    /// 没选过时照以前的开关算（`IngestNotifier.islandMode`）
+    @AppStorage(IngestNotifier.islandModeKey) private var islandMode = IngestNotifier.islandMode.rawValue
     @AppStorage(ThemeColor.key) private var themeColor = ThemeColor.defaultValue
     @State private var notifyDenied = false
     @State private var longPressing = false
@@ -34,16 +35,15 @@ struct NotificationSettingsView: View {
         }
         .animation(.smooth(duration: 0.3), value: notifyMode)
         .animation(.smooth(duration: 0.3), value: notifyRates)
-        .animation(.smooth(duration: 0.3), value: islandOn)
+        .animation(.smooth(duration: 0.3), value: islandMode)
         .navigationTitle("通知")
         .navigationBarTitleDisplayMode(.inline)
         .onChange(of: notifyMode) { _, mode in
             guard mode != IngestNotifier.Mode.off.rawValue else { return }
             askPermission { notifyMode = IngestNotifier.Mode.off.rawValue }
         }
-        .onChange(of: islandOn) { _, on in
-            // 岛上正在选的也收起，留在待分类
-            guard !on else { return }
+        .onChange(of: islandMode) {
+            // 岛上正在显示的收起，留在待分类：换成别的样子以后，下一笔按新的来
             Task { await LiveCategoryActivity.endAll() }
         }
         .onChange(of: notifyRates) { _, on in
@@ -92,15 +92,42 @@ struct NotificationSettingsView: View {
         }
     }
 
+    private var island: IngestNotifier.IslandMode { IngestNotifier.IslandMode(rawValue: islandMode) ?? .all }
+
+    /// 有灵动岛：全部（先提醒、再在岛上选）/ 仅提醒 / 关闭，和记账结果一样是菜单。
+    /// 没有灵动岛的手机只有提醒，是一个开关
     @ViewBuilder
     private var islandSections: some View {
         Section {
-            Toggle(isOn: $islandOn) {
-                Label(hasIsland ? LocalizedStringKey("灵动岛") : LocalizedStringKey("实时活动提醒"), systemImage: "iphone.gen3")
+            if hasIsland {
+                // 和记账结果一样：换了主题色按主题色重建这一行
+                Picker(selection: $islandMode) {
+                    ForEach(IngestNotifier.IslandMode.allCases) { Text($0.title).tag($0.rawValue) }
+                } label: {
+                    Label("灵动岛", systemImage: "iphone.gen3")
+                }
+                .id("island-\(themeColor)")
+            } else {
+                Toggle(isOn: reminderOn) {
+                    Label("实时活动提醒", systemImage: "iphone.gen3")
+                }
             }
         }
-        if islandOn {
-            Section { IslandPreview(hasIsland: hasIsland) }
+        if island != .off {
+            Section {
+                // 换了样子从头演示
+                IslandPreview(hasIsland: hasIsland, reminderOnly: island == .reminder)
+                    .id(island)
+            }
+        }
+    }
+
+    /// 没有灵动岛的手机：开就是「全部」（没有岛，实际上只有提醒），关就是「关闭」
+    private var reminderOn: Binding<Bool> {
+        Binding {
+            island != .off
+        } set: { on in
+            islandMode = (on ? IngestNotifier.IslandMode.all : .off).rawValue
         }
     }
 

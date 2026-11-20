@@ -6,7 +6,7 @@ import BKModel
 
 /// 灵动岛选分类（ADR 0024）：自动记账记上一笔没分类的支出或收入后，开启一个实时活动，在岛上选分类，全程不打开 App。
 ///
-/// - 有灵动岛的手机（`DynamicIsland`，按机型）在岛上选；
+/// - 有灵动岛的手机（`DynamicIsland`，按机型）在岛上选；「我的 › 通知 › 灵动岛」选了「仅提醒」的和没有灵动岛的手机一样；
 /// - 没有灵动岛的手机只放提醒（`ContentState.reminderOnly`）：锁屏卡片是提醒，记上一笔时发一次带提醒的更新，
 ///   系统把这张卡片当横幅在屏幕上方弹一下（苹果文档：没有灵动岛时，只有带 `AlertConfiguration` 的更新才弹横幅）；不放按钮，单点打开 App 这一笔；
 /// - 系统里关了实时活动、开启失败时返回 false，照常发记账结果通知（长按选分类，ADR 0020）；
@@ -86,7 +86,8 @@ enum LiveCategoryActivity {
     /// 新开启的系统有时先展开几秒：这时展开的是提醒，还有几笔待分类。成功返回 true，这一笔不再发记账成功通知
     @MainActor
     static func show(recordID: String, suggestions: CategorySuggestions, header: Header) async -> Bool {
-        let island = DynamicIsland.isPresent(model: modelIdentifier)
+        // 岛上放按钮：有灵动岛、通知设置里选的是「全部」。选「仅提醒」的和没有灵动岛的一样只放提醒
+        let buttons = DynamicIsland.isPresent(model: modelIdentifier) && IngestNotifier.islandMode == .all
         guard ActivityAuthorizationInfo().areActivitiesEnabled else {
             note(L("实时活动已关闭"))
             return false
@@ -96,9 +97,9 @@ enum LiveCategoryActivity {
         let record = LiveCategoryQueue.Entry(recordID: recordID, merchant: header.merchant, account: header.account, amount: header.amount)
         var state = makeState(record, picker: picker)
         // 刚开启或者还在刚开启那几秒里换成这一笔：系统可能正展开着，放提醒（`present` 过了时间会去掉）。
-        // 没有灵动岛的一直是提醒
+        // 只放提醒的（没有灵动岛、选了「仅提醒」）一直是提醒
         state.notice = await makeNotice()
-        state.reminderOnly = island ? nil : true
+        state.reminderOnly = buttons ? nil : true
         let content = ActivityContent(state: state, staleDate: nil)
         let current = running()
         var queue = loadQueue()
@@ -112,7 +113,7 @@ enum LiveCategoryActivity {
         queue.remove(recordID)
         saveQueue(queue)
         if let activity = current.first {
-            if island {
+            if buttons {
                 await present(activity, content.state)
             } else {
                 await announce(activity, content.state)
@@ -124,10 +125,10 @@ enum LiveCategoryActivity {
         do {
             let activity = try Activity.request(
                 attributes: CategoryActivityAttributes(),
-                content: ActivityContent(state: content.state, staleDate: island ? Date(timeIntervalSinceNow: openingTime) : nil),
+                content: ActivityContent(state: content.state, staleDate: buttons ? Date(timeIntervalSinceNow: openingTime) : nil),
                 pushType: nil
             )
-            if island {
+            if buttons {
                 fillButtonsLater(activity)
             } else {
                 await announce(activity, content.state)
