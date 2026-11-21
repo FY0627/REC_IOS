@@ -18,7 +18,7 @@ import BKModel
 ///   `openingTime`（「开发与调试」里调）后 App 自己更新一次换成按钮，之后长按展开就能在岛上选。
 ///   App 是在后台被拉起来的，要一段后台时间撑到那时；没撑到的，打开或离开 App 时换（`reconcile`）；
 /// - 只留一个：又记了一笔要选的，就换成这一笔，原来那一笔排着（`LiveCategoryQueue`）；
-/// - 不设时长：用户不选就留着，自己上滑收起；系统最长 8 小时后结束。这一笔在 App 里选了分类、删了，打开或离开 App 时换下一笔（`reconcile`）。
+/// - 不设时长：用户不选就留着，自己上滑收起；系统最长 8 小时后结束。这一笔在 App 里选了分类、删了、合成了转帐，打开或离开 App、下一次自动记账时换下一笔（`reconcile`）。
 ///
 /// 岛上的按钮（`PickLiveCategoryIntent`、`ShowLiveCategoryPageIntent`）在 App 进程里运行到这里：
 /// 换页只读开启时存下的选项（`LiveCategoryPicker`），不开账本；点到分类时写进账本，显示选中的分类一下，
@@ -67,6 +67,12 @@ enum LiveCategoryActivity {
     static func eligible(_ item: IngestItem, suggestions: CategorySuggestions) -> Bool {
         guard item.recordID != nil, suggestions.autoCategory == nil, !suggestions.groups.isEmpty else { return false }
         return !(item.kind.map { skippedKinds.contains($0) } ?? false)
+    }
+
+    /// 岛上（排着）的这一笔还要选：已入账、还没分类、还是支出或收入。
+    /// 和另一个账户的一笔合成了转帐（自动配对、手动合并）就不用选了，转帐不能选分类
+    private static func stillWaiting(_ record: LedgerRecord) -> Bool {
+        record.status == .posted && record.categoryID == nil && record.entryType != .transfer && !skippedKinds.contains(record.kind)
     }
 
     /// 机型标识符，例如 `iPhone15,2`；模拟器上是它模拟的机型
@@ -196,6 +202,11 @@ enum LiveCategoryActivity {
             return
         } catch {
             AppServices.logger.error("live activity pick failed: \(String(describing: type(of: error)), privacy: .public)")
+            // 这一笔已经不用选了（合成了转帐）：不换回按钮，直接换下一笔
+            if let activity, let detail = try? await backend.recordDetail(id: recordID), !stillWaiting(detail.row.record) {
+                await advance(activity, from: recordID, backend: backend)
+                return
+            }
             await undoChosen(activity, recordID: recordID)
             note(L("写入失败"))
             return
@@ -305,7 +316,8 @@ enum LiveCategoryActivity {
 
     // MARK: 打开、离开 App
 
-    /// 岛上这一笔已经在 App 里选了分类或者删了：换成排着的下一笔，没有了就结束。
+    /// 岛上这一笔已经在 App 里选了分类、删了，或者合成了转帐：换成排着的下一笔，没有了就结束。
+    /// 打开、离开 App 时，和每次自动记账记完时（这次记的一笔可能和岛上那一笔合成了转帐）。
     /// 刚开启的岛过了时间还是提醒（App 没撑到就被挂起了）：现在换成按钮
     @MainActor
     static func reconcile() async {
@@ -317,7 +329,8 @@ enum LiveCategoryActivity {
         for activity in current {
             let recordID = activity.content.state.recordID
             do {
-                guard try await backend.recordDetail(id: recordID).row.record.categoryID != nil else { continue }
+                let record = try await backend.recordDetail(id: recordID).row.record
+                guard !stillWaiting(record) else { continue }
             } catch BackendError.notFound {
                 // 删了
             } catch {
@@ -366,9 +379,9 @@ enum LiveCategoryActivity {
         await activity.end(nil, dismissalPolicy: .immediate)
     }
 
-    /// 排着的这一笔还要选：还在、还没分类、有分类可选
+    /// 排着的这一笔还要选：还在、还没分类、没合成转帐、有分类可选
     private static func waitingSuggestions(_ recordID: String, backend: LedgerBackend) async -> CategorySuggestions? {
-        guard let detail = try? await backend.recordDetail(id: recordID), detail.row.record.categoryID == nil,
+        guard let detail = try? await backend.recordDetail(id: recordID), stillWaiting(detail.row.record),
               let suggestions = try? await backend.categorySuggestions(recordID: recordID), !suggestions.groups.isEmpty
         else { return nil }
         return suggestions

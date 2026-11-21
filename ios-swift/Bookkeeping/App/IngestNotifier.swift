@@ -78,6 +78,8 @@ enum IngestNotifier {
 
     /// `screenshot`：用户自己交的付款截图（ADR 0021）。和已有的一笔合并、认不出是付款页也说一声，敲了背面总要知道有没有记上
     static func post(_ result: IngestResult, backend: LedgerBackend, screenshot: Bool = false) async {
+        // 这次记的一笔可能和灵动岛上那一笔合成了转帐：先收掉岛上那一笔（通知关了也要收）
+        await LiveCategoryActivity.reconcile()
         let mode = mode
         guard mode != .off else { return }
         let center = UNUserNotificationCenter.current()
