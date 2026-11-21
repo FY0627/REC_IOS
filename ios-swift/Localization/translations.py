@@ -440,7 +440,7 @@ t("还没有账户", "還沒有帳戶", "No Accounts Yet")
 # MARK: 统计
 
 t("全部账户", "全部帳戶", "All Accounts")
-t("这段时间还没有记录", "這段時間還沒有紀錄", "Nothing Recorded")
+t("%@还没有记录", "%@還沒有紀錄", "%@: Nothing Recorded")
 t("%@ · 合计（%@）", "%@ · 合計（%@）", "%@ · Total (%@)")
 t("支出分类", "支出分類", "Expense Categories")
 t("收入分类", "收入分類", "Income Categories")

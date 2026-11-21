@@ -189,7 +189,9 @@ struct StatsView: View {
 
     private var empty: some View {
         Section {
-            ContentUnavailableView("这段时间还没有记录", systemImage: "chart.bar", description: Text(period.title))
+            // 不要卡片底：只有图标和一行字，选好的时间段直接写进这行字
+            ContentUnavailableView("\(period.title)还没有记录", systemImage: "chart.bar")
+                .listRowBackground(Color.clear)
         }
     }
 

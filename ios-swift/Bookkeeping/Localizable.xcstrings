@@ -243,6 +243,28 @@
         }
       }
     },
+    "%@还没有记录" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@: Nothing Recorded"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@还没有记录"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@還沒有紀錄"
+          }
+        }
+      }
+    },
     "%@通知" : {
       "localizations" : {
         "en" : {
@@ -18763,28 +18785,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "這則通知裡認出了幾個金額，各列一則。記入正確的那一則，其餘的會自動忽略。"
-          }
-        }
-      }
-    },
-    "这段时间还没有记录" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Nothing Recorded"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "这段时间还没有记录"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "這段時間還沒有紀錄"
           }
         }
       }
