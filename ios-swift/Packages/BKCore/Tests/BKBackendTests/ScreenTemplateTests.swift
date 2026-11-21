@@ -232,6 +232,33 @@ final class ScreenTemplateTests: XCTestCase {
         XCTAssertEqual(ScreenTemplates.picks(for: template, in: text), picks)
     }
 
+    /// 金额旁边的「ⓘ」认成了一位数字，紧跟在金额后面（「+￥0.630」）：多的这一位不算
+    func testIconNextToTheAmountReadAsADigit() throws {
+        let page = """
+        0:30
+        交易详情
+        示例汇率补贴
+        +￥0.630
+        余额￥0.63
+        交易卡号  示例卡 0000********3442
+        交易类型  境外消费退款
+        """
+        let picks: [ScreenTemplateField.Role: ScreenTemplates.Cell] = [.amount: .init(row: 3, column: 0)]
+        let built = try ScreenTemplates.build(text: page, picks: picks).get()
+        XCTAssertEqual(built.fields.first?.anchor, "示例汇率补贴")
+        let template = ScreenTemplate(
+            id: "t", name: "示例", anchors: built.anchors, fields: built.fields, kind: .refund, direction: .inflow, accountID: nil, createdAt: now
+        )
+        let other = page.replacingOccurrences(of: "+￥0.630", with: "+￥25.000").replacingOccurrences(of: "余额￥0.63", with: "余额￥25.63")
+        XCTAssertEqual(ScreenTemplates.match(template, text: other)?.amount.digits, "25.00")
+
+        XCTAssertNil(ScreenTemplates.amount(in: "6.8235"), "没有 ¥ 的多位小数（汇率）不算")
+        XCTAssertNil(ScreenTemplates.amount(in: "+1.0958%"))
+
+        let layout = ScreenTemplates.skeleton(lines(page), picks: picks, fields: built.fields, aspect: 0.5)
+        XCTAssertEqual(ScreenTemplates.page(ScreenLayout.text(layout.lines))[3], ["+¥100.00"])
+    }
+
     func testSavedTemplateKeepsItsLayout() async throws {
         let backend = try makeBackend()
         let original = lines(walletPage)

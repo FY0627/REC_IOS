@@ -59,6 +59,9 @@ public enum ScreenTemplates {
     private static let edges = Rx(#"^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$"#)
     /// 「¥12.00」「-12.00」「+1,234.00」「12.00元」：要有两位小数；后面跟着数字、百分号的不算（收益率）
     private static let amountPattern = Rx(#"(?<![0-9.,])(?:[-+]\s*)?(?:[¥Y]\s*)?(?:[-+]\s*)?((?:\d{1,3}(?:,\d{3})+|\d+)\.\d{2})(?![0-9%])"#, caseInsensitive: false)
+    /// 整段只是一个带 ¥ 的金额、后面紧跟着多一位数字：金额旁边的小图标（ⓘ）认成了数字（「+￥0.630」）。
+    /// 人民币只有两位小数，多的这一位不算。要有 ¥，免得把汇率（6.8235）这类当成金额
+    private static let iconTailAmount = Rx(#"^[-+]?\s*[¥Y]\s*[-+]?\s*((?:\d{1,3}(?:,\d{3})+|\d+)\.\d{2})\d$"#, caseInsensitive: false)
     private static let tailPattern = Rx(#"\((\d{4})\)|尾号\s*(\d{4})|(?<![0-9])(\d{4})(?![0-9])"#)
 
     // MARK: 排成行、段
@@ -85,8 +88,16 @@ public enum ScreenTemplates {
     // MARK: 读一段
 
     static func amount(in text: String) -> String? {
+        amountMatch(in: text).map { $0.text.substring(with: $0.digits) }
+    }
+
+    /// 金额在整理过的写法里的位置：`digits` 是数字，`whole` 从数字开头到这次匹配结束（图标认成的那一位也算在里面）
+    private static func amountMatch(in text: String) -> (text: NSString, digits: NSRange, whole: NSRange)? {
         let ns = NSString(string: TextNormalizer.normalize(text))
-        return amountPattern.first(ns)?.group(1, in: ns)
+        guard let m = amountPattern.first(ns) ?? iconTailAmount.first(ns) else { return nil }
+        let digits = m.range(at: 1)
+        guard digits.location != NSNotFound else { return nil }
+        return (ns, digits, NSRange(location: digits.location, length: NSMaxRange(m.range) - digits.location))
     }
 
     static func tail(in text: String) -> String? {
@@ -228,7 +239,9 @@ public enum ScreenTemplates {
             for (c, line) in row.enumerated() {
                 let cell = Cell(row: r, column: c)
                 var text = zeroed(page[r][c])
-                if picks[.amount] == cell { text = replacing(amountPattern, group: 1, in: text, with: sampleAmount) }
+                if picks[.amount] == cell, let found = amountMatch(in: text) {
+                    text = found.text.replacingCharacters(in: found.whole, with: sampleAmount)
+                }
                 if picks[.cardTail] == cell { text = replacing(tailPattern, group: nil, in: text, with: sampleTail) }
                 if picks[.counterparty] == cell {
                     // 标签和对方认成一段的（「收款方 示例小馆」）：留着标签，只换后面
