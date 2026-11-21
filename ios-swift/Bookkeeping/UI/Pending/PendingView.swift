@@ -262,7 +262,7 @@ struct CategorizePage: View {
     }
 }
 
-/// 列表里点一笔流水打开的页面：待分类的直接选分类，其余的是流水详情
+/// 统计里点一笔流水推进来的页面：待分类的直接选分类，其余的是流水详情（首页是弹出的面板，`RecordSheet`）
 struct RecordPage: View {
     let row: RecordRow
 
@@ -271,6 +271,26 @@ struct RecordPage: View {
             CategorizePage(row: row)
         } else {
             RecordDetailView(recordID: row.id, initialRow: row)
+        }
+    }
+}
+
+/// 首页列表里点一笔弹出的面板：和资产页卡片详情里点一笔一样是流水详情（`RecordDetailSheet`）；
+/// 待分类的是选分类，和待处理页、通知点进来的选分类面板一样带「取消」
+struct RecordSheet: View {
+    let row: RecordRow
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        if row.needsCategory {
+            NavigationStack {
+                CategorizePage(row: row)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) { Button("取消", systemImage: "xmark") { dismiss() } }
+                    }
+            }
+        } else {
+            RecordDetailSheet(recordID: row.id, initialRow: row)
         }
     }
 }
