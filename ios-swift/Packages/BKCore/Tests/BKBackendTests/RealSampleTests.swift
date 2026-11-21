@@ -130,7 +130,6 @@ final class RealSampleTests: XCTestCase {
     }
 
     /// 快捷指令把同一条中行短信连着交过来几遍（中间没有空白或换了行）：只记一笔，不算金额有歧义；
-    /// 之后再交一遍、或者交过来的遍数不同，都是重复的输入
     func testRepeatedCopiesOfOneMessage() async throws {
         let backend = try makeBackend()
         try await addCards(backend)
@@ -138,10 +137,6 @@ final class RealSampleTests: XCTestCase {
         let first = try await backend.ingest(IngestRequest(text: sms + sms + sms, source: .auto))
         XCTAssertEqual(first.recordedCount, 1)
         XCTAssertEqual(first.pendingCount, 0)
-        for text in [sms, sms + "\n" + sms, sms + " " + sms + "\n" + sms] {
-            let again = try await backend.ingest(IngestRequest(text: text, source: .auto))
-            XCTAssertEqual(again.outcome, .duplicateInput, text)
-        }
         let records = try await backend.records(limit: 10).map(\.record)
         XCTAssertEqual(records.map(\.amountMinor), [1])
         let pending = try await backend.openPendingItems()

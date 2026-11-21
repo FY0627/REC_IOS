@@ -796,6 +796,47 @@ final class ScreenshotTests: XCTestCase {
         XCTAssertEqual(count, 1)
     }
 
+    /// 记上以后删掉，同一张截图（拍摄时间也一样）再交一遍照样记上
+    func testSameScreenshotAfterDeletingIsRecordedAgain() async throws {
+        let backend = try makeBackend()
+        try await addWechat(backend)
+        _ = try await backend.ingestScreenshot(text: wechatDetail, capturedAt: at(15, 0))
+        let first = try await backend.records()[0].record
+        try await backend.deleteRecord(id: first.id)
+        let again = try await backend.ingestScreenshot(text: wechatDetail, capturedAt: at(15, 0))
+        XCTAssertEqual(again.recordedCount, 1, again.summary)
+        let count = try await backend.recordCount()
+        XCTAssertEqual(count, 1)
+    }
+
+    /// 同一笔：自己截了图、银行发了短信、银行 App 又推了通知，不论先后都只记一笔
+    func testScreenshotSmsAndAppNotificationAreOneRecord() async throws {
+        let shot = wechatDetail.replacingOccurrences(of: "支付方式  零钱", with: "支付方式  招商银行储蓄卡(0427)")
+        let sms = "【招商银行】您尾号0427的储蓄卡于10月24日14:30在财付通-示例便利店快捷支付人民币12.00元"
+        let push = "招商银行：尾号0427储蓄卡10月24日14:30消费12.00元"
+        enum Input { case shot, sms, push }
+        let orders: [[Input]] = [[.shot, .sms, .push], [.sms, .shot, .push], [.push, .sms, .shot], [.sms, .push, .shot]]
+        for order in orders {
+            let backend = try makeBackend()
+            try await addWechat(backend)
+            let card = try await addCard(backend)
+            for (index, input) in order.enumerated() {
+                let time = at(14, 31, index * 10)
+                switch input {
+                case .shot: _ = try await backend.ingestScreenshot(text: shot, capturedAt: time)
+                case .sms: _ = try await backend.ingest(IngestRequest(text: sms, source: .sms, receivedAt: time))
+                case .push: _ = try await backend.ingest(IngestRequest(text: push, source: .notification, receivedAt: time))
+                }
+            }
+            let total = try await backend.recordCount()
+            let onCard = try await backend.recordCount(accountID: card.id)
+            let pending = try await backend.openPendingItems()
+            XCTAssertEqual(total, 1, "\(order)")
+            XCTAssertEqual(onCard, 1, "\(order)")
+            XCTAssertEqual(pending.count, 0, "\(order)")
+        }
+    }
+
     func testSuccessPageThenDetailPageIsOneRecord() async throws {
         let backend = try makeBackend()
         try await addWechat(backend)

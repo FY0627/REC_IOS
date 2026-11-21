@@ -18237,28 +18237,6 @@
         }
       }
     },
-    "这张截图已经记过了" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "This screenshot has already been recorded."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "这张截图已经记过了"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "這張截圖已經記過了"
-          }
-        }
-      }
-    },
     "这条通知里认出了几个金额，每个是一条。记入正确的那一条，其余的会自动忽略。" : {
       "localizations" : {
         "en" : {

@@ -88,12 +88,25 @@ final class IngestTests: XCTestCase {
 
     // MARK: 幂等与并发
 
-    func testSameInputTwiceIsIdempotent() async throws {
+    func testSameInputTwiceAsksWhileTheFirstIsThere() async throws {
         let backend = try makeBackend()
         try await addAccount(backend, last4: "0427")
         _ = try await backend.ingest(IngestRequest(text: purchase, source: .sms, sender: "95555"))
         let second = try await backend.ingest(IngestRequest(text: purchase + "  ", source: .sms, sender: "95555"))
-        XCTAssertEqual(second.outcome, .duplicateInput)
+        XCTAssertEqual(second.outcome, .pending, "同一笔还在：交给用户判断")
+        let count = try await backend.recordCount()
+        XCTAssertEqual(count, 1)
+    }
+
+    /// 删掉的一笔，同一条通知再交一遍照样记上（2026-11-21 起不再按「同一条输入」挡掉）
+    func testSameInputAfterDeletingIsRecordedAgain() async throws {
+        let backend = try makeBackend()
+        try await addAccount(backend, last4: "0427")
+        _ = try await backend.ingest(IngestRequest(text: purchase, source: .sms, sender: "95555"))
+        let first = try await backend.records()[0].record
+        try await backend.deleteRecord(id: first.id)
+        let again = try await backend.ingest(IngestRequest(text: purchase, source: .sms, sender: "95555"))
+        XCTAssertEqual(again.outcome, .recorded, again.summary)
         let count = try await backend.recordCount()
         XCTAssertEqual(count, 1)
     }
@@ -120,7 +133,7 @@ final class IngestTests: XCTestCase {
         async let a = first.ingest(IngestRequest(text: text, source: .sms, sender: "95555"))
         async let b = second.ingest(IngestRequest(text: text, source: .sms, sender: "95555"))
         let outcomes = try await [a.outcome, b.outcome].sorted { $0.rawValue < $1.rawValue }
-        XCTAssertEqual(Set(outcomes), [.recorded, .duplicateInput])
+        XCTAssertEqual(Set(outcomes), [.recorded, .pending])
         let count = try await first.recordCount()
         XCTAssertEqual(count, 1)
     }
@@ -1445,7 +1458,7 @@ final class IngestTests: XCTestCase {
         XCTAssertEqual(after, expected, "其他字段保持不变")
     }
 
-    func testRawContentPurgedAfterRetentionButFingerprintKept() async throws {
+    func testRawContentPurgedAfterRetention() async throws {
         var current = now
         let database = try Database.inMemory()
         let clockBox = ClockBox(now)
@@ -1459,8 +1472,6 @@ final class IngestTests: XCTestCase {
         XCTAssertEqual(purged, 1)
         let log = try await backend.ingestLog()
         XCTAssertNil(log[0].rawText)
-        let again = try await backend.ingest(IngestRequest(text: purchase, source: .sms))
-        XCTAssertEqual(again.outcome, .duplicateInput, "清理正文后仍能识别重复输入")
     }
 
     func testAddAccountValidation() async throws {

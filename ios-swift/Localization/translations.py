@@ -731,7 +731,6 @@ t("付完款停在付款成功或账单详情页，敲两下手机背面。以�
 
 t("仅失败", "僅失敗", "Failures Only")
 t("关闭（通知）", "關閉", "Off", hans="关闭")
-t("这张截图已经记过了", "這張截圖已經記過了", "This screenshot has already been recorded.")
 t("截图里没有认出付款", "截圖裡沒有認出付款", "No payment found in the screenshot.")
 t("，长按选分类", "，長按選擇分類", ". Touch and hold to choose a category.")
 t("，长按可改", "，長按可修改", ". Touch and hold to change it.")

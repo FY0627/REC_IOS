@@ -189,9 +189,9 @@ final class RecordEditTests: XCTestCase {
         XCTAssertNil(rows[0].record.transferGroupID, "只剩一边，不再算内部转账")
 
         let repeated = try await backend.ingest(IngestRequest(text: transferOut, source: .sms, sender: "95555"))
-        XCTAssertEqual(repeated.outcome, .duplicateInput, "同一条通知再来不会重新记上")
+        XCTAssertEqual(repeated.outcome, .recorded, "删掉的那笔，同一条通知再来照样记上")
         let count = try await backend.recordCount()
-        XCTAssertEqual(count, 1)
+        XCTAssertEqual(count, 2)
         do {
             try await backend.deleteRecord(id: outflow.id)
             XCTFail()
@@ -336,10 +336,7 @@ final class RecordEditTests: XCTestCase {
         XCTAssertEqual(peer.peer?.text, "招商银行 ·0427（已删除）")
         XCTAssertEqual(peer.account.text, "招商银行 ·1234")
 
-        // 同一条通知再来不会重新记上；同尾号的卡可以重新添加，之后的通知记到新卡上
-        _ = try await backend.ingest(IngestRequest(text: purchase, source: .sms, receivedAt: now))
-        let again = try await backend.recordCount()
-        XCTAssertEqual(again, 3)
+        // 同尾号的卡可以重新添加，之后的通知记到新卡上
         let readded = try await addAccount(backend, last4: "0427")
         _ = try await backend.ingest(IngestRequest(
             text: "【招商银行】您尾号0427的储蓄卡于10月24日16:00在全家便利店消费人民币12.00元。", source: .sms, receivedAt: now.addingTimeInterval(60)

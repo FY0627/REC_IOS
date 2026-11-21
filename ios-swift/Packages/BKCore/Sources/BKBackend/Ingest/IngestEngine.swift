@@ -82,23 +82,14 @@ struct IngestEngine {
     // MARK: 入口
 
     func run(_ request: IngestRequest) throws -> IngestResult {
-        // 同一条通知连着交过来几遍时只留一遍：和只交一遍的是同一条输入（指纹相同），不会认成同一句里的几个金额
+        // 同一条通知连着交过来几遍时只留一遍，不会认成同一句里的几个金额
         var request = request
         request.text = TextNormalizer.singleCopy(request.text)
-        let normalized = TextNormalizer.normalize(request.text)
-        let receivedPart = request.receivedAt.map { String(Int64(($0.timeIntervalSince1970 * 1000).rounded())) } ?? ""
-        let fingerprint = SHA256.hex([
-            request.source.rawValue,
-            request.messageID.map { "id:" + $0 } ?? normalized,
-            request.sender ?? "",
-            request.subject ?? "",
-            receivedPart,
-        ].joined(separator: "\u{1F}"))
-
-        if try IngestDAO.exists(db, fingerprint: fingerprint) != nil {
-            return IngestResult(ingestID: nil, outcome: .duplicateInput, classification: .transaction, recordedCount: 0, mergedCount: 0, pendingCount: 0, summary: "重复的输入，已忽略")
-        }
-        return try process(request, ingestID: newID(), fingerprint: fingerprint, processedAt: now)
+        // 交过来的每条输入都识别，不再按「同一条输入」挡掉（2026-11-21）：短信、邮件不再交过来，一笔只有一条 App 通知或者自己截的图；
+        // 删掉的流水，同一张截图、同一条通知再交一遍照样记上。指纹带上这条输入的标识，每条都不一样
+        let ingestID = newID()
+        let fingerprint = SHA256.hex([request.source.rawValue, TextNormalizer.normalize(request.text), ingestID].joined(separator: "\u{1F}"))
+        return try process(request, ingestID: ingestID, fingerprint: fingerprint, processedAt: now)
     }
 
     /// 识别一条输入并入账。`fingerprint` 是 nil 时是重读一条已经保存的输入（`rereadPending`）：不再插入，只更新它的结果，
@@ -670,6 +661,7 @@ struct IngestEngine {
 
     /// 跨来源的近似重复：同账户、同金额币种方向，来源不同（或分不出来源）、系统时间 20 分钟内，且正文时间不冲突。
     /// 手动记过的一笔：时间是用户随手选的，前后 3 小时内同卡同金额就问是不是同一笔。
+    /// 只和还在的流水比：删掉的那笔不再挡着，同一条输入再交一遍照样记上
     func possibleDuplicate(of record: LedgerRecord) throws -> LedgerRecord? {
         let window: TimeInterval = 20 * 60
         let candidates = try RecordDAO.candidates(

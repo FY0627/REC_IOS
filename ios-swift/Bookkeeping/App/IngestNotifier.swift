@@ -83,7 +83,7 @@ enum IngestNotifier {
         let center = UNUserNotificationCenter.current()
         if screenshot, result.items.isEmpty, mode == .all || result.outcome == .filtered {
             let content = UNMutableNotificationContent()
-            content.body = result.outcome == .duplicateInput ? L("这张截图已经记过了") : L("截图里没有认出付款")
+            content.body = L("截图里没有认出付款")
             content.threadIdentifier = "ingest"
             try? await center.add(UNNotificationRequest(identifier: "screenshot-\(UUID().uuidString)", content: content, trigger: nil))
             return
