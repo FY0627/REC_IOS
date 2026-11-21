@@ -94,14 +94,12 @@ struct ScreenTemplateEditorView: View {
                     switch source {
                     case .screenshot:
                         if let image {
-                            ScreenshotBoxes(page: .image(image), grid: grid, picks: picks) { choosing = $0 }
-                                .listRowInsets(EdgeInsets())
+                            boxes(.image(image))
                         } else {
                             ProgressView().frame(maxWidth: .infinity, minHeight: 200)
                         }
                     case .template(_, let layout):
-                        ScreenshotBoxes(page: .skeleton(aspect: layout.aspect), grid: grid, picks: picks) { choosing = $0 }
-                            .listRowInsets(EdgeInsets())
+                        boxes(.skeleton(aspect: layout.aspect))
                     }
                 }
 
@@ -130,17 +128,6 @@ struct ScreenTemplateEditorView: View {
                         .disabled(picks[.amount] == nil || saving)
                 }
             }
-            .confirmationDialog(
-                choosing.map(cellText) ?? "", isPresented: Binding(get: { choosing != nil }, set: { if !$0 { choosing = nil } }),
-                titleVisibility: .visible
-            ) {
-                ForEach(ScreenTemplateField.Role.allCases, id: \.self) { role in
-                    Button(Self.title(role)) { assign(role) }
-                }
-                if let choosing, picks.values.contains(choosing) {
-                    Button("不选", role: .destructive) { unassign(choosing) }
-                }
-            }
             .alert("已保存", isPresented: Binding(get: { savedCount != nil }, set: { if !$0 { savedCount = nil } })) {
                 Button("好") { dismiss() }
             } message: {
@@ -156,6 +143,12 @@ struct ScreenTemplateEditorView: View {
     }
 
     // MARK: 点到的内容
+
+    /// 截图（或版面骨架）和上面的框；点框弹出的菜单挂在这个框上，从它旁边弹出
+    private func boxes(_ page: ScreenshotBoxes.Page) -> some View {
+        ScreenshotBoxes(page: page, grid: grid, picks: picks, choosing: $choosing, assign: assign, unassign: unassign)
+            .listRowInsets(EdgeInsets())
+    }
 
     static func title(_ role: ScreenTemplateField.Role) -> LocalizedStringKey {
         switch role {
@@ -326,7 +319,10 @@ private struct ScreenshotBoxes: View {
     let page: Page
     let grid: [[ScreenTextLine]]
     let picks: [ScreenTemplateField.Role: ScreenTemplates.Cell]
-    let tap: (ScreenTemplates.Cell) -> Void
+    /// 点了哪个框、正在选它是什么
+    @Binding var choosing: ScreenTemplates.Cell?
+    let assign: (ScreenTemplateField.Role) -> Void
+    let unassign: (ScreenTemplates.Cell) -> Void
 
     private var isSkeleton: Bool {
         if case .skeleton = page { return true }
@@ -368,13 +364,30 @@ private struct ScreenshotBoxes: View {
                             }
                             .frame(width: max(line.width * size.width, 12) + 4, height: max(line.height * size.height, 12) + 4)
                             .contentShape(Rectangle())
-                            .position(x: (line.x + line.width / 2) * size.width, y: (line.y + line.height / 2) * size.height)
-                            .onTapGesture { tap(item.cell) }
+                            .onTapGesture { choosing = item.cell }
+                            // 菜单挂在框上（不挂在整页上），iOS 26 从这个框旁边弹出
+                            .confirmationDialog(line.text, isPresented: presenting(item.cell), titleVisibility: .visible) {
+                                ForEach(ScreenTemplateField.Role.allCases, id: \.self) { option in
+                                    Button(ScreenTemplateEditorView.title(option)) { assign(option) }
+                                }
+                                if role != nil {
+                                    Button("不选", role: .destructive) { unassign(item.cell) }
+                                }
+                            }
                             .accessibilityLabel(line.text)
                             .accessibilityAddTraits(.isButton)
+                            .position(x: (line.x + line.width / 2) * size.width, y: (line.y + line.height / 2) * size.height)
                     }
                 }
             }
+    }
+
+    private func presenting(_ cell: ScreenTemplates.Cell) -> Binding<Bool> {
+        Binding {
+            choosing == cell
+        } set: { shown in
+            if !shown, choosing == cell { choosing = nil }
+        }
     }
 
     private var cells: [(cell: ScreenTemplates.Cell, line: ScreenTextLine)] {
