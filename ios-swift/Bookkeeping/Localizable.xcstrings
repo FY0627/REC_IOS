@@ -4579,28 +4579,6 @@
         }
       }
     },
-    "到账比转出少的部分（手续费、汇损）只体现在余额上，不算支出。" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "If less arrives than was sent (fees, exchange loss), the difference only affects balances and isn’t counted as an expense."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "到账比转出少的部分（手续费、汇损）只体现在余额上，不算支出。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "入帳比轉出少的部分（手續費、匯損）只反映在餘額上，不算支出。"
-          }
-        }
-      }
-    },
     "到账金额" : {
       "localizations" : {
         "en" : {

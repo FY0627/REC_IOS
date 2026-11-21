@@ -65,7 +65,7 @@ struct ImportExchangeRatesIntent: AppIntent {
         let center = UNUserNotificationCenter.current()
         let content = UNMutableNotificationContent()
         content.title = L("汇率已更新")
-        content.body = L("已导入 \(rates.rates.count) 个币种的汇率，数据更新于\(Fmt.dateTime(rates.updatedAt))")
+        content.body = L("已导入 \(rates.rates.count) 个币种的汇率，数据更新于\(Fmt.day(rates.updatedAt))")
         content.threadIdentifier = "fx"
         try? await center.add(UNNotificationRequest(identifier: "fx-imported", content: content, trigger: nil))
     }

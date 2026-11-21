@@ -697,7 +697,8 @@ struct IngestEngine {
 
     /// 自己两张卡之间的转账：两边流水都保留，可靠关联时标记同一转账组。
     func linkTransfer(_ record: LedgerRecord, counterpartyTail: String?, accounts: [Account]) throws {
-        guard record.status == .posted, record.kind.isTransferLike else { return }
+        guard record.status == .posted else { return }
+        guard record.kind.isTransferLike else { return try joinScreenshotTransfer(record, accounts: accounts) }
         let peerAccounts = counterpartyTail.map { tail in accounts.filter { $0.isCard && $0.matches(tail: tail) && $0.id != record.accountID && !$0.archived } } ?? []
         let window: TimeInterval = 30 * 60
         var candidates = try RecordDAO.candidates(
@@ -718,9 +719,66 @@ struct IngestEngine {
             let group = peer.transferGroupID ?? newID()
             try RecordDAO.setTransferGroup(db, ids: [record.id, peer.id], group: group)
         } else if candidates.isEmpty, peerAccounts.count == 1 {
-            // 正文明确写了对方是自己的另一张卡，但对方的通知还没到：先单边标记为内部转账
-            try RecordDAO.setTransferGroup(db, ids: [record.id], group: newID())
+            // 正文明确写了对方是自己的另一张卡。那张卡上已经有一笔对得上的支出、收入（银行通知只写了「支付宝」，记成了消费）：
+            // 合成转帐，和手动「合并 › 转帐」一样能拆开；还没有时先单边标记为内部转账，银行通知来了再合（`joinScreenshotTransfer`）
+            if let peer = try loneOpposite(of: record, on: peerAccounts[0]) {
+                try mergeIntoTransfer(record, peer)
+            } else {
+                try RecordDAO.setTransferGroup(db, ids: [record.id], group: newID())
+            }
         }
+    }
+
+    /// 截图上写了另一边是哪张卡（银行卡转入余额宝、零钱充值、提现到卡）、那张卡的通知后到：
+    /// 那条截图单边标记了内部转账，卡号对得上就把这笔支出、收入合进去，成为一笔转帐
+    func joinScreenshotTransfer(_ record: LedgerRecord, accounts: [Account]) throws {
+        guard record.canMergeIntoTransfer, let account = accounts.first(where: { $0.id == record.accountID }), account.isCard else { return }
+        let window: TimeInterval = 30 * 60
+        let lone = try RecordDAO.candidates(
+            db, amountMinor: record.amountMinor, currency: record.currency, direction: record.direction.opposite,
+            effectiveFrom: record.effectiveAt.addingTimeInterval(-window), effectiveTo: record.effectiveAt.addingTimeInterval(window),
+            excludingIngest: record.ingestID
+        ).filter { candidate in
+            guard candidate.accountID != record.accountID, candidate.status == .posted, candidate.source == .screenshot,
+                  candidate.kind.isTransferLike, let group = candidate.transferGroupID, try RecordDAO.inGroup(db, group: group).count == 1 else { return false }
+            return try screenshotPeerTails(of: candidate).contains { account.matches(tail: $0) }
+        }
+        guard lone.count == 1 else { return }
+        try mergeIntoTransfer(lone[0], record)
+    }
+
+    /// 那张卡上和这笔金额一样、方向相反、30 分钟内、还没配对的唯一一笔支出或收入
+    private func loneOpposite(of record: LedgerRecord, on peer: Account) throws -> LedgerRecord? {
+        let window: TimeInterval = 30 * 60
+        let found = try RecordDAO.candidates(
+            db, amountMinor: record.amountMinor, currency: record.currency, direction: record.direction.opposite,
+            effectiveFrom: record.effectiveAt.addingTimeInterval(-window), effectiveTo: record.effectiveAt.addingTimeInterval(window),
+            excludingIngest: record.ingestID
+        ).filter { $0.accountID == peer.id && $0.transferGroupID == nil && $0.canMergeIntoTransfer }
+        return found.count == 1 ? found[0] : nil
+    }
+
+    /// 截图这笔写的另一边的卡号尾号（重新读一遍截图的原文）
+    private func screenshotPeerTails(of record: LedgerRecord) throws -> [String] {
+        try RecordDAO.evidence(db, recordID: record.id).compactMap { evidence -> String? in
+            guard evidence.source == .screenshot, let raw = evidence.rawText else { return nil }
+            let reading = ScreenshotParser.parse(raw, referenceDate: evidence.receivedAt ?? evidence.processedAt, calendar: calendar, sender: evidence.sender)
+            return reading.message.events.first { $0.draft.partIndex == record.partIndex }?.draft.counterpartyTail
+        }
+    }
+
+    /// 截图那笔（已是转帐）和卡上的支出、收入合成一笔转帐：卡那边改成转出、转入（转进信用卡算还款），两边记下合成前的样子
+    private func mergeIntoTransfer(_ transfer: LedgerRecord, _ plain: LedgerRecord) throws {
+        let (out, into) = transfer.direction == .outflow ? (transfer, plain) : (plain, transfer)
+        let target = try AccountDAO.find(db, id: into.accountID)
+        let repayment = target?.cardType == .credit
+        func kind(_ r: LedgerRecord, _ fallback: TransactionKind) -> TransactionKind {
+            r.id == transfer.id ? r.kind : (repayment ? .repayment : fallback)
+        }
+        try RecordDAO.mergeIntoTransfer(
+            db, outflowID: out.id, outKind: kind(out, .transferOut), inflowID: into.id, inKind: kind(into, .transferIn),
+            group: transfer.transferGroupID ?? newID()
+        )
     }
 
     /// 退款 / 冲正：能唯一找到原交易时建立关联，原交易保持不变。

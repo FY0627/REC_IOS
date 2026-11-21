@@ -2,7 +2,7 @@ import SwiftUI
 import BKModel
 
 /// 转帐的另一边：钱到了哪个币种、到账多少（编辑转入的一笔时是从哪个币种、转出多少）。
-/// 到账可以和转出不一样：有手续费，或者换汇（同一个账户的两个币种之间也可以转）。差额只体现在余额上，不算支出。
+/// 到账可以和转出不一样：有手续费，或者换汇（同一个账户的两个币种之间也可以转）。差额不算支出。
 /// 币种相同时空着就是一样多；币种不同必须填，空着时提示按汇率大概多少。
 struct TransferSideFields: View {
     /// 另一边的账户
@@ -19,9 +19,6 @@ struct TransferSideFields: View {
 
     @Environment(LedgerStore.self) private var store
     @State private var estimate: Int64?
-
-    /// 写在分组下面的说明
-    static var note: String { L("到账比转出少的部分（手续费、汇损）只体现在余额上，不算支出。") }
 
     private var sameAccount: Bool { account.id == sourceAccountID }
 

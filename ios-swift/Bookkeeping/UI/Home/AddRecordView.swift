@@ -139,11 +139,6 @@ struct AddRecordView: View {
                             )
                         }
                     }
-                } footer: {
-                    // 扣款币种不写说明（余额不够、从哪个币种扣、按哪天的汇率）：选择行和「约 …」已经看得出来
-                    if type == .transfer, toAccountID != nil {
-                        Text(TransferSideFields.note)
-                    }
                 }
                 if type != .transfer {
                     Section("分类") {

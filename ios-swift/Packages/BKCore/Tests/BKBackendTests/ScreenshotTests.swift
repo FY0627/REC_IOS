@@ -508,6 +508,68 @@ final class ScreenshotTests: XCTestCase {
         XCTAssertEqual(out.transferGroupID, into.transferGroupID, "零钱提现和到卡的那笔配成转帐")
     }
 
+    /// 支付宝账单详情：用银行卡往余额宝里转钱。标题「余额宝 >」右边是箭头
+    let alipayYuebaoFromCard = """
+    10:23
+    <  账单详情  全部账单
+    余额宝  >
+    5.00
+    交易成功
+    创建时间  2026-10-24 13:00:41
+    付款方式  招商银行储蓄卡(0427)  >
+    商品说明  余额宝-单次转入
+    订单号  20261024000000000000000000000001
+    账单管理  我的消费图鉴  >
+    账单分类  投资理财  >
+    计入收支
+    对此订单有疑问
+    """
+
+    func testCardIntoYuebaoIsATransferNotAnExpense() throws {
+        let reading = ScreenshotParser.parse(alipayYuebaoFromCard, referenceDate: now, calendar: calendar)
+        let draft = try XCTUnwrap(reading.message.events.first?.draft)
+        XCTAssertEqual(draft.direction, .inflow, "余额宝这边是转入")
+        XCTAssertEqual(draft.kind, .transferIn)
+        XCTAssertEqual(draft.counterpartyTail, "0427", "卡是转帐的另一边")
+        XCTAssertNil(draft.cardTail)
+        XCTAssertNil(draft.counterparty, "不把「余额宝 >」当对方")
+        XCTAssertEqual(reading.methodName, "余额宝")
+    }
+
+    func testYuebaoTopUpMergesWithTheCardDebitEitherOrder() async throws {
+        let sms = "您账户0427于10月24日13:00在【支付宝-余额宝】发生快捷支付扣款，人民币5.00"
+        for screenshotFirst in [true, false] {
+            let backend = try makeBackend()
+            let yuebao = try await addAlipay(backend, name: "余额宝")
+            let card = try await addCard(backend)
+            if screenshotFirst { _ = try await backend.ingestScreenshot(text: alipayYuebaoFromCard, capturedAt: now) }
+            _ = try await backend.ingest(IngestRequest(text: sms, source: .auto, receivedAt: at(13, 0, 30)))
+            if !screenshotFirst { _ = try await backend.ingestScreenshot(text: alipayYuebaoFromCard, capturedAt: now) }
+            let intoRows = try await backend.records(accountID: yuebao.id)
+            let outRows = try await backend.records(accountID: card.id)
+            let into = try XCTUnwrap(intoRows.first?.record)
+            let out = try XCTUnwrap(outRows.first?.record)
+            XCTAssertEqual(into.kind, .transferIn, "screenshotFirst=\(screenshotFirst)")
+            XCTAssertEqual(out.kind, .transferOut, "卡上那笔不算支出，screenshotFirst=\(screenshotFirst)")
+            XCTAssertNotNil(into.transferGroupID)
+            XCTAssertEqual(into.transferGroupID, out.transferGroupID, "screenshotFirst=\(screenshotFirst)")
+        }
+    }
+
+    func testBalanceIntoYuebaoIsSkipped() async throws {
+        let backend = try makeBackend()
+        try await addAlipay(backend)
+        let page = alipayYuebaoFromCard.replacingOccurrences(of: "招商银行储蓄卡(0427)  >", with: "账户余额")
+        let result = try await backend.ingestScreenshot(text: page, capturedAt: now)
+        XCTAssertEqual(result.outcome, .filtered, "余额和余额宝之间挪钱不记")
+    }
+
+    func testArrowAfterNameIsNotPartOfIt() throws {
+        let page = "账单详情\n示例便利店  >\n-12.00\n交易成功\n付款方式  账户余额\n创建时间  2026-10-24 13:00:41"
+        let reading = ScreenshotParser.parse(page, referenceDate: now, calendar: calendar)
+        XCTAssertEqual(reading.message.events.first?.draft.counterparty, "示例便利店")
+    }
+
     // MARK: 页面上没有「微信」「零钱」的微信页（照真机截图的版式，名字、卡号、单号、时间换过）
 
     /// 微信收款商业版：经营账户提现到银行卡

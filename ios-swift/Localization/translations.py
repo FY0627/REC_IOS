@@ -132,7 +132,6 @@ t("没填到账金额", "沒填入帳金額", "Enter the Amount Received")
 t("没填转出金额", "沒填轉出金額", "Enter the Amount Sent")
 t("币种不一样，请填到账金额", "幣別不同，請填入帳金額", "The currencies differ, so enter the amount received.")
 t("币种不一样，请填转出金额", "幣別不同，請填轉出金額", "The currencies differ, so enter the amount sent.")
-t("到账比转出少的部分（手续费、汇损）只体现在余额上，不算支出。", "入帳比轉出少的部分（手續費、匯損）只反映在餘額上，不算支出。", "If less arrives than was sent (fees, exchange loss), the difference only affects balances and isn’t counted as an expense.")
 
 # MARK: 流水行、流水详情、合并和拆开（RecordRowView）
 

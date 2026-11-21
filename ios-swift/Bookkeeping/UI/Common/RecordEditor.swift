@@ -215,8 +215,6 @@ struct RecordEditor: View {
                 } footer: {
                     if let balanceNote {
                         Text(balanceNote)
-                    } else if peerAccount != nil {
-                        Text(TransferSideFields.note)
                     }
                 }
                 if type != .transfer {

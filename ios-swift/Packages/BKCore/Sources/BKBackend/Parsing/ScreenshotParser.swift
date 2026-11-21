@@ -85,8 +85,9 @@ enum ScreenshotParser {
     private static let incomingWords = Rx(#"已收款|你已收款|已收钱|收款成功|已存入|存入零钱|收款到账|二维码收款|来自|已领取.{0,4}红包|收到"#)
     private static let purchaseWords = Rx(#"支付成功|付款成功|交易成功|支付时间|付款时间|支付方式|付款方式|收单机构|商户全称"#)
     private static let failedWords = Rx(#"支付失败|交易失败|交易关闭|已关闭|已撤销|已取消|已退还|已退回|已过期"#)
-    /// 零钱和零钱通、余额和余额宝之间挪钱：不是收支，也不是付款
-    private static let ownMove = Rx(#"零钱通(?:转入|转出)|(?:转入|转出到?)零钱通|余额宝(?:转入|转出)|(?:转入|转出到?)余额宝|零钱通-"#)
+    /// 钱转进、转出零钱通、余额宝（「余额宝-单次转入」「转出到零钱通」）。和零钱、余额之间挪钱不是收支，不记；
+    /// 从银行卡转进来、转出到银行卡的是转帐，卡是另一边（`fundCardMove`）
+    private static let fundMove = Rx(#"(零钱通|余额宝)\s*[-—]?\s*(?:单次|自动|定期|预约)?\s*(转入|转出)|(转入|转出到?)\s*(零钱通|余额宝)|(零钱通)-"#)
     private static let withdraw = Rx(#"(?:零钱|余额)提现|提现-到|提现到|^提现"#)
     private static let topUp = Rx(#"(?:零钱|余额)充值|充值-来自|充值到(?:零钱|余额)"#)
     private static let refund = Rx(#"退款"#)
@@ -108,7 +109,8 @@ enum ScreenshotParser {
     private static let amountName = Rx(#"金额|合计|总计|实付|应付|优惠|抵扣|立减|折扣|红包"#)
     private static let adWords = Rx(#"优惠|券|奖励|领取|广告|立即|查看|积分|抽奖|推荐|活动|开通|服务|关注|公众号|小程序|随机立减|立减"#)
     private static let titlePrefix = Rx(#"^(?:转账-转给|转账-来自|转账给|转账-|微信红包-发给|微信红包-来自|微信红包-|扫二维码付款-给|二维码收款-来自|付款给|收款方[:：]?)\s*"#)
-    private static let titleSuffix = Rx(#"(?:发出的?|的)红包$|(?:\.{2,}|…+)$"#)
+    /// 名称后面的「>」「›」是点进去的箭头（支付宝账单详情的标题「余额宝 >」），不是名称
+    private static let titleSuffix = Rx(#"(?:发出的?|的)红包$|(?:\.{2,}|…+)$|\s*[>›〉»]+$"#)
     /// 红包页上写着谁发的：「王五的红包」「某某发出红包」「某某发出的红包」。新版红包页这行下面是祝福语，不是对方
     private static let redPacketSender = Rx(#"^(.{1,24}?)(?:发出的?|的)红包$"#)
 
@@ -237,11 +239,12 @@ enum ScreenshotParser {
         // 4. 页面是哪一种
         let methodRow = values[.method]?.row
         let pageText = rows.enumerated().filter { $0.offset != methodRow }.map(\.element).joined(separator: "\n")
-        if ownMove.test(pageText) { return result(.noFinancialContent) }
+        let fundCard = fundCardMove(pageText: pageText, method: method, target: values[.target]?.value)
+        if fundCard == nil, fundMove.test(pageText) { return result(.noFinancialContent) }
         let title = Self.title(rows: rows, amountRow: amountRow, labelRows: labelRows)
         let titleText = title ?? ""
-        let isWithdraw = withdraw.test(titleText) || withdraw.test(pageText)
-        let isTopUp = topUp.test(titleText) || topUp.test(pageText)
+        let isWithdraw = fundCard.map { !$0.inbound } ?? (withdraw.test(titleText) || withdraw.test(pageText))
+        let isTopUp = fundCard.map(\.inbound) ?? (topUp.test(titleText) || topUp.test(pageText))
         // 红包写在金额上面（「王五的红包」）或标签里（「红包单号」）；金额下面广告里的「每天都可赚红包」不算
         let isRedPacket = rows.enumerated().contains { index, row in
             index != methodRow && ((amountRow.map { index <= $0 } ?? true) || labelRows.contains(index)) && row.contains("红包")
@@ -256,6 +259,8 @@ enum ScreenshotParser {
         // 红包存进了自己的零钱是收到的，页面上写「某某发出的红包」也一样
         var direction: FlowDirection?
         if sign == "-" { direction = .outflow } else if sign == "+" { direction = .inflow }
+        // 卡和余额宝之间：页面上的正负号是从卡那边看的也不管，余额宝这边转入是收、转出是付
+        if let fundCard { direction = fundCard.inbound ? .inflow : .outflow }
         if direction == nil {
             if isRefund || isTopUp { direction = .inflow }
             else if isWithdraw { direction = .outflow }
@@ -289,7 +294,7 @@ enum ScreenshotParser {
             let source = values[.target]?.value ?? method ?? pageText
             counterpartyTail = tailOf(source)
             stated = true
-            if toBusiness { methodName = "经营账户" }
+            if let fundCard { methodName = fundCard.name } else if toBusiness { methodName = "经营账户" }
         } else if let method {
             stated = true
             if method.contains("零钱通") { methodName = "零钱通" }
@@ -387,6 +392,19 @@ enum ScreenshotParser {
         }
         guard sold.count == 1, bought.count == 1, sold[0].currency != bought[0].currency else { return nil }
         return (sold[0], bought[0])
+    }
+
+    /// 银行卡和余额宝、零钱通之间转钱：转入时付款方式写的是卡，转出时到账银行卡写的是卡。
+    /// 记成余额宝、零钱通这边的一笔转帐，卡是另一边（和零钱充值、提现一样）。卡那边看不出来的是和零钱、余额之间挪钱
+    private static func fundCardMove(pageText: String, method: String?, target: String?) -> (name: String, inbound: Bool)? {
+        let ns = NSString(string: pageText)
+        guard let m = fundMove.first(ns) else { return nil }
+        guard let name = m.group(1, in: ns) ?? m.group(4, in: ns) ?? m.group(5, in: ns),
+              let verb = m.group(2, in: ns) ?? m.group(3, in: ns) else { return nil }
+        let inbound = verb.hasPrefix("转入")
+        guard let card = inbound ? method : (target ?? method) else { return nil }
+        guard !card.contains("零钱"), !card.contains("余额"), tailOf(card) != nil || bank(in: card) != nil else { return nil }
+        return (name, inbound)
     }
 
     // MARK: 小工具

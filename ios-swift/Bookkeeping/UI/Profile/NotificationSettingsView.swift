@@ -185,7 +185,7 @@ struct NotificationSettingsView: View {
     private var ratesExample: String {
         let count = rates.rates?.rates.count ?? 160
         let updated = rates.rates?.updatedAt ?? Date()
-        return L("已导入 \(count) 个币种的汇率，数据更新于\(Fmt.dateTime(updated))")
+        return L("已导入 \(count) 个币种的汇率，数据更新于\(Fmt.day(updated))")
     }
 
     private func askPermission(revert: @escaping () -> Void) {

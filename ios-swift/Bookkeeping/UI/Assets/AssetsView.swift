@@ -272,7 +272,7 @@ private struct NetWorthDetailView: View {
                 }
                 if let current = rates.rates {
                     Section("汇率") {
-                        LabeledContent("更新时间", value: Fmt.dateTime(current.updatedAt))
+                        LabeledContent("更新时间", value: Fmt.day(current.updatedAt))
                         Link(ExchangeRateFeed.attribution, destination: ExchangeRateFeed.attributionURL)
                     }
                 }
