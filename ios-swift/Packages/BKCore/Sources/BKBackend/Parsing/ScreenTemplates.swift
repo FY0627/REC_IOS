@@ -209,6 +209,71 @@ public enum ScreenTemplates {
         return .success((anchors, fields))
     }
 
+    // MARK: 版面骨架（编辑用）
+
+    /// 示例值：和通知模板还原的示例一样（`MessageTemplates.sample`）
+    static let sampleAmount = "100.00"
+    static let sampleTail = "1234"
+    static let sampleCounterparty = "对方"
+
+    /// 做好的模板另存的版面骨架：每段字和位置照原样，点到的金额、卡号、对方换成示例，其他数字都换成 0。
+    /// 行、段和原来一样多，固定的字不变，所以用同样的找法在骨架上能找回点到的那几段（`picks(for:in:)`）
+    public static func skeleton(
+        _ lines: [ScreenTextLine], picks: [ScreenTemplateField.Role: Cell], fields: [ScreenTemplateField], aspect: Double
+    ) -> ScreenTemplateLayout {
+        let grid = ScreenLayout.grid(lines)
+        let page = grid.map { $0.map { ScreenLayout.segment($0.text) } }
+        var out: [ScreenTextLine] = []
+        for (r, row) in grid.enumerated() {
+            for (c, line) in row.enumerated() {
+                let cell = Cell(row: r, column: c)
+                var text = zeroed(page[r][c])
+                if picks[.amount] == cell { text = replacing(amountPattern, group: 1, in: text, with: sampleAmount) }
+                if picks[.cardTail] == cell { text = replacing(tailPattern, group: nil, in: text, with: sampleTail) }
+                if picks[.counterparty] == cell {
+                    // 标签和对方认成一段的（「收款方 示例小馆」）：留着标签，只换后面
+                    let field = fields.first { $0.role == .counterparty }
+                    if let field, field.place == .right, let space = text.firstIndex(where: \.isWhitespace), key(String(text[..<space])) == field.anchor {
+                        text = String(text[..<space]) + " " + sampleCounterparty
+                    } else {
+                        text = sampleCounterparty
+                    }
+                }
+                out.append(ScreenTextLine(text: text, x: rounded(line.x), y: rounded(line.y), width: rounded(line.width), height: rounded(line.height)))
+            }
+        }
+        return ScreenTemplateLayout(aspect: rounded(aspect), lines: out)
+    }
+
+    /// 在骨架（或者同样的截图）上按模板的找法找回点到的那几段
+    public static func picks(for template: ScreenTemplate, in text: String) -> [ScreenTemplateField.Role: Cell] {
+        let page = page(text)
+        let anchors = Set(template.anchors)
+        var picks: [ScreenTemplateField.Role: Cell] = [:]
+        for field in template.fields {
+            if let found = locate(field, in: page, anchors: anchors) { picks[field.role] = found.cell }
+        }
+        return picks
+    }
+
+    /// 数字都换成 0（全角的也算），别的字不动
+    static func zeroed(_ text: String) -> String {
+        String(text.map { $0.isNumber && $0.wholeNumberValue != nil ? "0" : $0 })
+    }
+
+    /// 换掉最后一个匹配（卡号）或第一个匹配（金额）的数字部分。认不出时原样返回
+    private static func replacing(_ rx: Rx, group: Int?, in text: String, with sample: String) -> String {
+        let ns = NSString(string: TextNormalizer.normalizeWidth(text))
+        let match = group == nil ? rx.matches(ns).last : rx.first(ns)
+        guard let match else { return text }
+        let indices = group.map { [$0] } ?? Array(1..<match.numberOfRanges)
+        guard let range = indices.map({ match.range(at: $0) }).first(where: { $0.location != NSNotFound && $0.length > 0 }) else { return text }
+        return ns.replacingCharacters(in: range, with: sample)
+    }
+
+    /// 位置留 4 位小数就够画：骨架存得小一点
+    private static func rounded(_ value: Double) -> Double { (value * 10_000).rounded() / 10_000 }
+
     // MARK: 认截图
 
     /// 用模板认一张截图的文字。页面对不上、读不出金额时返回 nil

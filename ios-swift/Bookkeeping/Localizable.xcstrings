@@ -15907,6 +15907,28 @@
         }
       }
     },
+    "编辑截图模板" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edit Screenshot Templates"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "编辑截图模板"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "編輯截圖範本"
+          }
+        }
+      }
+    },
     "编辑流水" : {
       "localizations" : {
         "en" : {

@@ -19,6 +19,7 @@
 
 8. **截图模板**（[ADR 0028](../../decisions/0028-ios-swift-screenshot-templates.md)）：截图上的字每次识别都不太一样，按原文对很难对上，所以截图另有一种模板：
    打开留着的截图（「待处理 › 没认出的截图」，或者「识别模板」右上角「导入」里从相册选截图），点框选金额、卡号、对方，选类型和记到哪个账户。
-   模板存页面上固定的字和每样东西挨着哪段字，不存截图和数字。列表里在「截图」那一块，不能编辑，往左滑删除。
+   模板存页面上固定的字和每样东西挨着哪段字，不存截图和数字。列表里在「截图」那一块，往左滑删除。
+   另存一份版面骨架（每段字和位置，数字换成示例）：「开发与调试」里打开「编辑截图模板」后，点开截图模板照骨架改；关着时不能编辑。
 
 代码：`BKModel/Templates.swift`、`BKModel/ScreenTemplates.swift`、`BKBackend/Parsing/ScreenTemplates.swift`、`UI/Pending/ScreenTemplateEditorView.swift`、`App/ScreenshotInbox.swift`、`BKBackend/Parsing/MessageTemplates.swift`、`IngestEngine.run` / `reapply`、`TemplateDAO`、`LedgerBackend.skipRecord`。

@@ -356,6 +356,14 @@ final class LedgerStore {
         return count
     }
 
+    /// 改一个做好的截图模板（照版面骨架改的）：按原来的标识保存，还没处理的截图待处理按它重新识别。返回重新识别的张数
+    func updateScreenTemplate(_ template: ScreenTemplate) async throws -> Int {
+        guard let backend else { throw BackendError.notFound }
+        let count = try await backend.saveScreenTemplate(template)
+        await refresh()
+        return count
+    }
+
     /// 留着的截图到期清掉：和通知原文同一个保留期限
     private func purgeScreenshots() async {
         await ScreenshotInbox.purge(olderThan: await retentionDays())

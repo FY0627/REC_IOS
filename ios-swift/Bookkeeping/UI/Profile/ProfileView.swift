@@ -39,6 +39,8 @@ private struct ProfileList: View {
     @AppStorage(ExchangeRateStore.primaryKey) private var primaryCurrency = CurrencyCode.cny.rawValue
     /// 「开发与调试」平时藏着：连点 7 次版本号显示，再连点 7 次藏起来
     @AppStorage("showDevTools") private var showDevTools = false
+    /// 识别模板列表里的截图模板点开照版面骨架编辑（ADR 0028）
+    @AppStorage(ScreenTemplateEditorView.editingEnabledKey) private var screenTemplateEditing = false
     @AppStorage(LiveCategoryActivity.lastResultKey) private var liveActivityResult = ""
     @AppStorage(LiveCategoryActivity.lastTapKey) private var liveActivityTap = ""
     @AppStorage(LiveCategoryActivity.ringSecondsKey) private var ringSeconds = CategoryActivityAttributes.ContentState.ringDuration
@@ -165,6 +167,10 @@ private struct ProfileList: View {
                             }
                         }
                         .disabled(store.switchingLedger)
+                        // 截图模板照版面骨架编辑：先自己试，好用再放开
+                        Toggle(isOn: $screenTemplateEditing) {
+                            Label("编辑截图模板", systemImage: "rectangle.dashed")
+                        }
                         // 新手引导只在第一次打开时出现，这里再看一次
                         Button {
                             showingOnboarding = true

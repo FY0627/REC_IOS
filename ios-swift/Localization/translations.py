@@ -344,6 +344,7 @@ t("删除失败", "刪除失敗", "Couldn’t Delete")
 
 t("添加识别模板", "新增辨識範本", "New Template")
 t("编辑识别模板", "編輯辨識範本", "Edit Template")
+t("编辑截图模板", "編輯截圖範本", "Edit Screenshot Templates")
 t("模板名称", "範本名稱", "Template Name")
 t("转入", "轉入", "Transfer In")
 t("通知原文", "通知原文", "Original Alert")

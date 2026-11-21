@@ -7,12 +7,22 @@ import BKModel
 /// 再和记账一样选支出 / 收入 / 转帐、记到哪个账户，保存。以后同样的页面按这个模板认。
 ///
 /// 模板只保存页面上固定的字和每样东西挨着哪段字（`ScreenTemplates.build`），不保存截图和截图上的数字。
+/// 另存一份版面骨架（每段字和位置，数字换成示例，`ScreenTemplates.skeleton`），之后照着它画出页面来改这个模板。
 /// 保存后这张截图删掉；没进待处理的这张按模板再记一遍，待处理里同样的截图也按它重新识别。
 /// 记到选了账户时，截图上的卡号是转帐的另一边（银行卡转进余额宝这类）
 struct ScreenTemplateEditorView: View {
-    let entry: ScreenshotInbox.Entry
-    /// 保存后按模板把这张截图记上：留着的认不出的截图要记，从相册选来只做模板的不记
-    let record: Bool
+    /// 打开的是什么：留着的截图做新模板，或者照版面骨架改一个做好的模板（「开发与调试」里打开）
+    enum Source {
+        /// `record`：保存后按模板把这张截图记上。留着的认不出的截图要记，从相册选来只做模板的不记
+        case screenshot(ScreenshotInbox.Entry, record: Bool)
+        case template(ScreenTemplate, ScreenTemplateLayout)
+    }
+
+    /// 「开发与调试」里的开关：打开后点识别模板列表里的截图模板可以编辑
+    static let editingEnabledKey = "devEditScreenTemplates"
+
+    let source: Source
+    private let lines: [ScreenTextLine]
     private let grid: [[ScreenTextLine]]
     private let text: String
 
@@ -30,12 +40,28 @@ struct ScreenTemplateEditorView: View {
     @State private var errorText: String?
     @State private var saving = false
     @State private var savedCount: Int?
+    @State private var loaded = false
+    /// 改做好的模板时原来的交易性质：类型没换就保留（和通知模板一样）
+    @State private var originalKind: TransactionKind?
 
     init(entry: ScreenshotInbox.Entry, record: Bool = true) {
-        self.entry = entry
-        self.record = record
-        grid = ScreenLayout.grid(entry.lines)
-        text = ScreenLayout.text(entry.lines)
+        self.init(source: .screenshot(entry, record: record), lines: entry.lines)
+    }
+
+    init(template: ScreenTemplate, layout: ScreenTemplateLayout) {
+        self.init(source: .template(template, layout), lines: layout.lines)
+    }
+
+    private init(source: Source, lines: [ScreenTextLine]) {
+        self.source = source
+        self.lines = lines
+        grid = ScreenLayout.grid(lines)
+        text = ScreenLayout.text(lines)
+    }
+
+    private var existing: ScreenTemplate? {
+        if case .template(let template, _) = source { return template }
+        return nil
     }
 
     var body: some View {
@@ -65,11 +91,17 @@ struct ScreenTemplateEditorView: View {
                         .labelsHidden()
                         Spacer(minLength: 0)
                     }
-                    if let image {
-                        ScreenshotBoxes(image: image, grid: grid, picks: picks) { choosing = $0 }
+                    switch source {
+                    case .screenshot:
+                        if let image {
+                            ScreenshotBoxes(page: .image(image), grid: grid, picks: picks) { choosing = $0 }
+                                .listRowInsets(EdgeInsets())
+                        } else {
+                            ProgressView().frame(maxWidth: .infinity, minHeight: 200)
+                        }
+                    case .template(_, let layout):
+                        ScreenshotBoxes(page: .skeleton(aspect: layout.aspect), grid: grid, picks: picks) { choosing = $0 }
                             .listRowInsets(EdgeInsets())
-                    } else {
-                        ProgressView().frame(maxWidth: .infinity, minHeight: 200)
                     }
                 }
 
@@ -89,7 +121,7 @@ struct ScreenTemplateEditorView: View {
                 }
             }
             .disabled(saving)
-            .navigationTitle("做成识别模板")
+            .navigationTitle(existing == nil ? "做成识别模板" : "编辑识别模板")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("取消", systemImage: "xmark") { dismiss() } }
@@ -114,8 +146,9 @@ struct ScreenTemplateEditorView: View {
             } message: {
                 Text(savedCount.map { L("有 \($0) 张截图按这个模板重新识别。") } ?? "")
             }
+            .onAppear(perform: setup)
             .task {
-                guard image == nil else { return }
+                guard case .screenshot(let entry, _) = source, image == nil else { return }
                 image = await Self.loadImage(entry.id)
                 if image == nil { errorText = L("读不出这张图片") }
             }
@@ -204,12 +237,39 @@ struct ScreenTemplateEditorView: View {
 
     private var template: ScreenTemplate? {
         guard case .success(let parts)? = built else { return nil }
-        let (kind, direction) = MessageTemplate.fields(type: type, refund: refund, transferDirection: transferDirection, keeping: nil)
+        let (kind, direction) = MessageTemplate.fields(type: type, refund: refund, transferDirection: transferDirection, keeping: originalKind)
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let id = switch source {
+        case .screenshot(let entry, _): entry.id
+        case .template(let template, _): template.id
+        }
         return ScreenTemplate(
-            id: entry.id, name: trimmed.isEmpty ? L("截图模板") : trimmed, anchors: parts.anchors, fields: parts.fields,
-            kind: kind, direction: direction, accountID: accountID, createdAt: Date()
+            id: id, name: trimmed.isEmpty ? L("截图模板") : trimmed, anchors: parts.anchors, fields: parts.fields,
+            kind: kind, direction: direction, accountID: accountID, createdAt: existing?.createdAt ?? Date()
         )
+    }
+
+    /// 存进模板的版面骨架（保存时才算）：截图按原图的宽高比，改模板时照旧
+    private func layout(for template: ScreenTemplate) -> ScreenTemplateLayout? {
+        let aspect: Double? = switch source {
+        case .screenshot: image.flatMap { $0.size.height > 0 ? $0.size.width / $0.size.height : nil }
+        case .template(_, let layout): layout.aspect
+        }
+        return aspect.map { ScreenTemplates.skeleton(lines, picks: picks, fields: template.fields, aspect: $0) }
+    }
+
+    /// 改做好的模板：照骨架找回原来点的几段，类型、记到、名称照旧
+    private func setup() {
+        guard !loaded, let existing else { return }
+        loaded = true
+        picks = ScreenTemplates.picks(for: existing, in: text)
+        let entry = MessageTemplate.entry(kind: existing.kind, direction: existing.direction)
+        type = entry.type
+        refund = entry.refund
+        transferDirection = existing.direction
+        originalKind = existing.kind
+        accountID = existing.accountID
+        name = existing.name
     }
 
     /// 用这个模板读这张截图读出来的
@@ -229,14 +289,19 @@ struct ScreenTemplateEditorView: View {
             errorText = error.message.loc
             return
         }
-        guard let template, preview != nil else {
+        guard var template, preview != nil else {
             errorText = L("用这个模板认不出这张截图，请换一种点法")
             return
         }
+        template.layout = layout(for: template)
         saving = true
         defer { saving = false }
         do {
-            let count = try await store.saveScreenTemplate(template, from: entry, record: record)
+            let count: Int
+            switch source {
+            case .screenshot(let entry, let record): count = try await store.saveScreenTemplate(template, from: entry, record: record)
+            case .template: count = try await store.updateScreenTemplate(template)
+            }
             if count > 0 { savedCount = count } else { dismiss() }
         } catch {
             errorText = L("保存失败：\(error.localizedDescription)")
@@ -249,17 +314,36 @@ struct ScreenTemplateEditorView: View {
     }
 }
 
-/// 截图和上面识别出的每段字的框：点到的按颜色填上，点框交回第几行第几段
+/// 截图和上面识别出的每段字的框：点到的按颜色填上，点框交回第几行第几段。
+/// 改做好的模板时没有截图，画一张空白的页面，每个框里写上骨架里的字
 private struct ScreenshotBoxes: View {
-    let image: UIImage
+    enum Page {
+        case image(UIImage)
+        /// 版面骨架：截图的宽 / 高
+        case skeleton(aspect: Double)
+    }
+
+    let page: Page
     let grid: [[ScreenTextLine]]
     let picks: [ScreenTemplateField.Role: ScreenTemplates.Cell]
     let tap: (ScreenTemplates.Cell) -> Void
 
+    private var isSkeleton: Bool {
+        if case .skeleton = page { return true }
+        return false
+    }
+
+    @ViewBuilder private var background: some View {
+        switch page {
+        case .image(let image):
+            Image(uiImage: image).resizable().scaledToFit()
+        case .skeleton(let aspect):
+            Rectangle().fill(Color(.systemBackground)).aspectRatio(max(aspect, 0.1), contentMode: .fit)
+        }
+    }
+
     var body: some View {
-        Image(uiImage: image)
-            .resizable()
-            .scaledToFit()
+        background
             .overlay {
                 GeometryReader { geometry in
                     let size = geometry.size
@@ -271,6 +355,16 @@ private struct ScreenshotBoxes: View {
                             .overlay {
                                 RoundedRectangle(cornerRadius: 3)
                                     .stroke(role.map { ScreenTemplateEditorView.tint($0) } ?? Color.accentColor.opacity(0.5), lineWidth: 1)
+                            }
+                            .overlay {
+                                if isSkeleton {
+                                    Text(verbatim: line.text)
+                                        .font(.system(size: max(line.height * size.height * 0.72, 6)))
+                                        .lineLimit(1)
+                                        .minimumScaleFactor(0.3)
+                                        .foregroundStyle(role == nil ? Color.secondary : Color.primary)
+                                        .padding(.horizontal, 2)
+                                }
                             }
                             .frame(width: max(line.width * size.width, 12) + 4, height: max(line.height * size.height, 12) + 4)
                             .contentShape(Rectangle())

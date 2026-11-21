@@ -1120,6 +1120,8 @@ public enum ScreenTemplateDAO {
     private struct Body: Codable {
         var anchors: [String]
         var fields: [ScreenTemplateField]
+        /// 编辑用的版面骨架；早先做的模板没有
+        var layout: ScreenTemplateLayout?
     }
 
     /// 新做的在前：同一张截图几个模板都认得出时，用最新的
@@ -1132,14 +1134,14 @@ public enum ScreenTemplateDAO {
                   let direction = FlowDirection(rawValue: row.string(4)) else { return nil }
             return ScreenTemplate(
                 id: row.string(0), name: row.string(1), anchors: body.anchors, fields: body.fields, kind: kind, direction: direction,
-                accountID: row.optionalString(5), createdAt: row.date(6)
+                accountID: row.optionalString(5), createdAt: row.date(6), layout: body.layout
             )
         }
         .compactMap { $0 }
     }
 
     public static func save(_ db: SQLiteConnection, _ t: ScreenTemplate) throws {
-        let json = String(decoding: try JSONEncoder().encode(Body(anchors: t.anchors, fields: t.fields)), as: UTF8.self)
+        let json = String(decoding: try JSONEncoder().encode(Body(anchors: t.anchors, fields: t.fields, layout: t.layout)), as: UTF8.self)
         try db.run(
             """
             INSERT INTO screen_templates (id, name, body_json, kind, direction, account_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)

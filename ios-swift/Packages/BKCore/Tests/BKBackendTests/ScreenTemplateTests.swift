@@ -159,6 +159,96 @@ final class ScreenTemplateTests: XCTestCase {
         XCTAssertEqual(ScreenLayout.text(lines), "¥8.00\n付款方式  示例银行 借记卡(0427)", "一段里的空白缩成一个，段和段之间两个空格")
         XCTAssertEqual(ScreenTemplates.page(ScreenLayout.text(lines)).map(\.count), [1, 2])
     }
+
+    // MARK: 版面骨架
+
+    /// 按页面文字排出截图上的段：一行一行往下，一行里各段从左往右
+    func lines(_ page: String) -> [ScreenTextLine] {
+        ScreenTemplates.page(page).enumerated().flatMap { r, row in
+            row.enumerated().map { c, text in
+                ScreenTextLine(text: text, x: 0.05 + Double(c) * 0.45, y: 0.02 + Double(r) * 0.06, width: 0.4, height: 0.03)
+            }
+        }
+    }
+
+    func testSkeletonHidesNumbersAndRebuildsTheSameTemplate() throws {
+        let original = lines(walletPage)
+        let built = try ScreenTemplates.build(text: ScreenLayout.text(original), picks: picks).get()
+        let layout = ScreenTemplates.skeleton(original, picks: picks, fields: built.fields, aspect: 1179.0 / 2556)
+        let text = ScreenLayout.text(layout.lines)
+        XCTAssertEqual(text, """
+        0:00
+        示例钱包
+        交易结果
+        消费成功
+        -100.00
+        商户  对方
+        扣款账户  示例银行借记卡(1234)
+        交易时间  0000-00-00 00:00
+        订单编号  00000000000000
+        完成
+        """)
+        XCTAssertEqual(layout.aspect, 0.4613)
+        XCTAssertEqual(layout.lines.count, original.count)
+
+        let template = ScreenTemplate(
+            id: "t", name: "示例钱包", anchors: built.anchors, fields: built.fields, kind: .purchase, direction: .outflow,
+            accountID: nil, createdAt: now, layout: layout
+        )
+        XCTAssertEqual(ScreenTemplates.picks(for: template, in: text), picks, "在骨架上找回原来点的几段")
+        let rebuilt = try ScreenTemplates.build(text: text, picks: picks).get()
+        XCTAssertEqual(rebuilt.anchors, built.anchors)
+        XCTAssertEqual(rebuilt.fields, built.fields)
+        let hit = try XCTUnwrap(ScreenTemplates.match(template, text: text))
+        XCTAssertEqual(hit.amount.digits, "100.00")
+        XCTAssertEqual(hit.cardTail, "1234")
+        XCTAssertEqual(hit.counterparty, "对方")
+    }
+
+    func testSkeletonWhenLabelAndValueAreOneSegment() throws {
+        let page = """
+        示例钱包
+        转账成功
+        ¥0.01
+        收款方 示例小馆
+        付款方式 示例银行借记卡(0427)
+        完成
+        """
+        let picks: [ScreenTemplateField.Role: ScreenTemplates.Cell] = [
+            .amount: .init(row: 2, column: 0), .counterparty: .init(row: 3, column: 0), .cardTail: .init(row: 4, column: 0),
+        ]
+        let original = lines(page)
+        let built = try ScreenTemplates.build(text: ScreenLayout.text(original), picks: picks).get()
+        let layout = ScreenTemplates.skeleton(original, picks: picks, fields: built.fields, aspect: 0.5)
+        let text = ScreenLayout.text(layout.lines)
+        XCTAssertEqual(ScreenTemplates.page(text)[2], ["¥100.00"])
+        // 标签只在点到的这一段里，不是固定的字：整段就是对方
+        XCTAssertEqual(ScreenTemplates.page(text)[3], ["对方"])
+        XCTAssertEqual(ScreenTemplates.page(text)[4], ["付款方式 示例银行借记卡(1234)"])
+        let template = ScreenTemplate(
+            id: "t", name: "示例", anchors: built.anchors, fields: built.fields, kind: .transferOut, direction: .outflow,
+            accountID: nil, createdAt: now, layout: layout
+        )
+        XCTAssertEqual(ScreenTemplates.picks(for: template, in: text), picks)
+    }
+
+    func testSavedTemplateKeepsItsLayout() async throws {
+        let backend = try makeBackend()
+        let original = lines(walletPage)
+        let built = try ScreenTemplates.build(text: ScreenLayout.text(original), picks: picks).get()
+        let layout = ScreenTemplates.skeleton(original, picks: picks, fields: built.fields, aspect: 0.5)
+        var template = ScreenTemplate(
+            id: "t", name: "示例钱包", anchors: built.anchors, fields: built.fields, kind: .purchase, direction: .outflow,
+            accountID: nil, createdAt: now, layout: layout
+        )
+        _ = try await backend.saveScreenTemplate(template)
+        template.name = "改过的名称"
+        _ = try await backend.saveScreenTemplate(template)
+        let saved = try await backend.screenTemplates()
+        XCTAssertEqual(saved.count, 1, "按原来的标识改，不多出一个")
+        XCTAssertEqual(saved.first?.name, "改过的名称")
+        XCTAssertEqual(saved.first?.layout, layout)
+    }
 }
 
 private extension Result {
