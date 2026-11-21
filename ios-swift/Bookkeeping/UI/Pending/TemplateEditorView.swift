@@ -5,7 +5,9 @@ import BKBackend
 import BKModel
 
 /// 识别模板的编辑页（和记一笔一样是弹出的表单）：新添加、改已有的、或用一条待处理的通知做。
-/// 原文可以粘贴或手动改；在原文里选中金额（必选）、尾号、对方，和记账一样选支出 / 收入 / 转帐，保存。
+/// 原文在一个像备忘录的输入框里，直接粘贴或打字，光标离开就按 App 自带的读法认一遍（圈好金额、猜好类型）；
+/// 「导入」时输入框右下角的圆按钮从相册选截图，换成截图模板的编辑页（ADR 0028）。
+/// 在原文里选中金额（必选）、尾号、对方，和记账一样选支出 / 收入 / 转帐，保存。
 /// 交易性质按选的类型换（`MessageTemplate.fields`），原来的性质还在同一类里就保留，例如手续费、工资、还款。
 ///
 /// 模板只保存在这台 iPhone；保存的是写法，选中的内容和原文里的其他数字都不保存。
@@ -27,8 +29,8 @@ struct TemplateEditorView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var sample = ""
+    /// 光标在输入框里：这时不画选中的颜色，离开时按新的原文重新认
     @State private var editingText = false
-    @State private var draftText = ""
     @State private var selection = NSRange(location: 0, length: 0)
     @State private var amount: NSRange?
     @State private var cardTail: NSRange?
@@ -91,44 +93,39 @@ struct TemplateEditorView: View {
                 }
 
                 Section(pickScreenshot == nil ? "通知原文" : "通知或截图") {
-                    if editingText {
-                        TextEditor(text: $draftText)
-                            .frame(minHeight: 160)
-                        Button("完成") { applyText(draftText) }
-                    } else {
-                        if sample.isEmpty {
-                            Text(pickScreenshot == nil ? "粘贴一条收到的短信或邮件" : "粘贴一条通知，或者选一张截图").foregroundStyle(.secondary)
-                        } else {
-                            SelectableText(text: sample, highlights: highlights, selection: $selection)
-                                .frame(height: 200)
+                    // 像备忘录：直接粘贴或打字，离开输入框就按通用读法认一遍；右下角的圆按钮从相册插一张截图
+                    TemplateTextBox(text: sample, highlights: editingText ? [] : highlights, selection: $selection, editing: $editingText) { text in
+                        applyText(text)
+                    }
+                    .frame(height: 200)
+                    .overlay(alignment: .topLeading) {
+                        if sample.isEmpty, !editingText {
+                            Text(pickScreenshot == nil ? "粘贴一条收到的短信或邮件" : "粘贴一条通知，或者选一张截图")
+                                .foregroundStyle(.secondary)
+                                .allowsHitTesting(false)
                         }
-                        HStack {
-                            PasteButton(payloadType: String.self) { strings in
-                                guard let text = strings.first else { return }
-                                Task { @MainActor in applyText(text) }
-                            }
-                            .labelStyle(.titleAndIcon)
-                            Spacer()
-                            Button("手动输入") {
-                                draftText = sample
-                                editingText = true
-                            }
-                            .buttonStyle(.borderless)
-                        }
+                    }
+                    .overlay(alignment: .bottomTrailing) {
                         if pickScreenshot != nil {
                             PhotosPicker(selection: $photo, matching: .screenshots) {
-                                if readingPhoto {
-                                    ProgressView()
-                                } else {
-                                    Label("从相册选截图", systemImage: "photo")
+                                Group {
+                                    if readingPhoto {
+                                        ProgressView()
+                                    } else {
+                                        Image(systemName: "photo")
+                                    }
                                 }
+                                .frame(width: 40, height: 40)
+                                .background(Circle().fill(Color(.tertiarySystemFill)))
                             }
+                            .buttonStyle(.borderless)
                             .disabled(readingPhoto)
+                            .accessibilityLabel("从相册选截图")
                         }
                     }
                 }
 
-                if !sample.isEmpty, !editingText {
+                if !sample.isEmpty {
                     Section("选中的内容") {
                         markRow("金额", mark: .amount, range: amount, tint: .green, required: true)
                         markRow("尾号", mark: .cardTail, range: cardTail, tint: .blue, required: false)
@@ -154,13 +151,18 @@ struct TemplateEditorView: View {
                     }
                 }
             }
+            .scrollDismissesKeyboard(.interactively)
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("完成") { endEditing() }
+                }
                 ToolbarItem(placement: .cancellationAction) { Button("取消", systemImage: "xmark") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("保存", systemImage: "checkmark") { Task { await save() } }
-                        .disabled(amount == nil || saving || editingText)
+                        .disabled((amount == nil && !editingText) || saving)
                 }
             }
             .onAppear(perform: setup)
@@ -192,7 +194,13 @@ struct TemplateEditorView: View {
                     .foregroundStyle(.secondary)
                     .buttonStyle(.borderless)
             }
-            Button("用选中的") { set(mark, selection) }
+            Button("用选中的") {
+                // 先离开输入框：原文没改时选中的位置不变
+                let picked = selection
+                let before = sample
+                endEditing()
+                if sample == before, picked.length > 0, NSMaxRange(picked) <= NSString(string: sample).length { set(mark, picked) }
+            }
                 .buttonStyle(.bordered)
                 .disabled(selection.length == 0)
         }
@@ -264,7 +272,8 @@ struct TemplateEditorView: View {
 
     /// 换了原文（粘贴或手动输入）：整理成识别用的写法，原来选中的位置清掉，再用 App 自带的读法猜一下金额和性质
     private func applyText(_ text: String) {
-        editingText = false
+        // 只是选了字、没改原文：选中的位置和圈好的都不动
+        guard text != sample else { return }
         let cleaned = MessageParser.cleaned(text, source: .auto)
         guard cleaned != sample else { return }
         sample = cleaned
@@ -279,6 +288,11 @@ struct TemplateEditorView: View {
         if let draft = parsed.events.first?.draft { guess(draft) }
     }
 
+    /// 收起键盘、离开输入框（输入框交出原文，`applyText`）
+    private func endEditing() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+    }
+
     /// 用通用读法对这条通知的猜测预先填好：金额位置、支出 / 收入 / 转帐
     private func guess(_ draft: EventDraft) {
         let found = NSString(string: sample).range(of: draft.amount.digits)
@@ -288,6 +302,8 @@ struct TemplateEditorView: View {
     }
 
     private func save() async {
+        // 光标还在输入框里：先按刚打的原文认一遍
+        endEditing()
         guard case .success(let pieces)? = built else {
             if case .failure(let error)? = built { errorText = error.message }
             return
@@ -347,26 +363,32 @@ struct TemplateEditorView: View {
     }
 }
 
-/// 只读、可以用系统选择手柄选中的原文。选中范围按 UTF-16 计，与 `NSString` 一致。
-struct SelectableText: UIViewRepresentable {
+/// 识别模板的原文输入框：像备忘录，直接粘贴、打字。光标离开时把原文交出去（`commit`）重新认；
+/// 不在输入时画出圈好的颜色，也能用系统选择手柄选中一段（「用选中的」）。选中范围按 UTF-16 计，与 `NSString` 一致
+struct TemplateTextBox: UIViewRepresentable {
     let text: String
     let highlights: [(range: NSRange, color: UIColor)]
     @Binding var selection: NSRange
+    @Binding var editing: Bool
+    let commit: (String) -> Void
 
     func makeUIView(context: Context) -> UITextView {
         let view = UITextView()
-        view.isEditable = false
+        view.isEditable = true
         view.isSelectable = true
         view.backgroundColor = .clear
         view.textContainerInset = .zero
         view.textContainer.lineFragmentPadding = 0
         view.adjustsFontForContentSizeCategory = true
+        view.font = UIFont.preferredFont(forTextStyle: .callout)
         view.delegate = context.coordinator
         return view
     }
 
     func updateUIView(_ view: UITextView, context: Context) {
         context.coordinator.parent = self
+        // 正在输入时不动：用户打的字不能被换掉
+        guard !view.isFirstResponder else { return }
         let attributed = NSMutableAttributedString(
             string: text,
             attributes: [.font: UIFont.preferredFont(forTextStyle: .callout), .foregroundColor: UIColor.label]
@@ -384,10 +406,22 @@ struct SelectableText: UIViewRepresentable {
 
     @MainActor
     final class Coordinator: NSObject, UITextViewDelegate {
-        var parent: SelectableText
+        var parent: TemplateTextBox
 
-        init(parent: SelectableText) {
+        init(parent: TemplateTextBox) {
             self.parent = parent
+        }
+
+        func textViewDidBeginEditing(_ textView: UITextView) {
+            // 输入时去掉圈好的颜色，新打的字不会带上底色
+            textView.textStorage.removeAttribute(.backgroundColor, range: NSRange(location: 0, length: textView.textStorage.length))
+            textView.typingAttributes = [.font: UIFont.preferredFont(forTextStyle: .callout), .foregroundColor: UIColor.label]
+            parent.editing = true
+        }
+
+        func textViewDidEndEditing(_ textView: UITextView) {
+            parent.editing = false
+            parent.commit(textView.text)
         }
 
         func textViewDidChangeSelection(_ textView: UITextView) {
