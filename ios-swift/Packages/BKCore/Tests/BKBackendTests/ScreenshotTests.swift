@@ -529,11 +529,22 @@ final class ScreenshotTests: XCTestCase {
         let reading = ScreenshotParser.parse(alipayYuebaoFromCard, referenceDate: now, calendar: calendar)
         let draft = try XCTUnwrap(reading.message.events.first?.draft)
         XCTAssertEqual(draft.direction, .inflow, "余额宝这边是转入")
-        XCTAssertEqual(draft.kind, .transferIn)
-        XCTAssertEqual(draft.counterpartyTail, "0427", "卡是转帐的另一边")
+        XCTAssertEqual(draft.kind, .income, "支付宝这边先算收入")
+        XCTAssertEqual(draft.counterpartyTail, "0427", "记下是哪张卡，和卡上那笔配对")
         XCTAssertNil(draft.cardTail)
         XCTAssertNil(draft.counterparty, "不把「余额宝 >」当对方")
         XCTAssertEqual(reading.methodName, "余额宝")
+    }
+
+    func testYuebaoTopUpAloneIsIncome() async throws {
+        let backend = try makeBackend()
+        let yuebao = try await addAlipay(backend, name: "余额宝")
+        try await addCard(backend)
+        _ = try await backend.ingestScreenshot(text: alipayYuebaoFromCard, capturedAt: now)
+        let rows = try await backend.records(accountID: yuebao.id)
+        let record = try XCTUnwrap(rows.first?.record)
+        XCTAssertEqual(record.entryType, .income, "卡上那笔还没来：算支付宝的收入")
+        XCTAssertNil(record.transferGroupID)
     }
 
     func testYuebaoTopUpMergesWithTheCardDebitEitherOrder() async throws {

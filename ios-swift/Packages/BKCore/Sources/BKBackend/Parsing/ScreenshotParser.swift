@@ -86,7 +86,7 @@ enum ScreenshotParser {
     private static let purchaseWords = Rx(#"支付成功|付款成功|交易成功|支付时间|付款时间|支付方式|付款方式|收单机构|商户全称"#)
     private static let failedWords = Rx(#"支付失败|交易失败|交易关闭|已关闭|已撤销|已取消|已退还|已退回|已过期"#)
     /// 钱转进、转出零钱通、余额宝（「余额宝-单次转入」「转出到零钱通」）。和零钱、余额之间挪钱不是收支，不记；
-    /// 从银行卡转进来、转出到银行卡的是转帐，卡是另一边（`fundCardMove`）
+    /// 从银行卡转进来、转出到银行卡的照常记（`fundCardMove`）
     private static let fundMove = Rx(#"(零钱通|余额宝)\s*[-—]?\s*(?:单次|自动|定期|预约)?\s*(转入|转出)|(转入|转出到?)\s*(零钱通|余额宝)|(零钱通)-"#)
     private static let withdraw = Rx(#"(?:零钱|余额)提现|提现-到|提现到|^提现"#)
     private static let topUp = Rx(#"(?:零钱|余额)充值|充值-来自|充值到(?:零钱|余额)"#)
@@ -272,7 +272,9 @@ enum ScreenshotParser {
         }
 
         let kind: TransactionKind
-        if isWithdraw { kind = .transferOut }
+        // 卡和余额宝、零钱通之间：余额宝这边转入算收入、转出算支出，卡上那笔银行通知来了再合成转帐（`IngestEngine.pairWithCard`）
+        if let fundCard { kind = fundCard.inbound ? .income : .purchase }
+        else if isWithdraw { kind = .transferOut }
         else if isTopUp { kind = .transferIn }
         else if isRefund { kind = .refund }
         else if toBusiness, direction == .inflow { kind = .income }
@@ -395,7 +397,7 @@ enum ScreenshotParser {
     }
 
     /// 银行卡和余额宝、零钱通之间转钱：转入时付款方式写的是卡，转出时到账银行卡写的是卡。
-    /// 记成余额宝、零钱通这边的一笔转帐，卡是另一边（和零钱充值、提现一样）。卡那边看不出来的是和零钱、余额之间挪钱
+    /// 记到余额宝、零钱通，卡号记成另一边，和卡上那笔配对用。卡那边看不出来的是和零钱、余额之间挪钱
     private static func fundCardMove(pageText: String, method: String?, target: String?) -> (name: String, inbound: Bool)? {
         let ns = NSString(string: pageText)
         guard let m = fundMove.first(ns) else { return nil }
