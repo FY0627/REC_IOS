@@ -110,9 +110,7 @@ struct StatsView: View {
             // 分类明细、分类明细里的每一笔都和首页一样按值推进。
             // 两层都要按值：一层按值、一层用闭包混在一个导航栈里，点一笔会多推一次分类明细。
             // 流水详情右上角的按钮不再单独冒出来，靠的是分类明细也藏起系统导航栏（见 CategoryStatsView）
-            .navigationDestination(for: CategoryStatsRoute.self) { route in CategoryStatsView(route: route) }
-            .navigationDestination(for: RecordRow.self) { row in RecordPage(row: row) }
-            .sheet(isPresented: $choosingCustom) {
+            .navigationDestination(for: CategoryStatsRoute.self) { route in CategoryStatsView(route: route) }            .sheet(isPresented: $choosingCustom) {
                 CustomPeriodSheet(initial: period.customDates) { period = $0 }
             }
             .task(id: LoadKey(period: period, revision: store.revision)) {
@@ -303,7 +301,7 @@ private struct CategoryTotalRow: View {
     }
 }
 
-/// 推进分类明细（`CategoryStatsView`）时带的值：统计页按值推进，和首页推进流水详情一样
+/// 推进分类明细（`CategoryStatsView`）时带的值：统计页按值推进
 private struct CategoryStatsRoute: Hashable {
     let item: MonthStats.CategoryTotal
     let type: EntryType
@@ -331,6 +329,8 @@ private struct CategoryStatsView: View {
     @State private var rows: [RecordRow] = []
     @State private var swipe = RecordSwipeState()
     @State private var scrolledUnderBar = false
+    /// 点开的那一笔
+    @State private var opened: RecordRow?
 
     var body: some View {
         List {
@@ -355,9 +355,15 @@ private struct CategoryStatsView: View {
             // 每一笔和首页一样按天分组，行里只写时间
             ForEach(RecordDay.group(rows), id: \.day) { day in
                 Section(day.title) {
+                    // 点一笔和首页一样弹出流水详情面板（待分类的是选分类）
                     ForEach(day.rows) { row in
-                        NavigationLink(value: row) { RecordRowView(row: row, timeOnly: true) }
-                            .recordSwipe(row, state: $swipe)
+                        Button { opened = row } label: {
+                            RecordRowView(row: row, timeOnly: true)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .recordSwipe(row, state: $swipe)
                     }
                 }
             }
@@ -365,7 +371,7 @@ private struct CategoryStatsView: View {
         .trackingScrollUnderTopBar($scrolledUnderBar)
         .navigationTitle(item.name.loc)
         .navigationBarTitleDisplayMode(.inline)
-        // 系统导航栏藏起来，自己放返回和标题（和首页一样）：点进一笔时流水详情的导航栏整条跟着页面推进来，
+        // 系统导航栏藏起来，自己放返回和标题（和首页一样）。原来点进一笔是推进来的流水详情：导航栏整条跟着页面推进来，
         // 右上角的合并、删除也跟着一起进来。系统导航栏留着的话，前后两页共用一条导航栏，
         // 新页面的玻璃按钮会在导航栏里单独冒出来
         .toolbarVisibility(.hidden, for: .navigationBar)
@@ -398,6 +404,7 @@ private struct CategoryStatsView: View {
             .padding(.bottom, AppLayout.topBarBottom)
             .background { TopBarBackdrop(visible: scrolledUnderBar) }
         }
+        .sheet(item: $opened) { row in RecordSheet(row: row) }
         .recordSwipeHost($swipe)
         .task(id: store.revision) {
             let filter = RecordFilter(
