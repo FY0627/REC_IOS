@@ -169,7 +169,8 @@ struct HomeView: View {
     }
 
     private func recordLink(_ row: RecordRow) -> some View {
-        Button { opened = row } label: { RecordRowView(row: row, timeOnly: true) }
+        // 列表里的按钮默认把字染成主题色：字照原来的颜色，按下时整行变灰的效果留着
+        Button { opened = row } label: { RecordRowView(row: row, timeOnly: true).foregroundStyle(.primary) }
             .recordSwipe(row, state: $swipe)
     }
 
