@@ -56,6 +56,47 @@ struct TemplateEditorView: View {
         case amount, cardTail, counterparty
     }
 
+    /// 类型一行的选项：支出（可以是退款）、收入、转帐（这张卡转出、转入）合在一个菜单里
+    private enum EntryChoice: CaseIterable, Hashable {
+        case expense, refund, income, transferOut, transferIn
+
+        var title: LocalizedStringKey {
+            switch self {
+            case .expense: "支出"
+            case .refund: "退款（从支出里减掉）"
+            case .income: "收入"
+            case .transferOut: "转帐 · 这张卡转出"
+            case .transferIn: "转帐 · 这张卡转入"
+            }
+        }
+    }
+
+    private var entryChoice: Binding<EntryChoice> {
+        Binding {
+            switch type {
+            case .expense: refund ? .refund : .expense
+            case .income: .income
+            case .transfer: transferDirection == .outflow ? .transferOut : .transferIn
+            }
+        } set: { choice in
+            switch choice {
+            case .expense: (type, refund) = (.expense, false)
+            case .refund: (type, refund) = (.expense, true)
+            case .income: (type, refund) = (.income, false)
+            case .transferOut: (type, transferDirection) = (.transfer, .outflow)
+            case .transferIn: (type, transferDirection) = (.transfer, .inflow)
+            }
+        }
+    }
+
+    /// 邮件那样的一行：左边灰色的名字，右边直接填
+    private func mailRow<Content: View>(_ title: LocalizedStringKey, @ViewBuilder content: () -> Content) -> some View {
+        HStack(spacing: 12) {
+            Text(title).foregroundStyle(.secondary).frame(minWidth: 44, alignment: .leading)
+            content()
+        }
+    }
+
     private var existing: MessageTemplate? {
         if case .existing(let template) = origin { return template }
         return nil
@@ -72,32 +113,24 @@ struct TemplateEditorView: View {
     var body: some View {
         NavigationStack {
             Form {
+                // 像写邮件：名称、类型、原文排在一张卡片上，空着的地方直接点上去填、选
                 Section {
-                    TextField("模板名称", text: $name)
-                }
-
-                Section {
-                    Picker("类型", selection: $type) {
-                        ForEach(EntryType.allCases, id: \.self) { Text($0.displayName.loc).tag($0) }
+                    mailRow("名称") {
+                        TextField("模板名称", text: $name)
                     }
-                    .pickerStyle(.segmented)
-                    if type == .expense {
-                        Toggle("退款（从支出里减掉）", isOn: $refund)
-                    }
-                    if type == .transfer {
-                        Picker("这张卡", selection: $transferDirection) {
-                            Text("转出").tag(FlowDirection.outflow)
-                            Text("转入").tag(FlowDirection.inflow)
+                    mailRow("类型") {
+                        Picker("类型", selection: entryChoice) {
+                            ForEach(EntryChoice.allCases, id: \.self) { Text($0.title).tag($0) }
                         }
+                        .pickerStyle(.menu)
+                        .labelsHidden()
+                        Spacer(minLength: 0)
                     }
-                }
-
-                Section(pickScreenshot == nil ? "通知原文" : "通知或截图") {
                     // 像备忘录：直接粘贴或打字，离开输入框就按通用读法认一遍；右下角的圆按钮从相册插一张截图
                     TemplateTextBox(text: sample, highlights: editingText ? [] : highlights, selection: $selection, editing: $editingText) { text in
                         applyText(text)
                     }
-                    .frame(height: 200)
+                    .frame(height: 240)
                     .overlay(alignment: .topLeading) {
                         if sample.isEmpty, !editingText {
                             Text(pickScreenshot == nil ? "粘贴一条收到的短信或邮件" : "粘贴一条通知，或者选一张截图")

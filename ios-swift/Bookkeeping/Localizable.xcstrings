@@ -18239,6 +18239,50 @@
         }
       }
     },
+    "转帐 · 这张卡转入" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Transfer · Into This Card"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "转帐 · 这张卡转入"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "轉帳 · 這張卡轉入"
+          }
+        }
+      }
+    },
+    "转帐 · 这张卡转出" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Transfer · Out of This Card"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "转帐 · 这张卡转出"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "轉帳 · 這張卡轉出"
+          }
+        }
+      }
+    },
     "转帐的另一边" : {
       "localizations" : {
         "en" : {

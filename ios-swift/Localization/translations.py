@@ -379,6 +379,8 @@ t("有 %lld 张截图按这个模板重新识别。", "有 %lld 張截圖已依�
 t("截图模板", "截圖範本", "Screenshot Template")
 t("金额 %@", "金額 %@", "Amount %@")
 t("用这个模板认不出这张截图，请换一种点法", "用這個範本認不出這張截圖，請換個點法", "This template can’t read the screenshot. Try tapping differently.")
+t("转帐 · 这张卡转出", "轉帳 · 這張卡轉出", "Transfer · Out of This Card")
+t("转帐 · 这张卡转入", "轉帳 · 這張卡轉入", "Transfer · Into This Card")
 t("通知或截图", "通知或截圖", "Alert or Screenshot")
 t("粘贴一条通知，或者选一张截图", "貼上一則通知，或選一張截圖", "Paste an alert, or choose a screenshot")
 t("还没点金额", "還沒點金額", "Tap the amount first.")
