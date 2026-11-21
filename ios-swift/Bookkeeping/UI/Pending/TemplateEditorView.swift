@@ -1,3 +1,4 @@
+import PhotosUI
 import SwiftUI
 import UIKit
 import BKBackend
@@ -18,7 +19,11 @@ struct TemplateEditorView: View {
     }
 
     let origin: Origin
+    /// 「识别模板 › 导入」：也能从相册选截图，选好交出去换成截图模板的编辑页（ADR 0028）
+    var pickScreenshot: ((ScreenshotInbox.Entry) -> Void)?
     @Environment(LedgerStore.self) private var store
+    @State private var photo: PhotosPickerItem?
+    @State private var readingPhoto = false
     @Environment(\.dismiss) private var dismiss
 
     @State private var sample = ""
@@ -40,7 +45,10 @@ struct TemplateEditorView: View {
     @State private var loaded = false
 
     init(item: PendingItem) { origin = .pending(item) }
-    init(template: MessageTemplate?) { origin = template.map(Origin.existing) ?? .new }
+    init(template: MessageTemplate?, pickScreenshot: ((ScreenshotInbox.Entry) -> Void)? = nil) {
+        origin = template.map(Origin.existing) ?? .new
+        self.pickScreenshot = pickScreenshot
+    }
 
     private enum Mark {
         case amount, cardTail, counterparty
@@ -82,14 +90,14 @@ struct TemplateEditorView: View {
                     }
                 }
 
-                Section("通知原文") {
+                Section(pickScreenshot == nil ? "通知原文" : "通知或截图") {
                     if editingText {
                         TextEditor(text: $draftText)
                             .frame(minHeight: 160)
                         Button("完成") { applyText(draftText) }
                     } else {
                         if sample.isEmpty {
-                            Text("粘贴一条收到的短信或邮件").foregroundStyle(.secondary)
+                            Text(pickScreenshot == nil ? "粘贴一条收到的短信或邮件" : "粘贴一条通知，或者选一张截图").foregroundStyle(.secondary)
                         } else {
                             SelectableText(text: sample, highlights: highlights, selection: $selection)
                                 .frame(height: 200)
@@ -106,6 +114,16 @@ struct TemplateEditorView: View {
                                 editingText = true
                             }
                             .buttonStyle(.borderless)
+                        }
+                        if pickScreenshot != nil {
+                            PhotosPicker(selection: $photo, matching: .screenshots) {
+                                if readingPhoto {
+                                    ProgressView()
+                                } else {
+                                    Label("从相册选截图", systemImage: "photo")
+                                }
+                            }
+                            .disabled(readingPhoto)
                         }
                     }
                 }
@@ -146,6 +164,11 @@ struct TemplateEditorView: View {
                 }
             }
             .onAppear(perform: setup)
+            .onChange(of: photo) { _, item in
+                guard let item else { return }
+                photo = nil
+                Task { await readPhoto(item) }
+            }
             .alert("已保存", isPresented: Binding(get: { savedCount != nil }, set: { if !$0 { savedCount = nil } })) {
                 Button("好") { dismiss() }
             } message: {
@@ -287,6 +310,21 @@ struct TemplateEditorView: View {
             if count > 0 { savedCount = count } else { dismiss() }
         } catch {
             errorText = L("保存失败：\(error.localizedDescription)")
+        }
+    }
+
+    /// 选来的截图：识别出字，先放进留着的截图里给截图模板的编辑页用（编辑页关掉后删掉，`TemplateImportView`）
+    private func readPhoto(_ item: PhotosPickerItem) async {
+        readingPhoto = true
+        defer { readingPhoto = false }
+        do {
+            guard let data = try await item.loadTransferable(type: Data.self) else { throw ScreenshotReader.ReadError.unreadable }
+            let reading = try await ScreenshotReader.read(data)
+            guard let entry = await ScreenshotInbox.save(image: data, reading: reading, ingestID: nil) else { throw ScreenshotReader.ReadError.unreadable }
+            errorText = nil
+            pickScreenshot?(entry)
+        } catch {
+            errorText = L("读不出这张图片")
         }
     }
 

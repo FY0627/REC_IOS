@@ -1,6 +1,6 @@
 # 识别模板（用户在本机做）
 
-通用读法认不准的写法，用户可以自己做模板（`UI/Pending/TemplateEditorView.swift`，和记一笔一样是弹出的表单）：在「我的 › 自动记账 › 识别模板」点右上角「+」，粘贴或手动输入一条短信 / 邮件；或者在「待处理」里点一条通知的「做成识别模板」。
+通用读法认不准的写法，用户可以自己做模板（`UI/Pending/TemplateEditorView.swift`，和记一笔一样是弹出的表单）：在「我的 › 自动记账 › 识别模板」点右上角「导入」，粘贴或手动输入一条短信 / 邮件（同一个页面也能从相册选截图，做截图模板）；或者在「待处理」里点一条通知的「做成识别模板」。
 
 1. 原文是整理过的正文（`MessageParser.cleaned`，和识别时看到的一样；粘贴的原文先整理再显示），用系统文字选择选中金额（必选）、尾号、对方，再和记账一样选支出 / 收入 / 转帐（支出可以标成退款，转帐选这张卡转出还是转入）。交易性质和方向由这几样推出来（`MessageTemplate.fields`），原来的性质还在同一类里就保留（手续费、工资、还款等）。粘贴后先用通用读法猜好金额位置和类型。
 2. 模板只取选中内容所在的句子；前后文字（汉字、字母）少于 8 个时往前多取几句（例如邮件里金额单独一行），仍然太少就不让保存。
@@ -18,7 +18,7 @@
    识别模板列表里写「不记」，不能编辑，往左滑删除。不在设置里单独放屏蔽列表。
 
 8. **截图模板**（[ADR 0028](../../decisions/0028-ios-swift-screenshot-templates.md)）：截图上的字每次识别都不太一样，按原文对很难对上，所以截图另有一种模板：
-   打开留着的截图（「待处理 › 没认出的截图」，或者「识别模板」右上角「+ › 从相册选截图」），点框选金额、卡号、对方，选类型和记到哪个账户。
+   打开留着的截图（「待处理 › 没认出的截图」，或者「识别模板」右上角「导入」里从相册选截图），点框选金额、卡号、对方，选类型和记到哪个账户。
    模板存页面上固定的字和每样东西挨着哪段字，不存截图和数字。列表里在「截图」那一块，不能编辑，往左滑删除。
 
 代码：`BKModel/Templates.swift`、`BKModel/ScreenTemplates.swift`、`BKBackend/Parsing/ScreenTemplates.swift`、`UI/Pending/ScreenTemplateEditorView.swift`、`App/ScreenshotInbox.swift`、`BKBackend/Parsing/MessageTemplates.swift`、`IngestEngine.run` / `reapply`、`TemplateDAO`、`LedgerBackend.skipRecord`。

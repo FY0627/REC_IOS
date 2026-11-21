@@ -15555,24 +15555,24 @@
         }
       }
     },
-    "粘贴一条通知" : {
+    "粘贴一条通知，或者选一张截图" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Paste an Alert"
+            "value" : "Paste an alert, or choose a screenshot"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "粘贴一条通知"
+            "value" : "粘贴一条通知，或者选一张截图"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "貼上一則通知"
+            "value" : "貼上一則通知，或選一張截圖"
           }
         }
       }
@@ -19225,6 +19225,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "待處理通知"
+          }
+        }
+      }
+    },
+    "通知或截图" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alert or Screenshot"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通知或截图"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通知或截圖"
           }
         }
       }

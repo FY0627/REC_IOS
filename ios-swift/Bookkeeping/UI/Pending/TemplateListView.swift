@@ -1,8 +1,7 @@
-import PhotosUI
 import SwiftUI
 import BKModel
 
-/// 「我的 › 自动记账 › 识别模板」：自己做的模板。右上角「+」粘贴一条通知做，或者从相册选一张截图点出金额做（ADR 0028）；
+/// 「我的 › 自动记账 › 识别模板」：自己做的模板。右上角「导入」：同一个页面里粘贴一条通知，或者从相册选一张截图点出金额（ADR 0028）；
 /// 点一个通知模板编辑，往左滑删除。截图模板没有存截图，不能编辑，只能往左滑删除。
 /// 收到通知、截图时先用这些模板认（新做的在前），都认不出再用 App 自带的读法。
 struct TemplateListView: View {
@@ -11,11 +10,8 @@ struct TemplateListView: View {
     @State private var screenTemplates: [ScreenTemplate] = []
     @State private var loaded = false
     @State private var editing: EditorTarget?
-    @State private var photo: PhotosPickerItem?
-    /// 从相册选来做模板的截图：先放进留着的截图里给编辑页用，编辑页关掉后删掉
-    @State private var picked: ScreenshotInbox.Entry?
-    @State private var lastPickedID: String?
-    @State private var errorText: String?
+    /// 导入时从相册选来做模板的截图：先放进留着的截图里给编辑页用，编辑页关掉后删掉
+    @State private var pickedID: String?
 
     /// 弹出的编辑页：新添加，或者改一个已有的
     private enum EditorTarget: Identifiable {
@@ -37,9 +33,6 @@ struct TemplateListView: View {
 
     var body: some View {
         List {
-            if let errorText {
-                Text(errorText).foregroundStyle(.red).font(.footnote)
-            }
             if templates.isEmpty && screenTemplates.isEmpty && loaded {
                 Text("还没有识别模板").foregroundStyle(.secondary)
             }
@@ -93,48 +86,24 @@ struct TemplateListView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                Menu {
-                    Button("粘贴一条通知", systemImage: "doc.on.clipboard") { editing = .new }
-                    PhotosPicker(selection: $photo, matching: .screenshots) {
-                        Label("从相册选截图", systemImage: "photo")
-                    }
-                } label: {
-                    Label("添加", systemImage: "plus")
-                }
+                Button("导入", systemImage: "plus") { editing = .new }
             }
         }
-        .sheet(item: $editing, onDismiss: { Task { await reload() } }) { target in
-            TemplateEditorView(template: target.template)
-        }
-        .sheet(item: $picked, onDismiss: {
+        .sheet(item: $editing, onDismiss: {
             Task {
-                // 没保存就关掉的：这张截图不留（保存了的已经删了）
-                if let id = lastPickedID { await ScreenshotInbox.delete(id) }
-                lastPickedID = nil
+                // 选了截图、没保存就关掉的：这张截图不留（保存了的已经删了）
+                if let id = pickedID { await ScreenshotInbox.delete(id) }
+                pickedID = nil
                 await reload()
             }
-        }) { entry in
-            ScreenTemplateEditorView(entry: entry, record: false)
-        }
-        .onChange(of: photo) { _, item in
-            guard let item else { return }
-            photo = nil
-            Task { await open(item) }
+        }) { target in
+            if let template = target.template {
+                TemplateEditorView(template: template)
+            } else {
+                TemplateImportView(pickedID: $pickedID)
+            }
         }
         .task { await reload() }
-    }
-
-    private func open(_ item: PhotosPickerItem) async {
-        do {
-            guard let data = try await item.loadTransferable(type: Data.self) else { throw ScreenshotReader.ReadError.unreadable }
-            let reading = try await ScreenshotReader.read(data)
-            guard let entry = await ScreenshotInbox.save(image: data, reading: reading, ingestID: nil) else { throw ScreenshotReader.ReadError.unreadable }
-            errorText = nil
-            lastPickedID = entry.id
-            picked = entry
-        } catch {
-            errorText = L("读不出这张图片")
-        }
     }
 
     private func row(_ template: MessageTemplate) -> some View {
@@ -154,5 +123,23 @@ struct TemplateListView: View {
         templates = await store.templates()
         screenTemplates = await store.screenTemplates()
         loaded = true
+    }
+}
+
+/// 「识别模板 › 导入」：先是通知模板的编辑页（粘贴、手动输入），在里面从相册选了截图就换成截图模板的编辑页（ADR 0028）。
+/// 选来的截图只做模板、不记账；它的标识交回列表，编辑页关掉后删掉
+private struct TemplateImportView: View {
+    @Binding var pickedID: String?
+    @State private var entry: ScreenshotInbox.Entry?
+
+    var body: some View {
+        if let entry {
+            ScreenTemplateEditorView(entry: entry, record: false)
+        } else {
+            TemplateEditorView(template: nil) { picked in
+                pickedID = picked.id
+                entry = picked
+            }
+        }
     }
 }
