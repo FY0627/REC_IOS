@@ -487,6 +487,40 @@
         }
       }
     },
+    "%lld 张截图没认出" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld unrecognized screenshot"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld unrecognized screenshots"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld 张截图没认出"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld 張截圖沒認出"
+          }
+        }
+      }
+    },
     "%lld 张打不开" : {
       "localizations" : {
         "en" : {
@@ -1591,6 +1625,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "不記了"
+          }
+        }
+      }
+    },
+    "不选" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unmark"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "不选"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "不選"
           }
         }
       }
@@ -3455,6 +3511,28 @@
         }
       }
     },
+    "全部删除" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete All"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "全部删除"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "全部刪除"
+          }
+        }
+      }
+    },
     "全部账户" : {
       "localizations" : {
         "en" : {
@@ -5103,6 +5181,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "卡號必須是 12–19 位數字，末四碼是 %@。"
+          }
+        }
+      }
+    },
+    "卡号旁边找不到固定的字，换一段试试" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No fixed text next to the card number. Try another one."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "卡号旁边找不到固定的字，换一段试试"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "卡號旁邊找不到固定的文字，換一段試試"
           }
         }
       }
@@ -7849,6 +7949,28 @@
         }
       }
     },
+    "对方旁边找不到固定的字，换一段试试" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No fixed text next to the counterparty. Try another one."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "对方旁边找不到固定的字，换一段试试"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "對象旁邊找不到固定的文字，換一段試試"
+          }
+        }
+      }
+    },
     "导入" : {
       "localizations" : {
         "en" : {
@@ -8583,6 +8705,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "已收到過銀行通知"
+          }
+        }
+      }
+    },
+    "已放入待处理" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sent to To Review"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已放入待处理"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已放入待處理"
           }
         }
       }
@@ -9865,6 +10009,28 @@
         }
       }
     },
+    "截图模板" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Screenshot Template"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "截图模板"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "截圖範本"
+          }
+        }
+      }
+    },
     "截图没有认全，已放入待处理" : {
       "localizations" : {
         "en" : {
@@ -10543,6 +10709,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "以%@扣（還沒有匯率）"
+          }
+        }
+      }
+    },
+    "按截图上的卡号" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "By Card Number on Screenshot"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "按截图上的卡号"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "依截圖上的卡號"
           }
         }
       }
@@ -12011,6 +12199,40 @@
         }
       }
     },
+    "有 %lld 张截图按这个模板重新识别。" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld screenshot was re-read with this template."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld screenshots were re-read with this template."
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "有 %lld 张截图按这个模板重新识别。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "有 %lld 張截圖已依這個範本重新辨識。"
+          }
+        }
+      }
+    },
     "服装" : {
       "localizations" : {
         "en" : {
@@ -13129,6 +13351,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "沒加入 App 的帳戶"
+          }
+        }
+      }
+    },
+    "没认出的截图" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unrecognized Screenshots"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "没认出的截图"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "沒認出的截圖"
           }
         }
       }
@@ -14343,6 +14587,94 @@
         }
       }
     },
+    "点到的内容" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tapped Items"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "点到的内容"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "點到的內容"
+          }
+        }
+      }
+    },
+    "点到的卡号里没有 4 位数字" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The tapped card number has no 4 digits."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "点到的卡号里没有 4 位数字"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "點到的卡號裡沒有 4 位數字"
+          }
+        }
+      }
+    },
+    "点到的对方没有字" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The tapped counterparty has no text."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "点到的对方没有字"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "點到的對象沒有文字"
+          }
+        }
+      }
+    },
+    "点到的金额里没有像 12.00 这样的数" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The tapped amount has no number like 12.00."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "点到的金额里没有像 12.00 这样的数"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "點到的金額裡沒有像 12.00 這樣的數字"
+          }
+        }
+      }
+    },
     "照上一步再建三个，**信息包含** 分别填 **。**、**，**、**】**。" : {
       "localizations" : {
         "en" : {
@@ -14669,6 +15001,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "使用自己的照片"
+          }
+        }
+      }
+    },
+    "用这个模板认不出这张截图，请换一种点法" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This template can’t read the screenshot. Try tapping differently."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "用这个模板认不出这张截图，请换一种点法"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "用這個範本認不出這張截圖，請換個點法"
           }
         }
       }
@@ -15197,6 +15551,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "貼上一則收到的簡訊或郵件"
+          }
+        }
+      }
+    },
+    "粘贴一条通知" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Paste an Alert"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "粘贴一条通知"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "貼上一則通知"
           }
         }
       }
@@ -16631,6 +17007,28 @@
         }
       }
     },
+    "记到" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Record To"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "记到"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "記到"
+          }
+        }
+      }
+    },
     "记录付款截图" : {
       "localizations" : {
         "en" : {
@@ -16917,24 +17315,24 @@
         }
       }
     },
-    "识别微信、支付宝付款页的截图并记账。在本机识别，不联网，截图不保存。" : {
+    "识别微信、支付宝付款页的截图并记账。在本机识别，不联网。认不出的截图先留在 App 里，做成识别模板或删除后清除。" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Reads a WeChat or Alipay payment screenshot and records it. Everything happens on this iPhone, offline, and the screenshot isn’t kept."
+            "value" : "Reads a WeChat or Alipay payment screenshot and records it. Everything happens on this iPhone, offline. Screenshots it can’t read stay in the app until you make a template or delete them."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "识别微信、支付宝付款页的截图并记账。在本机识别，不联网，截图不保存。"
+            "value" : "识别微信、支付宝付款页的截图并记账。在本机识别，不联网。认不出的截图先留在 App 里，做成识别模板或删除后清除。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "辨識微信、支付寶付款頁的截圖並記帳。在本機辨識，不連網，截圖不會儲存。"
+            "value" : "辨識微信、支付寶付款頁的截圖並記帳。在本機辨識，不連網。認不出的截圖會先留在 App 裡，做成辨識範本或刪除後清除。"
           }
         }
       }
@@ -16957,6 +17355,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "辨識範本"
+          }
+        }
+      }
+    },
+    "试读" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preview"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "试读"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "試讀"
           }
         }
       }
@@ -18149,6 +18569,28 @@
         }
       }
     },
+    "还没点金额" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tap the amount first."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "还没点金额"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "還沒點金額"
+          }
+        }
+      }
+    },
     "这一笔" : {
       "localizations" : {
         "en" : {
@@ -18193,6 +18635,28 @@
         }
       }
     },
+    "这个账户" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This Account"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这个账户"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "這個帳戶"
+          }
+        }
+      }
+    },
     "这张卡" : {
       "localizations" : {
         "en" : {
@@ -18233,6 +18697,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "這張卡沒有待處理的帳單"
+          }
+        }
+      }
+    },
+    "这张截图上固定的字太少，做成模板会认错别的截图" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This screenshot has too little fixed text. A template would match other screenshots by mistake."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这张截图上固定的字太少，做成模板会认错别的截图"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "這張截圖上固定的文字太少，做成範本會認錯別的截圖"
           }
         }
       }
@@ -19073,6 +19559,28 @@
         }
       }
     },
+    "金额 %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Amount %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "金额 %@"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "金額 %@"
+          }
+        }
+      }
+    },
     "金额大小" : {
       "localizations" : {
         "en" : {
@@ -19091,6 +19599,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "金額大小"
+          }
+        }
+      }
+    },
+    "金额旁边找不到固定的字，换一段试试" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No fixed text next to the amount. Try another one."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "金额旁边找不到固定的字，换一段试试"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "金額旁邊找不到固定的文字，換一段試試"
           }
         }
       }

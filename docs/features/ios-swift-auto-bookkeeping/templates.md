@@ -17,4 +17,8 @@
    识别时最先看「不记」的写法（`MessageTemplates.skips`），认得出就整条不记（`skipped`）。不加新的列：旧版本读到它也认不出任何通知。
    识别模板列表里写「不记」，不能编辑，往左滑删除。不在设置里单独放屏蔽列表。
 
-代码：`BKModel/Templates.swift`、`BKBackend/Parsing/MessageTemplates.swift`、`IngestEngine.run` / `reapply`、`TemplateDAO`、`LedgerBackend.skipRecord`。
+8. **截图模板**（[ADR 0028](../../decisions/0028-ios-swift-screenshot-templates.md)）：截图上的字每次识别都不太一样，按原文对很难对上，所以截图另有一种模板：
+   打开留着的截图（「待处理 › 没认出的截图」，或者「识别模板」右上角「+ › 从相册选截图」），点框选金额、卡号、对方，选类型和记到哪个账户。
+   模板存页面上固定的字和每样东西挨着哪段字，不存截图和数字。列表里在「截图」那一块，不能编辑，往左滑删除。
+
+代码：`BKModel/Templates.swift`、`BKModel/ScreenTemplates.swift`、`BKBackend/Parsing/ScreenTemplates.swift`、`UI/Pending/ScreenTemplateEditorView.swift`、`App/ScreenshotInbox.swift`、`BKBackend/Parsing/MessageTemplates.swift`、`IngestEngine.run` / `reapply`、`TemplateDAO`、`LedgerBackend.skipRecord`。

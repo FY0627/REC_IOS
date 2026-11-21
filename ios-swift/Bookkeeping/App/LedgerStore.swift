@@ -40,6 +40,8 @@ final class LedgerStore {
     private(set) var pendingCount = 0
     /// 待分类：已入账的支出、收入还没有分类（没确认对方的转账也在里面）
     private(set) var uncategorizedCount = 0
+    /// 留着的没认出的截图（ADR 0028）
+    private(set) var screenshotCount = 0
     /// 全部分类
     private(set) var categories: [LedgerCategory] = []
     private(set) var categoryTree = CategoryTree([])
@@ -66,6 +68,7 @@ final class LedgerStore {
         do {
             try await open()
             _ = try? await backend?.purgeExpiredRawContent()
+            await purgeScreenshots()
         } catch {
             state = .failed((error as? LocalizedError)?.errorDescription ?? String(describing: error))
         }
@@ -186,6 +189,8 @@ final class LedgerStore {
             if self.automation != au { self.automation = au }
             if pendingCount != p { pendingCount = p }
             if uncategorizedCount != w { uncategorizedCount = w }
+            let shots = await ScreenshotInbox.count()
+            if screenshotCount != shots { screenshotCount = shots }
             if self.categories != c {
                 self.categories = c
                 categoryTree = CategoryTree(c)
@@ -325,6 +330,35 @@ final class LedgerStore {
 
     func deleteTemplate(id: String) async throws {
         try await backend?.deleteTemplate(id: id)
+    }
+
+    // MARK: 截图模板（ADR 0028）
+
+    func screenTemplates() async -> [ScreenTemplate] {
+        (try? await backend?.screenTemplates()) ?? []
+    }
+
+    func deleteScreenTemplate(id: String) async throws {
+        try await backend?.deleteScreenTemplate(id: id)
+    }
+
+    /// 用留着的截图做成模板：保存（还没处理的截图待处理按它重新识别），这张截图没进待处理的再按模板记一遍
+    /// （`record`：从相册选来只做模板的不记），然后删掉这张截图。返回重新识别、记上的张数
+    func saveScreenTemplate(_ template: ScreenTemplate, from entry: ScreenshotInbox.Entry, record: Bool) async throws -> Int {
+        guard let backend else { throw BackendError.notFound }
+        var count = try await backend.saveScreenTemplate(template)
+        if record, entry.ingestID == nil {
+            let result = try await backend.ingestScreenshot(lines: entry.lines, capturedAt: entry.capturedAt ?? entry.savedAt, iconApp: entry.iconApp)
+            count += result.recordedCount + result.mergedCount
+        }
+        await ScreenshotInbox.delete(entry.id)
+        await refresh()
+        return count
+    }
+
+    /// 留着的截图到期清掉：和通知原文同一个保留期限
+    private func purgeScreenshots() async {
+        await ScreenshotInbox.purge(olderThan: await retentionDays())
     }
 
     /// 确认转账的对方：自己的账户（不算收支）或别人
@@ -490,6 +524,7 @@ final class LedgerStore {
             do {
                 let reading = try await ScreenshotReader.read(data)
                 let result = try await backend.ingestScreenshot(lines: reading.lines, capturedAt: reading.capturedAt ?? Date(), iconApp: reading.iconApp)
+                if ScreenshotInbox.shouldKeep(result) { await ScreenshotInbox.save(image: data, reading: reading, ingestID: result.ingestID) }
                 recorded += result.recordedCount
                 merged += result.mergedCount
                 pending += result.pendingCount
@@ -699,6 +734,7 @@ final class LedgerStore {
     func setRetentionDays(_ days: Int) async {
         try? await backend?.setRawRetentionDays(days)
         _ = try? await backend?.purgeExpiredRawContent()
+        await purgeScreenshots()
     }
 
     /// 包括已停用的卡

@@ -1115,6 +1115,47 @@ public enum TemplateDAO {
     }
 }
 
+/// 截图模板（ADR 0028）
+public enum ScreenTemplateDAO {
+    private struct Body: Codable {
+        var anchors: [String]
+        var fields: [ScreenTemplateField]
+    }
+
+    /// 新做的在前：同一张截图几个模板都认得出时，用最新的
+    public static func all(_ db: SQLiteConnection) throws -> [ScreenTemplate] {
+        try db.query(
+            "SELECT id, name, body_json, kind, direction, account_id, created_at FROM screen_templates ORDER BY created_at DESC, id", []
+        ) { row -> ScreenTemplate? in
+            guard let body = try? JSONDecoder().decode(Body.self, from: Data(row.string(2).utf8)),
+                  let kind = TransactionKind(rawValue: row.string(3)),
+                  let direction = FlowDirection(rawValue: row.string(4)) else { return nil }
+            return ScreenTemplate(
+                id: row.string(0), name: row.string(1), anchors: body.anchors, fields: body.fields, kind: kind, direction: direction,
+                accountID: row.optionalString(5), createdAt: row.date(6)
+            )
+        }
+        .compactMap { $0 }
+    }
+
+    public static func save(_ db: SQLiteConnection, _ t: ScreenTemplate) throws {
+        let json = String(decoding: try JSONEncoder().encode(Body(anchors: t.anchors, fields: t.fields)), as: UTF8.self)
+        try db.run(
+            """
+            INSERT INTO screen_templates (id, name, body_json, kind, direction, account_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET name = excluded.name, body_json = excluded.body_json, kind = excluded.kind,
+              direction = excluded.direction, account_id = excluded.account_id
+            """,
+            [t.id, t.name, json, t.kind.rawValue, t.direction.rawValue, t.accountID, t.createdAt]
+        )
+    }
+
+    @discardableResult
+    public static func delete(_ db: SQLiteConnection, id: String) throws -> Bool {
+        try db.run("DELETE FROM screen_templates WHERE id = ?", [id]) > 0
+    }
+}
+
 /// 每天的完整汇率表（快捷指令导入的数据源原样保存，不删减币种）。
 public enum RateDAO {
     /// 保存一天的汇率。这一天已经有同样新或更新的下载时不覆盖，返回 false

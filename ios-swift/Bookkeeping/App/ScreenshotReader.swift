@@ -4,7 +4,7 @@ import Vision
 import BKBackend
 import BKModel
 
-/// 付款页截图的文字识别（ADR 0021）：系统 Vision，在手机上做，不联网。图片识别完就丢，不保存。
+/// 付款页截图的文字识别（ADR 0021）：系统 Vision，在手机上做，不联网。这里不保存图片；认不出的由 `ScreenshotInbox` 留着（ADR 0028）。
 /// 识别在自己的串行队列上做（低端机上一张要大半秒），不占主线程；几张一起交过来时一张一张来，不同时占内存
 enum ScreenshotReader {
     struct Reading: Sendable {

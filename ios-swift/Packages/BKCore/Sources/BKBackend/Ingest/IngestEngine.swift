@@ -105,11 +105,18 @@ struct IngestEngine {
         // 用户在本机做的模板优先于通用读法：认得出时只用它认出的这一笔（验证码除外）。
         // 用户点过「不记」的写法最先看：认得出就整条不记
         var templateHit = false
+        // 截图还看用户点截图做的模板（ADR 0028）：按排好的行和段认，记到模板选的账户
+        var templateAccountID: String?
         let templates = parsed.classification != .verificationCode && parsed.classification != .empty ? try TemplateDAO.all(db) : []
         if MessageTemplates.skips(templates, in: parsed.cleanedText) {
             parsed.classification = .skipped
             parsed.events = []
             parsed.balances = []
+        } else if screenshot != nil, let found = ScreenTemplates.firstHit(try ScreenTemplateDAO.all(db), text: request.text) {
+            parsed.events = [ParsedEvent(draft: ScreenTemplates.draft(found.hit, template: found.template, parsed: parsed), issue: nil)]
+            parsed.classification = .transaction
+            templateHit = true
+            templateAccountID = found.template.accountID
         } else if let found = MessageTemplates.firstHit(templates, in: parsed.cleanedText) {
             parsed.events = [ParsedEvent(draft: MessageTemplates.draft(found.hit, template: found.template, parsed: parsed, partIndex: 0), issue: nil)]
             parsed.classification = .transaction
@@ -172,6 +179,9 @@ struct IngestEngine {
         var items: [IngestItem] = []
         // 银行 App 的换汇页：两笔都记到同时有这两个币种的账户，记完配成一对（同卡换汇）
         let exchangeRoute = screenshot?.exchange == true && !templateHit ? Self.exchangeRoute(parsed.events.map(\.draft), accounts: accounts) : nil
+        // 截图模板选了记到哪个账户（账户删了、停用了就照常找）
+        let templateRoute = templateAccountID.flatMap { id in accounts.first { $0.id == id && !$0.archived } }
+            .map { ScreenshotRoute(account: $0, assumed: false, pending: nil, candidates: []) }
         var exchangeIDs: [String] = []
         if classification == .transaction {
             for event in parsed.events {
@@ -183,7 +193,7 @@ struct IngestEngine {
                     draft.cardTail = other
                 }
                 let outcome: CommitOutcome
-                let route = exchangeRoute ?? screenshot.map { screenshotRoute(draft, reading: $0, accounts: accounts) }
+                let route = templateRoute ?? exchangeRoute ?? screenshot.map { screenshotRoute(draft, reading: $0, accounts: accounts) }
                 if let issue = event.issue {
                     let candidates = route?.candidates ?? candidateIDs(for: draft, request: request, accounts: accounts)
                     outcome = .pending(issue, candidates: candidates, duplicateOf: nil)
@@ -418,6 +428,38 @@ struct IngestEngine {
                 draft, meta: IngestMeta(ingestID: ingestID, source: meta.source, receivedAt: meta.receivedAt, processedAt: meta.processedAt),
                 boundAccountID: nil, accounts: accounts, forcedAccount: nil, duplicateCheck: true
             )
+            if case let .pending(reason, candidates, duplicateOf) = outcome {
+                try PendingDAO.insert(db, id: newID(), ingestID: ingestID, partIndex: draft.partIndex, reason: reason, draft: draft, candidates: candidates, duplicateOf: duplicateOf, now: now)
+            }
+            count += 1
+        }
+        return count
+    }
+
+    /// 刚保存的截图模板用于还没处理的截图待处理项，和 `reapply(_: MessageTemplate)` 一样。返回重新识别的截图张数
+    func reapply(_ template: ScreenTemplate) throws -> Int {
+        let accounts = try AccountDAO.all(db)
+        let forced = template.accountID.flatMap { id in accounts.first { $0.id == id && !$0.archived } }
+        var count = 0
+        for (ingestID, items) in Dictionary(grouping: try PendingDAO.open(db), by: \.ingestID) {
+            guard let first = items.first, first.source == .screenshot, let raw = first.rawText,
+                  try !PendingDAO.ingestHasRecords(db, ingestID: ingestID), let meta = try IngestDAO.meta(db, id: ingestID),
+                  let hit = ScreenTemplates.match(template, text: raw) else { continue }
+            let reading = ScreenshotParser.parse(raw, referenceDate: meta.receivedAt ?? meta.processedAt, calendar: calendar, sender: meta.sender)
+            var draft = ScreenTemplates.draft(hit, template: template, parsed: reading.message)
+            draft.partIndex = try PendingDAO.nextPartIndex(db, ingestID: ingestID)
+            for item in items { _ = try PendingDAO.resolve(db, id: item.id, status: .ignored, at: now) }
+            let route = forced.map { ScreenshotRoute(account: $0, assumed: false, pending: nil, candidates: []) }
+                ?? screenshotRoute(draft, reading: reading, accounts: accounts)
+            let outcome: CommitOutcome
+            if let reason = route.pending {
+                outcome = .pending(reason, candidates: route.candidates, duplicateOf: nil)
+            } else {
+                outcome = try commit(
+                    draft, meta: IngestMeta(ingestID: ingestID, source: meta.source, receivedAt: meta.receivedAt, processedAt: meta.processedAt),
+                    boundAccountID: nil, accounts: accounts, forcedAccount: route.account, duplicateCheck: true, assumedAccount: route.assumed
+                )
+            }
             if case let .pending(reason, candidates, duplicateOf) = outcome {
                 try PendingDAO.insert(db, id: newID(), ingestID: ingestID, partIndex: draft.partIndex, reason: reason, draft: draft, candidates: candidates, duplicateOf: duplicateOf, now: now)
             }
@@ -749,9 +791,14 @@ struct IngestEngine {
     }
 
     /// 截图这笔写的另一边的卡号尾号（重新读一遍截图的原文）
+    /// 截图模板认出的：选了记到哪个账户时，截图上的卡号是另一边
     private func screenshotPeerTails(of record: LedgerRecord) throws -> [String] {
-        try RecordDAO.evidence(db, recordID: record.id).compactMap { evidence -> String? in
+        let screenTemplates = try ScreenTemplateDAO.all(db)
+        return try RecordDAO.evidence(db, recordID: record.id).compactMap { evidence -> String? in
             guard evidence.source == .screenshot, let raw = evidence.rawText else { return nil }
+            if let found = ScreenTemplates.firstHit(screenTemplates, text: raw) {
+                return found.template.accountID == nil ? nil : found.hit.cardTail
+            }
             let reading = ScreenshotParser.parse(raw, referenceDate: evidence.receivedAt ?? evidence.processedAt, calendar: calendar, sender: evidence.sender)
             return reading.message.events.first { $0.draft.partIndex == record.partIndex }?.draft.counterpartyTail
         }

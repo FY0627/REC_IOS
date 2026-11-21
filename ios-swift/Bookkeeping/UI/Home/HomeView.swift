@@ -141,7 +141,7 @@ struct HomeView: View {
                     if FirstBoxLayout.shared.home != position { FirstBoxLayout.shared.home = position }
                 })
         }
-        if store.pendingCount + store.uncategorizedCount > 0 {
+        if store.pendingCount + store.uncategorizedCount + store.screenshotCount > 0 {
             Section { pendingBanner }
         }
         if store.homeRows.isEmpty {
@@ -287,6 +287,7 @@ struct HomeView: View {
         var parts: [String] = []
         if store.uncategorizedCount > 0 { parts.append(L("\(store.uncategorizedCount) 笔待分类")) }
         if store.pendingCount > 0 { parts.append(L("\(store.pendingCount) 条通知待处理")) }
+        if store.screenshotCount > 0 { parts.append(L("\(store.screenshotCount) 张截图没认出")) }
         return parts.joined(separator: L("，"))
     }
 

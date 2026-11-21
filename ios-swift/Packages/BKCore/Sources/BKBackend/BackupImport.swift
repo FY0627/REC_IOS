@@ -66,7 +66,7 @@ enum BackupImport {
     /// 有外键的排在它引用的表后面：按这个顺序加，倒过来删
     static let tables = [
         "accounts", "opening_balances", "ingests", "records", "record_evidence", "balance_observations", "pending_items",
-        "categories", "merchant_categories", "message_templates", "exchange_rate_days", "exchange_rates", "settings",
+        "categories", "merchant_categories", "message_templates", "screen_templates", "exchange_rate_days", "exchange_rates", "settings",
     ]
 
     /// 从导出的 zip 里取出数据库副本，写到临时文件，打开并升级表结构
@@ -240,6 +240,10 @@ enum BackupImport {
             return true
         }
         try copy(source, "message_templates", into: db) { _ in true }
+        try copy(source, "screen_templates", into: db) { row in
+            row["account_id"] = remap(row["account_id"], accountMap)
+            return true
+        }
         // 某天的汇率：这里没有这一天才加，同一天的不拼两份
         let localDays = Set(try RateDAO.days(db))
         try copy(source, "exchange_rate_days", into: db) { row in !localDays.contains(row.text("day")) }

@@ -20,6 +20,11 @@ struct PendingView: View {
     @State private var errorText: String?
     @State private var templateSource: PendingItem?
     @State private var categorizing: CategorizeTarget?
+    /// 留着的截图（ADR 0028）
+    @State private var inbox: [ScreenshotInbox.Entry] = []
+    @State private var screenSource: ScreenshotInbox.Entry?
+    @State private var deleting: ScreenshotInbox.Entry?
+    @State private var deletingAll = false
 
     var body: some View {
         NavigationStack {
@@ -46,11 +51,35 @@ struct PendingView: View {
                         } ignore: {
                             await run { try await store.ignorePending(id: item.id) }
                         } makeTemplate: {
-                            templateSource = item
+                            // 截图还留着的：在截图上点出金额、卡号
+                            if item.source == .screenshot, let entry = inbox.first(where: { $0.ingestID == item.ingestID }) {
+                                screenSource = entry
+                            } else {
+                                templateSource = item
+                            }
                         }
                     }
                 } header: {
                     Text(account.map { L("\($0.localizedTitle) 的通知") } ?? L("通知待处理"))
+                }
+                if account == nil, !inbox.isEmpty {
+                    Section {
+                        ForEach(inbox) { entry in
+                            InboxRow(entry: entry) {
+                                screenSource = entry
+                            } delete: {
+                                deleting = entry
+                            }
+                        }
+                    } header: {
+                        HStack {
+                            Text("没认出的截图")
+                            Spacer()
+                            Button("全部删除") { deletingAll = true }
+                                .font(.footnote)
+                                .buttonStyle(.borderless)
+                        }
+                    }
                 }
             }
             .navigationTitle(account == nil ? "待处理" : "待处理账单")
@@ -63,6 +92,30 @@ struct PendingView: View {
             }
             .sheet(item: $categorizing, onDismiss: { Task { await reload() } }) { target in
                 CategorizeSheet(target: target)
+            }
+            .sheet(item: $screenSource, onDismiss: { Task { await reload() } }) { entry in
+                ScreenTemplateEditorView(entry: entry)
+            }
+            .confirmationDialog(
+                "删除后不能恢复", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }), titleVisibility: .visible
+            ) {
+                Button("删除", role: .destructive) {
+                    guard let entry = deleting else { return }
+                    Task {
+                        await ScreenshotInbox.delete(entry.id)
+                        await store.refresh()
+                        await reload()
+                    }
+                }
+            }
+            .confirmationDialog("删除后不能恢复", isPresented: $deletingAll, titleVisibility: .visible) {
+                Button("全部删除", role: .destructive) {
+                    Task {
+                        await ScreenshotInbox.deleteAll()
+                        await store.refresh()
+                        await reload()
+                    }
+                }
             }
         }
     }
@@ -92,6 +145,7 @@ struct PendingView: View {
     private func reload() async {
         items = await store.pendingItems()
         waiting = await store.uncategorized()
+        inbox = await ScreenshotInbox.all()
         loaded = true
     }
 
@@ -112,6 +166,43 @@ struct CategorizeTarget: Identifiable, Hashable {
     let suggestions: CategorySuggestions
 
     var id: String { row.id }
+}
+
+/// 留着的一张截图：缩略图、为什么留着、截图的时间，「做成识别模板」「删除」
+private struct InboxRow: View {
+    let entry: ScreenshotInbox.Entry
+    let makeTemplate: () -> Void
+    let delete: () -> Void
+    @State private var thumbnail: UIImage?
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Group {
+                if let thumbnail {
+                    Image(uiImage: thumbnail).resizable().scaledToFill()
+                } else {
+                    Color(.secondarySystemFill)
+                }
+            }
+            .frame(width: 56, height: 100)
+            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 8) {
+                Text(entry.ingestID == nil ? "没有认出付款" : "已放入待处理").font(.subheadline.weight(.semibold))
+                Text(Fmt.dateTime(entry.capturedAt ?? entry.savedAt)).font(.caption).foregroundStyle(.secondary)
+                Button(action: makeTemplate) {
+                    Label("做成识别模板", systemImage: "text.viewfinder")
+                }
+                .buttonStyle(.borderless)
+                Button(role: .destructive, action: delete) {
+                    Label("删除", systemImage: "trash")
+                }
+                .buttonStyle(.borderless)
+            }
+        }
+        .padding(.vertical, 4)
+        .task { thumbnail = await ScreenshotInbox.thumbnail(entry.id, maxPixel: 300) }
+    }
 }
 
 /// 待分类列表里的一行：标题、时间和账户、金额

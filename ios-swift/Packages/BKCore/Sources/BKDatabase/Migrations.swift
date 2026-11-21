@@ -5,7 +5,7 @@
 /// - 每个迁移在一个事务里执行，失败整体回滚，版本号不变；
 /// - 每次修改表结构都要在 `DatabaseTests` 里补迁移测试。
 public enum Migrations {
-    public static let latestVersion = 13
+    public static let latestVersion = 14
 
     static let steps: [(version: Int, sql: String)] = [
         (1, """
@@ -251,6 +251,19 @@ public enum Migrations {
         // 「我的 › 分类」不再能隐藏分类（2026-11-19）：以前隐藏的都显示出来，免得找不回来。之后 `hidden` 用来标记删除了的分类（流水还记在上面）
         (13, """
         UPDATE categories SET hidden = 0 WHERE hidden <> 0;
+        """),
+        // 截图模板（ADR 0028）：页面上固定的字和每样东西的找法，不保存截图和截图上的数字。
+        // 记到的账户单独一列，导入备份时和别的表一样换成这台手机上的账户
+        (14, """
+        CREATE TABLE screen_templates (
+            id TEXT PRIMARY KEY NOT NULL,
+            name TEXT NOT NULL,
+            body_json TEXT NOT NULL,
+            kind TEXT NOT NULL,
+            direction TEXT NOT NULL,
+            account_id TEXT,
+            created_at REAL NOT NULL
+        );
         """),
     ]
 

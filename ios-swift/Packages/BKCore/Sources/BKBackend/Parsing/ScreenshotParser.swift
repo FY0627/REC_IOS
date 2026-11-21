@@ -6,7 +6,13 @@ import BKModel
 public enum ScreenLayout {
     public static func text(_ lines: [ScreenTextLine]) -> String { rows(lines).joined(separator: "\n") }
 
+    /// 一行里各段用两个空格隔开；段里自己的空白缩成一个，截图模板（`ScreenTemplates`）按两个空格分回各段
     public static func rows(_ lines: [ScreenTextLine]) -> [String] {
+        grid(lines).map { row in row.map { segment($0.text) }.joined(separator: "  ") }
+    }
+
+    /// 排好的行，每行里的各段从左到右。截图模板编辑页按它找点到的是第几行第几段
+    public static func grid(_ lines: [ScreenTextLine]) -> [[ScreenTextLine]] {
         let sorted = lines
             .filter { !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
             .sorted { $0.midY < $1.midY }
@@ -22,9 +28,11 @@ public enum ScreenLayout {
             }
             groups.append([line])
         }
-        return groups.map { group in
-            group.sorted { $0.x < $1.x }.map { $0.text.trimmingCharacters(in: .whitespacesAndNewlines) }.joined(separator: "  ")
-        }
+        return groups.map { group in group.sorted { $0.x < $1.x } }
+    }
+
+    static func segment(_ text: String) -> String {
+        text.split(whereSeparator: \.isWhitespace).joined(separator: " ")
     }
 }
 

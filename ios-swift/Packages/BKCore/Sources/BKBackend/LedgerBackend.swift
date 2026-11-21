@@ -1256,6 +1256,34 @@ public final class LedgerBackend: Sendable {
         if !deleted { throw BackendError.notFound }
     }
 
+    // MARK: 截图模板（ADR 0028）
+
+    public func screenTemplates() async throws -> [ScreenTemplate] {
+        try await database.read { try ScreenTemplateDAO.all($0) }
+    }
+
+    /// 保存用户点截图做的模板，并用它重新识别还没处理的截图待处理项。返回重新识别的截图张数
+    public func saveScreenTemplate(_ template: ScreenTemplate) async throws -> Int {
+        guard template.field(.amount) != nil, !template.anchors.isEmpty else { throw BackendError.invalidTemplate }
+        let now = clock()
+        let calendar = calendar
+        let newID = newID
+        return try await database.write { db in
+            try ScreenTemplateDAO.save(db, template)
+            return try IngestEngine(db: db, now: now, calendar: calendar, newID: newID).reapply(template)
+        }
+    }
+
+    public func deleteScreenTemplate(id: String) async throws {
+        let deleted = try await database.write { try ScreenTemplateDAO.delete($0, id: id) }
+        if !deleted { throw BackendError.notFound }
+    }
+
+    /// 这条输入还有没处理的待处理项（截图收着的地方用：做完模板、处理完的不再算在待处理里）
+    public func hasOpenPending(ingestID: String) async throws -> Bool {
+        try await database.read { db in try PendingDAO.open(db).contains { $0.ingestID == ingestID } }
+    }
+
     /// 新添加了账户：因为「没有匹配账户」（认出了银行或钱包的是「没写尾号」）待处理的通知，现在能唯一匹配就入账
     static func rematchOpenPending(_ db: SQLiteConnection, engine: IngestEngine) throws {
         let accounts = try AccountDAO.all(db)
