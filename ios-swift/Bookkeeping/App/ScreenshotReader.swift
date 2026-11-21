@@ -43,14 +43,27 @@ enum ScreenshotReader {
         request.recognitionLanguages = ["zh-Hans", "en-US"]
         request.usesLanguageCorrection = true
         try VNImageRequestHandler(cgImage: image, options: [:]).perform([request])
-        // Vision 的位置原点在左下角，换成左上角
-        let lines = (request.results ?? []).compactMap { observation -> ScreenTextLine? in
-            guard let text = observation.topCandidates(1).first?.string else { return nil }
-            let box = observation.boundingBox
-            return ScreenTextLine(text: text, x: box.minX, y: 1 - box.maxY, width: box.width, height: box.height)
+        // Vision 的位置原点在左下角，换成左上角。旁边的小图标认成了字的，按每个字的框拆成单独一段（`ScreenLayout.splitIcons`）
+        let lines = (request.results ?? []).flatMap { observation -> [ScreenTextLine] in
+            guard let candidate = observation.topCandidates(1).first else { return [] }
+            let line = ScreenTextLine(rect: observation.boundingBox, text: candidate.string)
+            return ScreenLayout.splitIcons(line, glyphs: glyphs(candidate))
         }
         let iconApp = ScreenshotIcon.successTitle(in: lines).flatMap { iconApp(image, around: $0) }
         return Reading(lines: lines, capturedAt: captureDate(source), iconApp: iconApp)
+    }
+
+    /// 一段里每个不是空白的字的框（原点换成左上角）。长的段（多半是整句话，不会是图标）和取不到框的不算，交回空的就不拆
+    private static func glyphs(_ candidate: VNRecognizedText) -> [ScreenTextLine] {
+        let text = candidate.string
+        guard text.count <= 40 else { return [] }
+        var result: [ScreenTextLine] = []
+        for index in text.indices where !text[index].isWhitespace {
+            let range = index..<text.index(after: index)
+            guard let box = try? candidate.boundingBox(for: range)?.boundingBox else { return [] }
+            result.append(ScreenTextLine(rect: box, text: String(text[range])))
+        }
+        return result
     }
 
     /// 只取「支付成功」左边、上面的一小块（几个字高见方），画成 sRGB 再数绿点、蓝点
@@ -109,5 +122,12 @@ enum ScreenshotReader {
             if let date = formatter.date(from: trimmed) { return date }
         }
         return nil
+    }
+}
+
+private extension ScreenTextLine {
+    /// Vision 的框（归一化，原点在左下角）换成原点在左上角
+    init(rect: CGRect, text: String) {
+        self.init(text: text, x: rect.minX, y: 1 - rect.maxY, width: rect.width, height: rect.height)
     }
 }

@@ -34,6 +34,52 @@ public enum ScreenLayout {
     static func segment(_ text: String) -> String {
         text.split(whereSeparator: \.isWhitespace).joined(separator: " ")
     }
+
+    /// 小图标和旁边的字认成了一段（「+ ¥0.63 ⓘ」认成「+￥0.630」）：按每个字的框，把开头、结尾隔开一点、
+    /// 明显小一号的一两个字（字母、数字）拆成单独一段，图标就不会粘在金额、标签上。
+    ///
+    /// `glyphs` 是这段里每个不是空白的字的框（和 `line` 一样归一化、原点在左上），按字的顺序；个数对不上时不拆。
+    /// Vision 精确模式常常只给整个词的框（几个字的框一样），这时字和字之间没有空隙，也不拆：和以前一样
+    public static func splitIcons(_ line: ScreenTextLine, glyphs: [ScreenTextLine]) -> [ScreenTextLine] {
+        let characters = Array(line.text)
+        let visible = characters.indices.filter { !characters[$0].isWhitespace }
+        guard glyphs.count == visible.count, glyphs.count >= 3 else { return [line] }
+
+        /// 前 `count` 个字和后面的字能不能分开：小的那边最多两个字、都是字母或数字，高度不到大的那边的 55%，中间隔开至少 0.15 个字高
+        func separable(at count: Int) -> Bool {
+            let head = glyphs[..<count], tail = glyphs[count...]
+            let small = head.count <= tail.count ? head : tail
+            guard small.count <= 2,
+                  small.indices.allSatisfy({ characters[visible[$0]].isLetter || characters[visible[$0]].isNumber }) else { return false }
+            let headHeight = head.map(\.height).max() ?? 0, tailHeight = tail.map(\.height).max() ?? 0
+            let big = max(headHeight, tailHeight), smallHeight = min(headHeight, tailHeight)
+            let before = glyphs[count - 1], after = glyphs[count]
+            let gap = after.x - (before.x + before.width)
+            return big > 0 && smallHeight < big * 0.55 && gap > big * 0.15
+        }
+
+        var cuts: [Int] = []
+        for count in [1, 2] where separable(at: count) {
+            cuts.append(count)
+            break
+        }
+        for count in [glyphs.count - 1, glyphs.count - 2] where count > (cuts.last ?? 0) && separable(at: count) {
+            cuts.append(count)
+            break
+        }
+        guard !cuts.isEmpty else { return [line] }
+
+        var parts: [ScreenTextLine] = []
+        for (start, end) in zip([0] + cuts, cuts + [glyphs.count]) where start < end {
+            let boxes = glyphs[start..<end]
+            let from = visible[start], to = visible[end - 1]
+            let text = String(characters[from...to])
+            let minX = boxes.map(\.x).min()!, minY = boxes.map(\.y).min()!
+            let maxX = boxes.map { $0.x + $0.width }.max()!, maxY = boxes.map { $0.y + $0.height }.max()!
+            parts.append(ScreenTextLine(text: text, x: minX, y: minY, width: maxX - minX, height: maxY - minY))
+        }
+        return parts
+    }
 }
 
 /// 截图读出来的结果：交给入账的部分和 `MessageParser` 的一样，另外记下页面写没写用什么付的。
