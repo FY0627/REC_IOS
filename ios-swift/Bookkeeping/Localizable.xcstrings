@@ -3821,28 +3821,6 @@
         }
       }
     },
-    "其中退款" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Refunds"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "其中退款"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "其中退款"
-          }
-        }
-      }
-    },
     "其他" : {
       "localizations" : {
         "en" : {
@@ -18301,28 +18279,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "轉帳的另一邊"
-          }
-        }
-      }
-    },
-    "转帐（不算收支）" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Transfers (Not Counted)"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "转帐（不算收支）"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "轉帳（不算收支）"
           }
         }
       }

@@ -222,12 +222,6 @@ struct StatsView: View {
             ConvertedTotalsView(total: MonthStats.ConvertedTotals(
                 currency: t.currency, expenseMinor: t.netExpenseMinor, incomeMinor: t.incomeMinor, unconverted: []
             ))
-            if t.refundMinor > 0 {
-                LabeledContent("其中退款", value: Fmt.money(t.refundMinor, t.currency))
-            }
-            if t.transferMinor > 0 {
-                LabeledContent("转帐（不算收支）", value: Fmt.money(t.transferMinor, t.currency))
-            }
         } header: {
             Text("\(period.title) · \(t.currency.localizedName)")
         }
