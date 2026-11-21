@@ -41,7 +41,30 @@ struct ScreenTemplateEditorView: View {
     var body: some View {
         NavigationStack {
             Form {
+                // 和通知模板一样像写邮件：名称、类型、记到排在上面，下面是截图，空着的地方直接点上去填、选
                 Section {
+                    MailRow("名称") {
+                        TextField("模板名称", text: $name)
+                    }
+                    MailRow("类型") {
+                        Picker("类型", selection: TemplateEntryChoice.binding(type: $type, refund: $refund, transferDirection: $transferDirection)) {
+                            ForEach(TemplateEntryChoice.allCases, id: \.self) { Text($0.title).tag($0) }
+                        }
+                        .pickerStyle(.menu)
+                        .labelsHidden()
+                        Spacer(minLength: 0)
+                    }
+                    MailRow("记到") {
+                        Picker("记到", selection: $accountID) {
+                            Text(picks[.cardTail] == nil ? L("自动") : L("按截图上的卡号")).tag(String?.none)
+                            ForEach(accounts) { account in
+                                Text(account.localizedTitle).tag(Optional(account.id))
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .labelsHidden()
+                        Spacer(minLength: 0)
+                    }
                     if let image {
                         ScreenshotBoxes(image: image, grid: grid, picks: picks) { choosing = $0 }
                             .listRowInsets(EdgeInsets())
@@ -54,32 +77,6 @@ struct ScreenTemplateEditorView: View {
                     pickRow(.amount)
                     pickRow(.cardTail)
                     pickRow(.counterparty)
-                }
-
-                Section {
-                    Picker("类型", selection: $type) {
-                        ForEach(EntryType.allCases, id: \.self) { Text($0.displayName.loc).tag($0) }
-                    }
-                    .pickerStyle(.segmented)
-                    if type == .expense {
-                        Toggle("退款（从支出里减掉）", isOn: $refund)
-                    }
-                    if type == .transfer {
-                        Picker("这个账户", selection: $transferDirection) {
-                            Text("转出").tag(FlowDirection.outflow)
-                            Text("转入").tag(FlowDirection.inflow)
-                        }
-                    }
-                    Picker("记到", selection: $accountID) {
-                        Text(picks[.cardTail] == nil ? L("自动") : L("按截图上的卡号")).tag(String?.none)
-                        ForEach(accounts) { account in
-                            Text(account.localizedTitle).tag(Optional(account.id))
-                        }
-                    }
-                }
-
-                Section {
-                    TextField("模板名称", text: $name)
                 }
 
                 if let hit = preview {

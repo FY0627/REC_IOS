@@ -56,45 +56,8 @@ struct TemplateEditorView: View {
         case amount, cardTail, counterparty
     }
 
-    /// 类型一行的选项：支出（可以是退款）、收入、转帐（这张卡转出、转入）合在一个菜单里
-    private enum EntryChoice: CaseIterable, Hashable {
-        case expense, refund, income, transferOut, transferIn
-
-        var title: LocalizedStringKey {
-            switch self {
-            case .expense: "支出"
-            case .refund: "退款（从支出里减掉）"
-            case .income: "收入"
-            case .transferOut: "转帐 · 这张卡转出"
-            case .transferIn: "转帐 · 这张卡转入"
-            }
-        }
-    }
-
-    private var entryChoice: Binding<EntryChoice> {
-        Binding {
-            switch type {
-            case .expense: refund ? .refund : .expense
-            case .income: .income
-            case .transfer: transferDirection == .outflow ? .transferOut : .transferIn
-            }
-        } set: { choice in
-            switch choice {
-            case .expense: (type, refund) = (.expense, false)
-            case .refund: (type, refund) = (.expense, true)
-            case .income: (type, refund) = (.income, false)
-            case .transferOut: (type, transferDirection) = (.transfer, .outflow)
-            case .transferIn: (type, transferDirection) = (.transfer, .inflow)
-            }
-        }
-    }
-
-    /// 邮件那样的一行：左边灰色的名字，右边直接填
-    private func mailRow<Content: View>(_ title: LocalizedStringKey, @ViewBuilder content: () -> Content) -> some View {
-        HStack(spacing: 12) {
-            Text(title).foregroundStyle(.secondary).frame(minWidth: 44, alignment: .leading)
-            content()
-        }
+    private var entryChoice: Binding<TemplateEntryChoice> {
+        TemplateEntryChoice.binding(type: $type, refund: $refund, transferDirection: $transferDirection)
     }
 
     private var existing: MessageTemplate? {
@@ -115,12 +78,12 @@ struct TemplateEditorView: View {
             Form {
                 // 像写邮件：名称、类型、原文排在一张卡片上，空着的地方直接点上去填、选
                 Section {
-                    mailRow("名称") {
+                    MailRow("名称") {
                         TextField("模板名称", text: $name)
                     }
-                    mailRow("类型") {
+                    MailRow("类型") {
                         Picker("类型", selection: entryChoice) {
-                            ForEach(EntryChoice.allCases, id: \.self) { Text($0.title).tag($0) }
+                            ForEach(TemplateEntryChoice.allCases, id: \.self) { Text($0.title).tag($0) }
                         }
                         .pickerStyle(.menu)
                         .labelsHidden()
@@ -374,6 +337,58 @@ struct TemplateEditorView: View {
         case .purchase, .transferOut, .interestCharge, .fee, .withdrawal: .outflow
         case .income, .salary, .transferIn, .refund, .deposit, .interestIncome, .reversal: .inflow
         case .repayment, .other: nil
+        }
+    }
+}
+
+/// 识别模板编辑页（通知、截图）类型那一行的选项：支出（可以是退款）、收入、转帐（这张卡转出、转入）合在一个菜单里
+enum TemplateEntryChoice: CaseIterable, Hashable {
+    case expense, refund, income, transferOut, transferIn
+
+    var title: LocalizedStringKey {
+        switch self {
+        case .expense: "支出"
+        case .refund: "退款（从支出里减掉）"
+        case .income: "收入"
+        case .transferOut: "转帐 · 这张卡转出"
+        case .transferIn: "转帐 · 这张卡转入"
+        }
+    }
+
+    /// 菜单选的和编辑页的类型、退款、转帐方向互相换算
+    static func binding(type: Binding<EntryType>, refund: Binding<Bool>, transferDirection: Binding<FlowDirection>) -> Binding<TemplateEntryChoice> {
+        Binding {
+            switch type.wrappedValue {
+            case .expense: refund.wrappedValue ? .refund : .expense
+            case .income: .income
+            case .transfer: transferDirection.wrappedValue == .outflow ? .transferOut : .transferIn
+            }
+        } set: { choice in
+            switch choice {
+            case .expense: (type.wrappedValue, refund.wrappedValue) = (.expense, false)
+            case .refund: (type.wrappedValue, refund.wrappedValue) = (.expense, true)
+            case .income: (type.wrappedValue, refund.wrappedValue) = (.income, false)
+            case .transferOut: (type.wrappedValue, transferDirection.wrappedValue) = (.transfer, .outflow)
+            case .transferIn: (type.wrappedValue, transferDirection.wrappedValue) = (.transfer, .inflow)
+            }
+        }
+    }
+}
+
+/// 识别模板编辑页像写邮件的一行：左边灰色的名字，右边直接填、选
+struct MailRow<Content: View>: View {
+    let title: LocalizedStringKey
+    let content: Content
+
+    init(_ title: LocalizedStringKey, @ViewBuilder content: () -> Content) {
+        self.title = title
+        self.content = content()
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Text(title).foregroundStyle(.secondary).frame(minWidth: 44, alignment: .leading)
+            content
         }
     }
 }
