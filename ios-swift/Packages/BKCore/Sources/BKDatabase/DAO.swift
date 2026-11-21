@@ -1088,11 +1088,16 @@ public enum BalanceDAO {
 public enum TemplateDAO {
     /// 新做的模板在前：同一条通知能被多个模板认出时，用最新的
     public static func all(_ db: SQLiteConnection) throws -> [MessageTemplate] {
-        try db.query("SELECT id, name, pieces_json, kind, direction, created_at FROM message_templates ORDER BY created_at DESC, id", []) { row -> MessageTemplate? in
+        try db.query(
+            "SELECT id, name, pieces_json, kind, direction, created_at, account_id FROM message_templates ORDER BY created_at DESC, id", []
+        ) { row -> MessageTemplate? in
             guard let pieces = try? JSONDecoder().decode([TemplatePiece].self, from: Data(row.string(2).utf8)),
                   let kind = TransactionKind(rawValue: row.string(3)),
                   let direction = FlowDirection(rawValue: row.string(4)) else { return nil }
-            return MessageTemplate(id: row.string(0), name: row.string(1), pieces: pieces, kind: kind, direction: direction, createdAt: row.date(5))
+            return MessageTemplate(
+                id: row.string(0), name: row.string(1), pieces: pieces, kind: kind, direction: direction, createdAt: row.date(5),
+                accountID: row.optionalString(6)
+            )
         }
         .compactMap { $0 }
     }
@@ -1102,10 +1107,11 @@ public enum TemplateDAO {
         let json = String(decoding: try JSONEncoder().encode(t.pieces), as: UTF8.self)
         try db.run(
             """
-            INSERT INTO message_templates (id, name, pieces_json, kind, direction, created_at) VALUES (?, ?, ?, ?, ?, ?)
-            ON CONFLICT(id) DO UPDATE SET name = excluded.name, pieces_json = excluded.pieces_json, kind = excluded.kind, direction = excluded.direction
+            INSERT INTO message_templates (id, name, pieces_json, kind, direction, created_at, account_id) VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET name = excluded.name, pieces_json = excluded.pieces_json, kind = excluded.kind, direction = excluded.direction,
+              account_id = excluded.account_id
             """,
-            [t.id, t.name, json, t.kind.rawValue, t.direction.rawValue, t.createdAt]
+            [t.id, t.name, json, t.kind.rawValue, t.direction.rawValue, t.createdAt, t.accountID]
         )
     }
 

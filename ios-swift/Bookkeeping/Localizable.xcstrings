@@ -10757,6 +10757,28 @@
         }
       }
     },
+    "按通知里的尾号" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "By Card Number in Message"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "按通知里的尾号"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "依通知裡的末四碼"
+          }
+        }
+      }
+    },
     "换一个文件" : {
       "localizations" : {
         "en" : {

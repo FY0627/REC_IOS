@@ -402,6 +402,27 @@ final class DatabaseTests: XCTestCase {
         XCTAssertNil(try db.readSync { try AccountDAO.find($0, id: "x") })
     }
 
+    func testMigrationFromVersion14AddsTemplateAccount() throws {
+        let path = tempPath()
+        let created = Date(timeIntervalSince1970: 1_790_000_000)
+        do {
+            let old = try SQLiteConnection(path: path)
+            for step in Migrations.steps where step.version <= 14 { try old.execute(step.sql) }
+            try old.setUserVersion(14)
+            try old.run(
+                "INSERT INTO message_templates (id, name, pieces_json, kind, direction, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+                ["t1", "示例", #"[{"amount":{}}]"#, "purchase", "outflow", created]
+            )
+        }
+        let db = try Database(path: path)
+        XCTAssertEqual(try db.readSync { $0.userVersion }, Migrations.latestVersion)
+        var template = try XCTUnwrap(try db.readSync { try TemplateDAO.all($0) }.first)
+        XCTAssertNil(template.accountID, "以前做的模板照常找账户")
+        template.accountID = "a1"
+        try db.writeSync { try TemplateDAO.save($0, template) }
+        XCTAssertEqual(try db.readSync { try TemplateDAO.all($0) }.first?.accountID, "a1")
+    }
+
     func testWallClockCodecRoundTrip() {
         let clock = WallClock(year: 2026, month: 10, day: 4, hour: 9, minute: 5, second: nil)
         XCTAssertEqual(WallClockCodec.encode(clock), "2026-10-04T09:05")

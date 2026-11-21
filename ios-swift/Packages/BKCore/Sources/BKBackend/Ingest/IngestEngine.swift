@@ -105,7 +105,7 @@ struct IngestEngine {
         // 用户在本机做的模板优先于通用读法：认得出时只用它认出的这一笔（验证码除外）。
         // 用户点过「不记」的写法最先看：认得出就整条不记
         var templateHit = false
-        // 截图还看用户点截图做的模板（ADR 0028）：按排好的行和段认，记到模板选的账户
+        // 截图还看用户点截图做的模板（ADR 0028）：按排好的行和段认。截图模板、通知模板都记到模板选的账户
         var templateAccountID: String?
         let templates = parsed.classification != .verificationCode && parsed.classification != .empty ? try TemplateDAO.all(db) : []
         if MessageTemplates.skips(templates, in: parsed.cleanedText) {
@@ -121,6 +121,7 @@ struct IngestEngine {
             parsed.events = [ParsedEvent(draft: MessageTemplates.draft(found.hit, template: found.template, parsed: parsed, partIndex: 0), issue: nil)]
             parsed.classification = .transaction
             templateHit = true
+            templateAccountID = found.template.accountID
         }
         let accounts = try AccountDAO.all(db)
         // 固定写法认不出尾号时，在正文里找已添加的卡的尾号；再找卡片信息里填的账号、完整卡号
@@ -179,14 +180,14 @@ struct IngestEngine {
         var items: [IngestItem] = []
         // 银行 App 的换汇页：两笔都记到同时有这两个币种的账户，记完配成一对（同卡换汇）
         let exchangeRoute = screenshot?.exchange == true && !templateHit ? Self.exchangeRoute(parsed.events.map(\.draft), accounts: accounts) : nil
-        // 截图模板选了记到哪个账户（账户删了、停用了就照常找）
+        // 模板选了记到哪个账户（账户删了、停用了就照常找）
         let templateRoute = templateAccountID.flatMap { id in accounts.first { $0.id == id && !$0.archived } }
             .map { ScreenshotRoute(account: $0, assumed: false, pending: nil, candidates: []) }
         var exchangeIDs: [String] = []
         if classification == .transaction {
             for event in parsed.events {
                 var draft = event.draft
-                if draft.cardTail == nil { draft.cardTail = fallbackTail }
+                if draft.cardTail == nil, templateRoute == nil { draft.cardTail = fallbackTail }
                 // 同时写了账号和卡号（「Account XX01 Card XX02」），用户加的可能是其中任何一个
                 if let tail = draft.cardTail, !ownCard.contains(where: { $0.matches(tail: tail) }),
                    let other = parsed.cardTails.first(where: { tail in ownCard.contains { $0.matches(tail: tail) } }) {
@@ -410,6 +411,7 @@ struct IngestEngine {
     /// 这条通知原来的待处理项关闭。已经有流水入账的通知不动，避免重复记账。返回重新识别的通知条数。
     func reapply(_ template: MessageTemplate) throws -> Int {
         let accounts = try AccountDAO.all(db)
+        let forced = template.accountID.flatMap { id in accounts.first { $0.id == id && !$0.archived } }
         var count = 0
         for (ingestID, items) in Dictionary(grouping: try PendingDAO.open(db), by: \.ingestID) {
             guard let first = items.first, let raw = first.rawText, try !PendingDAO.ingestHasRecords(db, ingestID: ingestID),
@@ -420,13 +422,13 @@ struct IngestEngine {
             ))
             guard let hit = MessageTemplates.match(template, in: parsed.cleanedText) else { continue }
             var draft = MessageTemplates.draft(hit, template: template, parsed: parsed, partIndex: try PendingDAO.nextPartIndex(db, ingestID: ingestID))
-            if draft.cardTail == nil, draft.walletHint == nil {
+            if draft.cardTail == nil, draft.walletHint == nil, forced == nil {
                 draft.cardTail = Self.knownTail(in: parsed.cleanedText, accounts: accounts) ?? Self.identifierTail(in: parsed.cleanedText, accounts: accounts)
             }
             for item in items { _ = try PendingDAO.resolve(db, id: item.id, status: .ignored, at: now) }
             let outcome = try commit(
                 draft, meta: IngestMeta(ingestID: ingestID, source: meta.source, receivedAt: meta.receivedAt, processedAt: meta.processedAt),
-                boundAccountID: nil, accounts: accounts, forcedAccount: nil, duplicateCheck: true
+                boundAccountID: nil, accounts: accounts, forcedAccount: forced, duplicateCheck: true
             )
             if case let .pending(reason, candidates, duplicateOf) = outcome {
                 try PendingDAO.insert(db, id: newID(), ingestID: ingestID, partIndex: draft.partIndex, reason: reason, draft: draft, candidates: candidates, duplicateOf: duplicateOf, now: now)

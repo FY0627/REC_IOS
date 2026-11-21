@@ -11,14 +11,19 @@ public struct MessageTemplate: Identifiable, Hashable, Sendable, Codable {
     public var kind: TransactionKind
     public var direction: FlowDirection
     public var createdAt: Date
+    /// 记到这个账户。nil 时按通知里的尾号、银行找；不是 nil 时通知里圈的尾号是转帐的另一边（和截图模板一样）
+    public var accountID: String?
 
-    public init(id: String, name: String, pieces: [TemplatePiece], kind: TransactionKind, direction: FlowDirection, createdAt: Date) {
+    public init(
+        id: String, name: String, pieces: [TemplatePiece], kind: TransactionKind, direction: FlowDirection, createdAt: Date, accountID: String? = nil
+    ) {
         self.id = id
         self.name = name
         self.pieces = pieces
         self.kind = kind
         self.direction = direction
         self.createdAt = createdAt
+        self.accountID = accountID
     }
 
     /// 给用户看的写法，例如「你已于 # # 将 HKD【金额】转出至"【对方】"」

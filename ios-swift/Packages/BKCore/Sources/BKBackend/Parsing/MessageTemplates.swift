@@ -287,10 +287,13 @@ public enum MessageTemplates {
     }
 
     /// 模板认出的一笔交易：性质和方向由用户做模板时选定，时间和交易参考号用通用读法从正文里找
+    /// 选了记到哪个账户时，通知里圈的尾号是转帐的另一边（和截图模板一样）
     public static func draft(_ hit: Hit, template: MessageTemplate, parsed: ParsedMessage, partIndex: Int) -> EventDraft {
-        EventDraft(
+        let fixed = template.accountID != nil
+        return EventDraft(
             amount: hit.amount, direction: template.direction, kind: template.kind, status: .posted,
-            counterparty: hit.counterparty, cardTail: hit.cardTail, counterpartyTail: nil, transactionTime: parsed.firstTime,
+            counterparty: hit.counterparty, cardTail: fixed ? nil : hit.cardTail, counterpartyTail: fixed ? hit.cardTail : nil,
+            transactionTime: parsed.firstTime,
             bankReference: parsed.onlyReference, balanceAfter: nil, includedFee: nil, isSplitFee: false, partIndex: partIndex,
             bankHint: parsed.bankHint, walletHint: parsed.walletHint, evidenceSnippet: hit.snippet
         )

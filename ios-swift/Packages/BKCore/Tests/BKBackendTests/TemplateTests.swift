@@ -230,6 +230,30 @@ final class TemplateTests: XCTestCase {
         }
     }
 
+    /// 模板选了记到哪个账户：记到它，通知里圈的尾号是转帐的另一边（和截图模板一样）
+    func testTemplateWithAnAccountRecordsThere() async throws {
+        let backend = try makeBackend()
+        let card = try await addAccount(backend)
+        let wallet = try await backend.addAccount(.pocket(name: "示例钱包", type: .wallet, currency: .hkd, paletteID: "ocean", walletID: "alipay"))
+        let sample = cleaned(Self.unknownWording)
+        let pieces = try MessageTemplates.build(
+            sample: sample, amount: range(of: "88.20", in: sample), cardTail: range(of: "5566", in: sample), counterparty: range(of: "陈大文", in: sample)
+        ).get()
+        var t = template(pieces, kind: .transferIn, direction: .inflow)
+        t.accountID = wallet.id
+        _ = try await backend.saveTemplate(t)
+        let saved = try await backend.templates()
+        XCTAssertEqual(saved.first?.accountID, wallet.id)
+
+        let result = try await backend.ingest(IngestRequest(text: "【某某银行】你的账户 5566 有一笔 HKD 12.00 的变动，对方：李小明。", source: .sms))
+        XCTAssertEqual(result.outcome, .recorded, result.summary)
+        let onWallet = try await backend.records(accountID: wallet.id)
+        XCTAssertEqual(onWallet.first?.record.amountMinor, 12_00)
+        XCTAssertEqual(onWallet.first?.record.kind, .transferIn)
+        let onCard = try await backend.records(accountID: card.id)
+        XCTAssertTrue(onCard.isEmpty, "尾号是另一边，不记到这张卡")
+    }
+
     func testTemplateDoesNotOverrideVerificationCode() async throws {
         let backend = try makeBackend()
         try await addAccount(backend)

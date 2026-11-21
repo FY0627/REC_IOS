@@ -40,6 +40,8 @@ struct TemplateEditorView: View {
     @State private var transferDirection: FlowDirection = .outflow
     /// 原来的交易性质（改已有的模板、用通知猜的）
     @State private var originalKind: TransactionKind?
+    /// 记到哪个账户；nil 时按通知里的尾号、银行找
+    @State private var accountID: String?
     @State private var name = ""
     @State private var errorText: String?
     @State private var saving = false
@@ -84,6 +86,18 @@ struct TemplateEditorView: View {
                     MailRow("类型") {
                         Picker("类型", selection: entryChoice) {
                             ForEach(TemplateEntryChoice.allCases, id: \.self) { Text($0.title).tag($0) }
+                        }
+                        .pickerStyle(.menu)
+                        .labelsHidden()
+                        Spacer(minLength: 0)
+                    }
+                    // 和截图模板一样：选了账户就记到它，通知里圈的尾号是转帐的另一边
+                    MailRow("记到") {
+                        Picker("记到", selection: $accountID) {
+                            Text(cardTail == nil ? L("自动") : L("按通知里的尾号")).tag(String?.none)
+                            ForEach(accounts) { account in
+                                Text(account.localizedTitle).tag(Optional(account.id))
+                            }
                         }
                         .pickerStyle(.menu)
                         .labelsHidden()
@@ -141,11 +155,8 @@ struct TemplateEditorView: View {
             .scrollDismissesKeyboard(.interactively)
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
+            // 不在键盘上方加「完成」：点页面空白处收起键盘（`dismissesKeyboardOnTapOutside`，装在根视图上）
             .toolbar {
-                ToolbarItemGroup(placement: .keyboard) {
-                    Spacer()
-                    Button("完成") { endEditing() }
-                }
                 ToolbarItem(placement: .cancellationAction) { Button("取消", systemImage: "xmark") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("保存", systemImage: "checkmark") { Task { await save() } }
@@ -248,6 +259,7 @@ struct TemplateEditorView: View {
             cardTail = restored.cardTail
             counterparty = restored.counterparty
             show(kind: template.kind, direction: template.direction)
+            accountID = template.accountID
             name = template.name
         case .pending(let item):
             sample = MessageParser.cleaned(item.rawText ?? "", source: item.source)
@@ -275,6 +287,11 @@ struct TemplateEditorView: View {
         if let draft = parsed.events.first?.draft { guess(draft) }
     }
 
+    /// 「记到」能选的账户：和截图模板一样，卡和电子钱包
+    private var accounts: [Account] {
+        store.accounts.filter { !$0.archived && ($0.isCard || $0.cardType == .wallet) }
+    }
+
     /// 收起键盘、离开输入框（输入框交出原文，`applyText`）
     private func endEditing() {
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
@@ -299,7 +316,7 @@ struct TemplateEditorView: View {
         let (kind, direction) = fields
         let template = MessageTemplate(
             id: existing?.id ?? UUID().uuidString, name: trimmedName.isEmpty ? L("\(kind.displayName.loc)通知") : trimmedName,
-            pieces: pieces, kind: kind, direction: direction, createdAt: existing?.createdAt ?? Date()
+            pieces: pieces, kind: kind, direction: direction, createdAt: existing?.createdAt ?? Date(), accountID: accountID
         )
         // 模板至少要认得出原文这条通知
         guard MessageTemplates.match(template, in: sample) != nil else {

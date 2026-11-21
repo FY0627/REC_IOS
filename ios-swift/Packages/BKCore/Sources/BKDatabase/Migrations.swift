@@ -5,7 +5,7 @@
 /// - 每个迁移在一个事务里执行，失败整体回滚，版本号不变；
 /// - 每次修改表结构都要在 `DatabaseTests` 里补迁移测试。
 public enum Migrations {
-    public static let latestVersion = 14
+    public static let latestVersion = 15
 
     static let steps: [(version: Int, sql: String)] = [
         (1, """
@@ -264,6 +264,10 @@ public enum Migrations {
             account_id TEXT,
             created_at REAL NOT NULL
         );
+        """),
+        // 通知模板也能选记到哪个账户（2026-11-22，和截图模板一样）。导入备份时换成这台手机上的账户
+        (15, """
+        ALTER TABLE message_templates ADD COLUMN account_id TEXT;
         """),
     ]
 

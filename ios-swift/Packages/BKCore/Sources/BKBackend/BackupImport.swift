@@ -239,7 +239,10 @@ enum BackupImport {
             row["category_id"] = remap(row["category_id"], categoryMap)
             return true
         }
-        try copy(source, "message_templates", into: db) { _ in true }
+        try copy(source, "message_templates", into: db) { row in
+            row["account_id"] = remap(row["account_id"], accountMap)
+            return true
+        }
         try copy(source, "screen_templates", into: db) { row in
             row["account_id"] = remap(row["account_id"], accountMap)
             return true
