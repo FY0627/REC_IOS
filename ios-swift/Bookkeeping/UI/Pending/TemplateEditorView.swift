@@ -141,15 +141,6 @@ struct TemplateEditorView: View {
                 if let errorText {
                     Section { Text(errorText).foregroundStyle(.red) }
                 }
-                if let existing {
-                    Section {
-                        Menu {
-                            Button("删除这个模板", systemImage: "trash", role: .destructive) { Task { await delete(existing) } }
-                        } label: {
-                            ActionLabel(title: "删除").foregroundStyle(Color.red)
-                        }
-                    }
-                }
             }
             .scrollDismissesKeyboard(.interactively)
             .navigationTitle(title)
@@ -341,15 +332,6 @@ struct TemplateEditorView: View {
             pickScreenshot?(entry)
         } catch {
             errorText = L("读不出这张图片")
-        }
-    }
-
-    private func delete(_ template: MessageTemplate) async {
-        do {
-            try await store.deleteTemplate(id: template.id)
-            dismiss()
-        } catch {
-            errorText = L("删除失败：\(error.localizedDescription)")
         }
     }
 

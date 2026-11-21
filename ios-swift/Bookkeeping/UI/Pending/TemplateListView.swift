@@ -12,6 +12,8 @@ struct TemplateListView: View {
     @State private var editing: EditorTarget?
     /// 导入时从相册选来做模板的截图：先放进留着的截图里给编辑页用，编辑页关掉后删掉
     @State private var pickedID: String?
+    /// 左滑点了「删除」、正在确认的模板
+    @State private var deletingID: String?
 
     /// 弹出的编辑页：新添加，或者改一个已有的
     private enum EditorTarget: Identifiable {
@@ -39,23 +41,24 @@ struct TemplateListView: View {
             if !templates.isEmpty {
                 Section {
                     ForEach(templates) { template in
-                        // 流水上点「不记」记下的写法：没有圈出的金额，不能编辑，只能往左滑删除
-                        if template.isSkip {
-                            row(template)
-                        } else {
-                            Button {
-                                editing = .existing(template)
-                            } label: {
+                        Group {
+                            // 流水上点「不记」记下的写法：没有圈出的金额，不能编辑，只能往左滑删除
+                            if template.isSkip {
                                 row(template)
+                            } else {
+                                Button {
+                                    editing = .existing(template)
+                                } label: {
+                                    row(template)
+                                }
                             }
                         }
-                    }
-                    .onDelete { offsets in
-                        let ids = offsets.map { templates[$0].id }
-                        Task {
-                            for id in ids { try? await store.deleteTemplate(id: id) }
-                            await reload()
-                        }
+                        .modifier(TemplateSwipe(id: template.id, deleting: $deletingID) {
+                            Task {
+                                try? await store.deleteTemplate(id: template.id)
+                                await reload()
+                            }
+                        })
                     }
                 } header: {
                     if !screenTemplates.isEmpty { Text("通知") }
@@ -71,13 +74,13 @@ struct TemplateListView: View {
                             Text(template.preview).font(.caption).foregroundStyle(Color.secondary).lineLimit(2)
                         }
                         .padding(.vertical, 2)
-                    }
-                    .onDelete { offsets in
-                        let ids = offsets.map { screenTemplates[$0].id }
-                        Task {
-                            for id in ids { try? await store.deleteScreenTemplate(id: id) }
-                            await reload()
-                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .modifier(TemplateSwipe(id: template.id, deleting: $deletingID) {
+                            Task {
+                                try? await store.deleteScreenTemplate(id: template.id)
+                                await reload()
+                            }
+                        })
                     }
                 }
             }
@@ -141,5 +144,33 @@ private struct TemplateImportView: View {
                 entry = picked
             }
         }
+    }
+}
+
+/// 模板的左滑删除：和首页的流水、管理账户一样，左滑露出「删除」，点了从这一行右端弹出系统的确认菜单；
+/// 换成同样颜色的行背景，滑动时这一行不变灰、四个角不变圆
+private struct TemplateSwipe: ViewModifier {
+    let id: String
+    @Binding var deleting: String?
+    let delete: () -> Void
+
+    func body(content: Content) -> some View {
+        content
+            .background(alignment: .trailing) {
+                if deleting == id {
+                    DeleteMenuAnchor(warning: L("删除后不能恢复"), action: L("删除这个模板")) {
+                        delete()
+                    } onEnd: {
+                        deleting = nil
+                    }
+                    .frame(width: 76)
+                }
+            }
+            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                // 不用 .destructive：那样一点就先把这一行划走，确认前就不见了
+                Button("删除", systemImage: "trash") { deleting = id }
+                    .tint(.red)
+            }
+            .listRowBackground(Color(.secondarySystemGroupedBackground))
     }
 }
