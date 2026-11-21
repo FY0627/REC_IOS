@@ -167,6 +167,16 @@ final class ScreenTemplateTests: XCTestCase {
         XCTAssertEqual(parts[1].x, 0.3 + 0.3 * 245 / 300, accuracy: 0.0001)
     }
 
+    func testIconTwoThirdsAsTallAsTheDigitsIsSplit() {
+        // 真机截图量的：「+」18 像素高、「¥」「3.55」32 像素高，隔开 14 像素的 ⓘ 21 像素高
+        let line = ScreenTextLine(text: "+ ¥ 3.550", x: 0.3, y: 0.2, width: 0.35, height: 0.04)
+        let columns = ink(width: 190, [(8...26, 7...24), (41...66, 1...30), (76...151, 0...31), (165...185, 4...24)])
+        XCTAssertEqual(ScreenLayout.splitIcons(line, ink: columns).map(\.text), ["+ ¥ 3.55", "0"])
+        // 差不多一样高的（80%）不拆
+        let tall = ink(width: 190, [(8...26, 7...24), (41...66, 1...30), (76...151, 0...31), (165...185, 3...28)])
+        XCTAssertEqual(ScreenLayout.splitIcons(line, ink: tall), [line])
+    }
+
     func testSameHeightWordsPunctuationAndSignsStayTogether() {
         let words = ScreenTextLine(text: "付款方式 招商", x: 0.1, y: 0.5, width: 0.4, height: 0.03)
         let wordInk = ink(width: 200, [(0...110, 0...29), (130...190, 0...29)])

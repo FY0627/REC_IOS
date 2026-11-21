@@ -93,7 +93,8 @@ enum ScreenshotReader {
             var top: Int?, bottom = 0
             for y in 0..<height {
                 let c = color(x, y)
-                if max(abs(c.0 - background.0), abs(c.1 - background.1), abs(c.2 - background.2)) > 40 {
+                // 浅灰的小图标（ⓘ）和白底只差 50 上下，门槛不能太高
+                if max(abs(c.0 - background.0), abs(c.1 - background.1), abs(c.2 - background.2)) > 32 {
                     if top == nil { top = y }
                     bottom = y
                 }

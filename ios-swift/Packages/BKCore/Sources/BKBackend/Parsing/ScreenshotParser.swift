@@ -68,7 +68,8 @@ public enum ScreenLayout {
             let ownHeight = own.bottom - own.top + 1
             let rest = others.map { extent($0) }
             let restHeight = (rest.map(\.bottom).max() ?? 0) - (rest.map(\.top).min() ?? 0) + 1
-            return Double(ownHeight) < Double(restHeight) * 0.6 && cluster.count <= ownHeight * 2
+            // 不到其他字的 75% 高（招行「+ ¥3.55 ⓘ」的 ⓘ 是数字的 66%），宽不超过高的两倍（一串小字不算）
+            return Double(ownHeight) < Double(restHeight) * 0.75 && cluster.count <= ownHeight * 2
         }
         let width = Double(ink.count)
         func box(_ cluster: ClosedRange<Int>, text: String) -> ScreenTextLine {
