@@ -169,9 +169,14 @@ struct HomeView: View {
     }
 
     private func recordLink(_ row: RecordRow) -> some View {
-        // 列表里的按钮默认把字染成主题色：字照原来的颜色，按下时整行变灰的效果留着
-        Button { opened = row } label: { RecordRowView(row: row, timeOnly: true).foregroundStyle(.primary) }
-            .recordSwipe(row, state: $swipe)
+        // 列表里默认样式的按钮会把字染成主题色：用 plain，整行（包括中间空白）都能点
+        Button { opened = row } label: {
+            RecordRowView(row: row, timeOnly: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .recordSwipe(row, state: $swipe)
     }
 
     /// 每天的分组标题：左边日期，右边当天支出（换算成主要币种，和本月支出一样算；当天没有支出不写）
