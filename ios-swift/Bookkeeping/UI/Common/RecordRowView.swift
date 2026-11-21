@@ -399,9 +399,9 @@ struct RecordDetailView: View {
                 }
             }
         }
-        // 第一张卡片紧贴着上面的按钮，不留一大块空白（默认空着的分组标题有三十多点高）
-        .contentMargins(.top, 0, for: .scrollContent)
-        .environment(\.defaultMinListHeaderHeight, 8)
+        // 第一张卡片和上面的按钮之间留一小段，不留一大块空白（默认空着的分组标题有三十多点高）
+        .contentMargins(.top, 6, for: .scrollContent)
+        .environment(\.defaultMinListHeaderHeight, 14)
     }
 
     /// 能合并（右上角「合并」）：不在合成的一单里、已入账的支出或收入（手动合成的转帐也是转帐）。
