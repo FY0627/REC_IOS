@@ -88,6 +88,8 @@ enum ScreenshotParser {
     /// 钱转进、转出零钱通、余额宝（「余额宝-单次转入」「转出到零钱通」）。和零钱、余额之间挪钱不是收支，不记；
     /// 从银行卡转进来、转出到银行卡的照常记（`fundCardMove`）
     private static let fundMove = Rx(#"(零钱通|余额宝)\s*[-—]?\s*(?:单次|自动|定期|预约)?\s*(转入|转出)|(转入|转出到?)\s*(零钱通|余额宝)|(零钱通)-"#)
+    /// 转入、转出完成页的标题（支付宝余额宝：「转入成功」，下面写「开始计算收益」「收益到账」，付款方式是卡）
+    private static let fundResult = Rx(#"^(转入|转出)成功$"#)
     private static let withdraw = Rx(#"(?:零钱|余额)提现|提现-到|提现到|^提现"#)
     private static let topUp = Rx(#"(?:零钱|余额)充值|充值-来自|充值到(?:零钱|余额)"#)
     private static let refund = Rx(#"退款"#)
@@ -100,7 +102,7 @@ enum ScreenshotParser {
     private static let receivedTitle = Rx(#"^(?:待(.{1,24}?)(?:确认)?收款|(.{1,24}?)已收款)(?:[，,\s].*)?$"#)
 
     /// 页面上的这些行不是商户名称：状态栏、导航、页面标题、按钮
-    private static let noiseRow = Rx(#"^(?:\d{1,2}[:：]\d{2}|[0-9]{1,3}%?|[45]G|LTE|WiFi|<|返回|账单详情|交易详情|详情|全部账单|全部收款明细|账单|支付成功|付款成功|交易成功|转账成功|收款成功|已收款|你已收款|微信支付|支付宝|完成|返回商家|回首页|\.{2,}|…+|·+|X|x|更多|查看账单|查看详情|联系商家|申请退款|常见问题|对此订单有疑问)$"#)
+    private static let noiseRow = Rx(#"^(?:\d{1,2}[:：]\d{2}|[0-9]{1,3}%?|[45]G|LTE|WiFi|<|返回|账单详情|交易详情|详情|全部账单|全部收款明细|账单|支付成功|付款成功|交易成功|转账成功|收款成功|转入成功|转出成功|充值成功|提现成功|已收款|你已收款|微信支付|支付宝|完成|返回商家|回首页|\.{2,}|…+|·+|X|x|更多|查看账单|查看详情|联系商家|申请退款|常见问题|对此订单有疑问)$"#)
     /// 一段字前面的符号：成功页标题左边的对勾被认成「•」「©」这类
     private static let leadingSymbols = Rx(#"^[^\p{L}\p{N}]+"#)
     /// 右边跟着一个金额的一行：「示例科技 ¥ 0.03」
@@ -239,8 +241,9 @@ enum ScreenshotParser {
         // 4. 页面是哪一种
         let methodRow = values[.method]?.row
         let pageText = rows.enumerated().filter { $0.offset != methodRow }.map(\.element).joined(separator: "\n")
-        let fundCard = fundCardMove(pageText: pageText, method: method, target: values[.target]?.value)
-        if fundCard == nil, fundMove.test(pageText) { return result(.noFinancialContent) }
+        let heading = amountRow.map { Array(rows[..<$0]) } ?? []
+        let fundCard = fundCardMove(pageText: pageText, heading: heading, app: app, method: method, target: values[.target]?.value)
+        if fundCard == nil, fundMove.test(pageText) || fundPage(pageText: pageText, heading: heading, app: app) != nil { return result(.noFinancialContent) }
         let title = Self.title(rows: rows, amountRow: amountRow, labelRows: labelRows)
         let titleText = title ?? ""
         let isWithdraw = fundCard.map { !$0.inbound } ?? (withdraw.test(titleText) || withdraw.test(pageText))
@@ -397,16 +400,37 @@ enum ScreenshotParser {
     }
 
     /// 银行卡和余额宝、零钱通之间转钱：转入时付款方式写的是卡，转出时到账银行卡写的是卡。
-    /// 记到余额宝、零钱通，卡号记成另一边，和卡上那笔配对用。卡那边看不出来的是和零钱、余额之间挪钱
-    private static func fundCardMove(pageText: String, method: String?, target: String?) -> (name: String, inbound: Bool)? {
-        let ns = NSString(string: pageText)
-        guard let m = fundMove.first(ns) else { return nil }
-        guard let name = m.group(1, in: ns) ?? m.group(4, in: ns) ?? m.group(5, in: ns),
-              let verb = m.group(2, in: ns) ?? m.group(3, in: ns) else { return nil }
-        let inbound = verb.hasPrefix("转入")
-        guard let card = inbound ? method : (target ?? method) else { return nil }
+    /// 记到余额宝、零钱通，卡号记成另一边，和卡上那笔配对用。卡那边看不出来的是和零钱、余额之间挪钱。
+    /// 账单详情写着「余额宝-单次转入」；刚转完的完成页只有标题「转入成功」（`heading`：金额上面几行）和「开始计算收益」，
+    /// 页面上写了零钱通是零钱通，否则支付宝的是余额宝、微信的是零钱通
+    private static func fundCardMove(pageText: String, heading: [String], app: String?, method: String?, target: String?) -> (name: String, inbound: Bool)? {
+        guard let page = fundPage(pageText: pageText, heading: heading, app: app) else { return nil }
+        guard let card = page.inbound ? method : (target ?? method) else { return nil }
         guard !card.contains("零钱"), !card.contains("余额"), tailOf(card) != nil || bank(in: card) != nil else { return nil }
-        return (name, inbound)
+        return page
+    }
+
+    /// 钱转进、转出零钱通、余额宝的页面：转的是哪个、是不是转入。不管另一边是卡还是零钱、余额
+    private static func fundPage(pageText: String, heading: [String], app: String?) -> (name: String, inbound: Bool)? {
+        let ns = NSString(string: pageText)
+        if let m = fundMove.first(ns) {
+            guard let name = m.group(1, in: ns) ?? m.group(4, in: ns) ?? m.group(5, in: ns),
+                  let verb = m.group(2, in: ns) ?? m.group(3, in: ns) else { return nil }
+            return (name, verb.hasPrefix("转入"))
+        }
+        let verb = heading.lazy.flatMap { row in
+            row.split(whereSeparator: \.isWhitespace).map { leadingSymbols.replace(String($0), with: "") }
+        }.compactMap { segment -> String? in
+            let s = NSString(string: segment)
+            return fundResult.first(s)?.group(1, in: s)
+        }.first
+        guard let verb, pageText.contains("收益") || pageText.contains("余额宝") || pageText.contains("零钱通") else { return nil }
+        let name: String
+        if pageText.contains("零钱通") { name = "零钱通" }
+        else if pageText.contains("余额宝") || app == "alipay" { name = "余额宝" }
+        else if app == "wechatpay" { name = "零钱通" }
+        else { return nil }
+        return (name, verb == "转入")
     }
 
     // MARK: 小工具
