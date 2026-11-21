@@ -152,43 +152,34 @@ final class ScreenTemplateTests: XCTestCase {
 
     // MARK: 小图标拆开
 
-    /// 一段字和每个字的框：`sizes` 是每个字的（宽, 高），`gaps` 是这个字前面空多少
-    func glyphs(_ text: String, sizes: [(Double, Double)], gaps: [Double]) -> (line: ScreenTextLine, glyphs: [ScreenTextLine]) {
-        var x = 0.1
-        var boxes: [ScreenTextLine] = []
-        for (i, ch) in text.filter({ !$0.isWhitespace }).enumerated() {
-            x += gaps[i]
-            let (w, h) = sizes[i]
-            boxes.append(ScreenTextLine(text: String(ch), x: x, y: 0.30 - h / 2, width: w, height: h))
-            x += w
-        }
-        let minY = boxes.map(\.y).min()!, maxY = boxes.map { $0.y + $0.height }.max()!
-        return (ScreenTextLine(text: text, x: 0.1, y: minY, width: x - 0.1, height: maxY - minY), boxes)
+    /// 一段字在截图上每一列有没有字：`blobs` 是一团一团的字（从第几列到第几列、上下边），其余的列空着
+    func ink(width: Int, _ blobs: [(ClosedRange<Int>, ClosedRange<Int>)]) -> [ClosedRange<Int>?] {
+        (0..<width).map { x in blobs.first { $0.0.contains(x) }?.1 }
     }
 
     func testSmallIconAtTheEndBecomesItsOwnSegment() {
-        // 「+ ¥0.63 ⓘ」：ⓘ 认成了「0」，比金额小一半多，隔开一点
-        let big = (0.03, 0.04), dot = (0.01, 0.01), icon = (0.018, 0.018)
-        let (line, boxes) = glyphs("+￥0.630", sizes: [(0.02, 0.02), big, big, dot, big, big, icon], gaps: [0, 0.005, 0.003, 0, 0, 0, 0.012])
-        let parts = ScreenLayout.splitIcons(line, glyphs: boxes)
+        // 「+ ¥0.63 ⓘ」认成「+￥0.630」：「+」、「¥0.63」（40 像素高）、隔开 14 像素的 ⓘ（18 像素高）
+        let line = ScreenTextLine(text: "+￥0.630", x: 0.3, y: 0.2, width: 0.3, height: 0.04)
+        let columns = ink(width: 300, [(0...20, 15...35), (40...230, 5...44), (245...262, 16...33)])
+        let parts = ScreenLayout.splitIcons(line, ink: columns)
         XCTAssertEqual(parts.map(\.text), ["+￥0.63", "0"])
         XCTAssertEqual(ScreenLayout.text(parts), "+￥0.63  0", "拆开的还在同一行")
+        XCTAssertEqual(parts[1].x, 0.3 + 0.3 * 245 / 300, accuracy: 0.0001)
     }
 
-    func testWholeWordBoxesAreNotSplit() {
-        // 精确模式只给整个词的框：每个字的框都一样，没有空隙
-        let line = ScreenTextLine(text: "+￥0.630", x: 0.2, y: 0.28, width: 0.2, height: 0.04)
-        XCTAssertEqual(ScreenLayout.splitIcons(line, glyphs: Array(repeating: line, count: 7)), [line])
-    }
+    func testSameHeightWordsPunctuationAndSignsStayTogether() {
+        let words = ScreenTextLine(text: "付款方式 招商", x: 0.1, y: 0.5, width: 0.4, height: 0.03)
+        let wordInk = ink(width: 200, [(0...110, 0...29), (130...190, 0...29)])
+        XCTAssertEqual(ScreenLayout.splitIcons(words, ink: wordInk), [words], "一样高的字中间空一格不拆")
 
-    func testSameSizeWordsAndPunctuationStayTogether() {
-        let normal = (0.03, 0.03)
-        let (words, wordBoxes) = glyphs("付款方式 招商", sizes: Array(repeating: normal, count: 6), gaps: [0, 0, 0, 0, 0.02, 0])
-        XCTAssertEqual(ScreenLayout.splitIcons(words, glyphs: wordBoxes).map(\.text), ["付款方式 招商"], "一样大的字中间空一格不拆")
-        let (done, doneBoxes) = glyphs("完成了。", sizes: [normal, normal, normal, (0.01, 0.01)], gaps: [0, 0, 0, 0.01])
-        XCTAssertEqual(ScreenLayout.splitIcons(done, glyphs: doneBoxes).map(\.text), ["完成了。"], "小的标点不拆")
-        let (sign, signBoxes) = glyphs("+12.00", sizes: [(0.015, 0.015), normal, normal, (0.01, 0.01), normal, normal], gaps: [0, 0.01, 0, 0, 0, 0])
-        XCTAssertEqual(ScreenLayout.splitIcons(sign, glyphs: signBoxes).map(\.text), ["+12.00"], "正负号不拆")
+        let done = ScreenTextLine(text: "完成了。", x: 0.1, y: 0.5, width: 0.2, height: 0.03)
+        XCTAssertEqual(ScreenLayout.splitIcons(done, ink: ink(width: 120, [(0...90, 0...29), (100...106, 22...29)])), [done], "小的标点不拆")
+
+        let sign = ScreenTextLine(text: "+12.00", x: 0.1, y: 0.5, width: 0.2, height: 0.03)
+        XCTAssertEqual(ScreenLayout.splitIcons(sign, ink: ink(width: 120, [(0...10, 10...20), (25...110, 0...29)])), [sign], "正负号不拆")
+
+        let wide = ScreenTextLine(text: "收益 abc", x: 0.1, y: 0.5, width: 0.3, height: 0.03)
+        XCTAssertEqual(ScreenLayout.splitIcons(wide, ink: ink(width: 200, [(0...60, 0...29), (80...150, 10...25)])).count, 1, "矮一截但很宽的（一串小字）不拆")
     }
 
     func testLayoutKeepsSegmentsApart() {

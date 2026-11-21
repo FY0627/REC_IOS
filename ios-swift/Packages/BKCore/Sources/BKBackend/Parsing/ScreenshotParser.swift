@@ -35,49 +35,71 @@ public enum ScreenLayout {
         text.split(whereSeparator: \.isWhitespace).joined(separator: " ")
     }
 
-    /// 小图标和旁边的字认成了一段（「+ ¥0.63 ⓘ」认成「+￥0.630」）：按每个字的框，把开头、结尾隔开一点、
-    /// 明显小一号的一两个字（字母、数字）拆成单独一段，图标就不会粘在金额、标签上。
+    /// 小图标和旁边的字认成了一段（「+ ¥0.63 ⓘ」认成「+￥0.630」）：看截图上这一段每一列有没有字，
+    /// 开头、结尾和其他字隔开一截、明显矮一截、差不多一个字宽的一团，是旁边的小图标，拆成单独一段，
+    /// 图标就不会粘在金额、标签上。Vision 精确模式只给整个词的框，按字的框拆不开，所以看图上的像素。
     ///
-    /// `glyphs` 是这段里每个不是空白的字的框（和 `line` 一样归一化、原点在左上），按字的顺序；个数对不上时不拆。
-    /// Vision 精确模式常常只给整个词的框（几个字的框一样），这时字和字之间没有空隙，也不拆：和以前一样
-    public static func splitIcons(_ line: ScreenTextLine, glyphs: [ScreenTextLine]) -> [ScreenTextLine] {
+    /// `ink[i]` 是这一段的框里从左数第 i 列（像素）有字的上下边（从框的上边往下数），这一列没有字是 nil。
+    /// 拆下来的一团对应开头或结尾的一个字，这个字要是字母或数字（标点、正负号、¥ 不拆）
+    public static func splitIcons(_ line: ScreenTextLine, ink: [ClosedRange<Int>?]) -> [ScreenTextLine] {
         let characters = Array(line.text)
         let visible = characters.indices.filter { !characters[$0].isWhitespace }
-        guard glyphs.count == visible.count, glyphs.count >= 3 else { return [line] }
-
-        /// 前 `count` 个字和后面的字能不能分开：小的那边最多两个字、都是字母或数字，高度不到大的那边的 55%，中间隔开至少 0.15 个字高
-        func separable(at count: Int) -> Bool {
-            let head = glyphs[..<count], tail = glyphs[count...]
-            let small = head.count <= tail.count ? head : tail
-            guard small.count <= 2,
-                  small.indices.allSatisfy({ characters[visible[$0]].isLetter || characters[visible[$0]].isNumber }) else { return false }
-            let headHeight = head.map(\.height).max() ?? 0, tailHeight = tail.map(\.height).max() ?? 0
-            let big = max(headHeight, tailHeight), smallHeight = min(headHeight, tailHeight)
-            let before = glyphs[count - 1], after = glyphs[count]
-            let gap = after.x - (before.x + before.width)
-            return big > 0 && smallHeight < big * 0.55 && gap > big * 0.15
+        guard visible.count >= 2, !ink.isEmpty else { return [line] }
+        guard let top = ink.compactMap({ $0?.lowerBound }).min(), let bottom = ink.compactMap({ $0?.upperBound }).max() else { return [line] }
+        let height = bottom - top + 1
+        // 有字的列连成一团；隔开不到 0.2 个字高的算同一团（字和字之间的小空隙）
+        var clusters: [ClosedRange<Int>] = []
+        let joinGap = max(1, Int((Double(height) * 0.2).rounded(.down)))
+        for x in ink.indices where ink[x] != nil {
+            if let last = clusters.last, x - last.upperBound <= joinGap {
+                clusters[clusters.count - 1] = last.lowerBound...x
+            } else {
+                clusters.append(x...x)
+            }
+        }
+        guard clusters.count >= 2 else { return [line] }
+        func extent(_ cluster: ClosedRange<Int>) -> (top: Int, bottom: Int) {
+            let spans = cluster.compactMap { ink[$0] }
+            return (spans.map(\.lowerBound).min()!, spans.map(\.upperBound).max()!)
+        }
+        func isIcon(_ cluster: ClosedRange<Int>, others: ArraySlice<ClosedRange<Int>>, character: Character) -> Bool {
+            guard character.isLetter || character.isNumber else { return false }
+            let own = extent(cluster)
+            let ownHeight = own.bottom - own.top + 1
+            let rest = others.map { extent($0) }
+            let restHeight = (rest.map(\.bottom).max() ?? 0) - (rest.map(\.top).min() ?? 0) + 1
+            return Double(ownHeight) < Double(restHeight) * 0.6 && cluster.count <= ownHeight * 2
+        }
+        let width = Double(ink.count)
+        func box(_ cluster: ClosedRange<Int>, text: String) -> ScreenTextLine {
+            let e = extent(cluster)
+            let inkHeight = Double(max(bottom - top + 1, 1))
+            return ScreenTextLine(
+                text: text,
+                x: line.x + line.width * Double(cluster.lowerBound) / width,
+                y: line.y + line.height * Double(e.top - top) / inkHeight,
+                width: line.width * Double(cluster.count) / width,
+                height: line.height * Double(e.bottom - e.top + 1) / inkHeight
+            )
         }
 
-        var cuts: [Int] = []
-        for count in [1, 2] where separable(at: count) {
-            cuts.append(count)
-            break
-        }
-        for count in [glyphs.count - 1, glyphs.count - 2] where count > (cuts.last ?? 0) && separable(at: count) {
-            cuts.append(count)
-            break
-        }
-        guard !cuts.isEmpty else { return [line] }
+        let first = visible.first!, last = visible.last!
+        let head = isIcon(clusters[0], others: clusters[1...], character: characters[first])
+        let tail = isIcon(clusters[clusters.count - 1], others: clusters[..<(clusters.count - 1)], character: characters[last])
+        guard head || tail else { return [line] }
+        let bodyClusters = clusters[(head ? 1 : 0)..<(clusters.count - (tail ? 1 : 0))]
+        guard let bodyStart = bodyClusters.first?.lowerBound, let bodyEnd = bodyClusters.last?.upperBound else { return [line] }
+        let bodyFrom = head ? visible[1] : first, bodyTo = tail ? visible[visible.count - 2] : last
+        guard bodyFrom <= bodyTo else { return [line] }
 
         var parts: [ScreenTextLine] = []
-        for (start, end) in zip([0] + cuts, cuts + [glyphs.count]) where start < end {
-            let boxes = glyphs[start..<end]
-            let from = visible[start], to = visible[end - 1]
-            let text = String(characters[from...to])
-            let minX = boxes.map(\.x).min()!, minY = boxes.map(\.y).min()!
-            let maxX = boxes.map { $0.x + $0.width }.max()!, maxY = boxes.map { $0.y + $0.height }.max()!
-            parts.append(ScreenTextLine(text: text, x: minX, y: minY, width: maxX - minX, height: maxY - minY))
-        }
+        if head { parts.append(box(clusters[0], text: String(characters[first]))) }
+        var body = line
+        body.text = String(characters[bodyFrom...bodyTo]).trimmingCharacters(in: .whitespaces)
+        body.x = line.x + line.width * Double(bodyStart) / width
+        body.width = line.width * Double(bodyEnd - bodyStart + 1) / width
+        parts.append(body)
+        if tail { parts.append(box(clusters[clusters.count - 1], text: String(characters[last]))) }
         return parts
     }
 }
