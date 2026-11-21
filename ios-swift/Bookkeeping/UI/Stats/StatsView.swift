@@ -107,9 +107,7 @@ struct StatsView: View {
                 .padding(.bottom, AppLayout.topBarBottom)
                 .background { TopBarBackdrop(visible: scrolledUnderBar) }
             }
-            // 分类明细、分类明细里的每一笔都和首页一样按值推进。
-            // 两层都要按值：一层按值、一层用闭包混在一个导航栈里，点一笔会多推一次分类明细。
-            // 流水详情右上角的按钮不再单独冒出来，靠的是分类明细也藏起系统导航栏（见 CategoryStatsView）
+            // 分类明细按值推进；分类明细里点一笔是弹出的流水详情面板（见 CategoryStatsView）
             .navigationDestination(for: CategoryStatsRoute.self) { route in CategoryStatsView(route: route) }
             .sheet(isPresented: $choosingCustom) {
                 CustomPeriodSheet(initial: period.customDates) { period = $0 }
